@@ -35,14 +35,14 @@ const services = [
 ];
 
 const Services = () => (
-  <section className="bg-gray-100 py-12">
+  <section className="bg-light2 py-12">
     <div className="container mx-auto px-4">
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8 text-center">
         {services.map(({ id, icon, title, subtitle }) => (
           <div key={id} className="flex flex-col items-center space-y-3">
-            <div className="text-purple-600">{icon}</div>
-            <h4 className="text-lg font-medium text-gray-900">{title}</h4>
-            <p className="text-sm text-gray-600">{subtitle}</p>
+            <div className="text-dark2">{icon}</div>
+            <h4 className="text-lg font-medium text-dark3">{title}</h4>
+            <p className="text-sm text-dark2">{subtitle}</p>
           </div>
         ))}
       </div>

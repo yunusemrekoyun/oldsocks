@@ -1,4 +1,3 @@
-// src/components/RecentBlog.jsx
 import React from "react";
 import RecentBlogItem from "./RecentBlogItem";
 import b1 from "../../assets/blog/blog1.png";
@@ -24,7 +23,7 @@ const posts = [
 
 const RecentBlog = () => (
   <div className="mb-8">
-    <h4 className="text-lg font-semibold mb-3">Recent Post</h4>
+    <h4 className="text-lg font-semibold mb-3 text-[#0b0b0d]">Recent Post</h4>
     {posts.map((p) => (
       <RecentBlogItem key={p.id} {...p} />
     ))}

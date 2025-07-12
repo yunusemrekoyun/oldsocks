@@ -1,4 +1,3 @@
-// src/components/SocialMedia.jsx
 import React from "react";
 
 const images = [
@@ -11,18 +10,18 @@ const images = [
 ];
 
 const SocialMedia = () => (
-  <div className="bg-[#f9f8fd] p-8">
-    <h4 className="text-2xl font-semibold text-gray-800 mb-4 border-b border-purple-100 pb-2">
+  <div className="bg-[#f4f4f4] p-6 rounded-lg shadow-sm">
+    <h4 className="text-xl font-semibold text-[#0b0b0d] mb-4 border-b border-[#d9d9d9] pb-2">
       Instagram Feeds
     </h4>
 
-    <div className="grid grid-cols-3 gap-4">
+    <div className="grid grid-cols-3 gap-3">
       {images.map((src, i) => (
         <img
           key={i}
           src={src}
           alt={`instagram-${i}`}
-          className="w-full h-full object-cover"
+          className="w-full aspect-square object-cover rounded-md hover:opacity-80 transition"
         />
       ))}
     </div>

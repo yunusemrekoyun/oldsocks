@@ -15,7 +15,7 @@ const CampaignItem = ({ image, title, buttonText, onClick }) => (
     />
 
     {/* Karartma katmanı */}
-    <div className="absolute inset-0 bg-black bg-opacity-30 group-hover:bg-opacity-40 transition-colors duration-500" />
+    <div className="absolute inset-0 bg-dark1/30 group-hover:bg-dark1/40 transition-colors duration-500" />
 
     {/* Metin & Buton */}
     <div className="absolute inset-0 flex flex-col justify-center items-start p-6">
@@ -24,7 +24,7 @@ const CampaignItem = ({ image, title, buttonText, onClick }) => (
       </h3>
       <button
         onClick={onClick}
-        className="mt-4 px-5 py-2 bg-purple-600 hover:bg-purple-700 text-white text-sm font-medium rounded transition"
+        className="mt-4 px-5 py-2 bg-dark3 hover:bg-dark2 text-white text-sm font-medium rounded transition"
       >
         {buttonText}
       </button>

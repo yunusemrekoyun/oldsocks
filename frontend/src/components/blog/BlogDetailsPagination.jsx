@@ -1,4 +1,3 @@
-// src/components/BlogDetailsPagination.jsx
 import React from "react";
 import { Link } from "react-router-dom";
 import prevImg from "../../assets/blog/blog-pagination/next.png";
@@ -9,7 +8,7 @@ const BlogDetailsPagination = () => (
     {/* Previous */}
     <Link
       to="/blog/prev"
-      className="flex items-center space-x-4 hover:text-purple-600 transition"
+      className="flex items-center space-x-4 hover:text-[#03588C] transition"
     >
       <img
         src={prevImg}
@@ -24,7 +23,7 @@ const BlogDetailsPagination = () => (
     {/* Next */}
     <Link
       to="/blog/next"
-      className="flex items-center space-x-4 hover:text-purple-600 transition"
+      className="flex items-center space-x-4 hover:text-[#03588C] transition"
     >
       <div className="text-right">
         <p className="text-sm text-gray-500">Next Post</p>

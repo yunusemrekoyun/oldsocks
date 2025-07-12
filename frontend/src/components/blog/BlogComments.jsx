@@ -1,4 +1,3 @@
-// src/components/BlogComments.jsx
 import React from "react";
 import BlogCommentItem from "./BlogCommentItem";
 import c1 from "../../assets/blog/blog-comment/comment_1.png";
@@ -31,7 +30,9 @@ const comments = [
 
 const BlogComments = () => (
   <div className="mt-12">
-    <h4 className="text-lg font-semibold mb-6">{comments.length} Comments</h4>
+    <h4 className="text-xl font-semibold mb-6 text-[#0b0b0d]">
+      {comments.length} Comments
+    </h4>
     {comments.map((c) => (
       <BlogCommentItem key={c.id} {...c} />
     ))}

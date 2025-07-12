@@ -1,4 +1,3 @@
-// src/components/BlogDetails.jsx
 import React from "react";
 import {
   FaUserAlt,
@@ -22,16 +21,16 @@ const BlogDetails = ({
   <article className="mb-12">
     <div className="relative rounded-lg overflow-hidden shadow-lg">
       <img src={image} alt={title} className="w-full object-cover" />
-      <div className="absolute top-4 left-4 bg-purple-600 text-white text-sm font-semibold px-3 py-1 rounded">
+      <div className="absolute top-4 left-4 bg-[#03588C] text-white text-sm font-semibold px-3 py-1 rounded">
         {date}
       </div>
     </div>
 
-    <h1 className="mt-6 text-3xl font-serif font-bold text-gray-900">
+    <h1 className="mt-6 text-3xl font-serif font-bold text-[#0b0b0d]">
       {title}
     </h1>
 
-    <div className="flex items-center space-x-6 text-gray-500 text-sm mt-2">
+    <div className="flex items-center space-x-6 text-[#666] text-sm mt-2">
       <span className="flex items-center">
         <FaUserAlt className="mr-1" /> {author}
       </span>
@@ -43,13 +42,13 @@ const BlogDetails = ({
       </span>
     </div>
 
-    <div className="prose prose-lg text-gray-700 mt-6">
+    <div className="prose prose-lg text-[#444] mt-6">
       {paragraphs.map((p, i) => (
         <p key={i}>{p}</p>
       ))}
     </div>
 
-    <blockquote className="border-l-4 border-purple-600 italic pl-6 my-8 text-gray-600">
+    <blockquote className="border-l-4 border-[#03588C] italic pl-6 my-8 text-[#444]">
       {quote}
     </blockquote>
 
@@ -58,9 +57,9 @@ const BlogDetails = ({
         <a
           key={i}
           href="#"
-          className="p-2 border border-gray-300 rounded-full hover:border-purple-600 transition-colors"
+          className="p-2 border border-gray-300 rounded-full hover:border-[#03588C] transition-colors"
         >
-          <Icon className="text-gray-600 hover:text-purple-600" />
+          <Icon className="text-[#666] hover:text-[#03588C]" />
         </a>
       ))}
     </div>

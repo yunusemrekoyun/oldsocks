@@ -37,20 +37,19 @@ const ProductGridItem = ({ video, name, price, rating }) => {
   return (
     <Link
       to={`/product-details`}
-      className="block relative bg-white rounded-lg overflow-hidden shadow hover:shadow-lg transition-shadow duration-300 group"
+      className="block relative bg-white rounded-xl overflow-hidden shadow hover:shadow-lg transition-shadow duration-300 group"
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
     >
-      {/* Ses kontrol butonu */}
       {isHovered && (
         <button
           onClick={toggleMute}
-          className="absolute top-2 right-2 bg-white p-1 rounded-full shadow z-10"
+          className="absolute top-2 right-2 bg-light1 p-1 rounded-full shadow z-10 hover:scale-110 transition"
         >
           {isMuted ? (
-            <FaVolumeMute className="text-gray-500" />
+            <FaVolumeMute className="text-dark2" />
           ) : (
-            <FaVolumeUp className="text-purple-600" />
+            <FaVolumeUp className="text-black" />
           )}
         </button>
       )}
@@ -61,22 +60,22 @@ const ProductGridItem = ({ video, name, price, rating }) => {
         muted
         playsInline
         preload="metadata"
-        className="w-full h-64 object-contain rounded transition-transform duration-300"
+        className="w-full h-64 object-contain transition duration-300"
       />
 
-      <div className="p-4 text-center">
-        <h3 className="text-sm font-medium text-gray-700">{name}</h3>
+      <div className="p-4 text-center bg-light2">
+        <h3 className="text-sm font-medium text-dark2">{name}</h3>
         <div className="flex items-center justify-center mt-2 space-x-1">
           {Array.from({ length: 5 }).map((_, i) => (
             <FaStar
               key={i}
               className={`h-4 w-4 ${
-                i < rating ? "text-yellow-400" : "text-gray-300"
+                i < rating ? "text-yellow-400" : "text-light2"
               }`}
             />
           ))}
         </div>
-        <p className="mt-2 font-semibold text-gray-900">${price.toFixed(2)}</p>
+        <p className="mt-2 font-semibold text-black">${price.toFixed(2)}</p>
       </div>
     </Link>
   );

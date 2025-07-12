@@ -1,4 +1,3 @@
-// src/pages/BlogPage.jsx
 import React from "react";
 import BreadCrumb from "../components/breadCrumb/BreadCrumb";
 import BlogItem from "../components/blog/BlogItem";
@@ -10,7 +9,6 @@ import SocialMedia from "../components/blog/SocialMedia";
 import NewsLetter from "../components/blog/NewsLetter";
 import BlogPagination from "../components/blog/BlogPagination";
 
-// Örnek veri – kendi verinizle değiştirin
 import post1 from "../assets/blog/blog1.png";
 import post2 from "../assets/blog/blog2.png";
 import post3 from "../assets/blog/blog3.png";
@@ -67,18 +65,17 @@ const BlogPage = () => (
   <>
     <BreadCrumb />
 
-    <main className="container mx-auto px-4 py-12 grid grid-cols-1 lg:grid-cols-3 gap-8">
-      {/* Blog list (sol) */}
-      <section className="lg:col-span-2">
-        {blogPosts.map((p) => (
-          <BlogItem key={p.id} {...p} />
+    <main className="container mx-auto px-4 py-16 grid grid-cols-1 lg:grid-cols-3 gap-10">
+      {/* Sol: Blog içerikleri */}
+      <section className="lg:col-span-2 space-y-10">
+        {blogPosts.map((post) => (
+          <BlogItem key={post.id} {...post} />
         ))}
-
         <BlogPagination />
       </section>
 
-      {/* Sidebar (sağ) */}
-      <aside className="lg:col-span-1">
+      {/* Sağ: Sidebar bileşenleri */}
+      <aside className="lg:col-span-1 space-y-6">
         <BlogSearch />
         <BlogCategory />
         <RecentBlog />

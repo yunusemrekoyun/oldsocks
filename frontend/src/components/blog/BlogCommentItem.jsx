@@ -1,4 +1,3 @@
-// src/components/BlogCommentItem.jsx
 import React from "react";
 
 const BlogCommentItem = ({ avatar, name, date, text }) => (
@@ -10,11 +9,11 @@ const BlogCommentItem = ({ avatar, name, date, text }) => (
     />
     <div className="flex-1">
       <div className="flex justify-between items-center">
-        <h5 className="font-medium text-gray-900">{name}</h5>
-        <span className="text-sm text-gray-400">{date}</span>
+        <h5 className="font-medium text-[#0b0b0d]">{name}</h5>
+        <span className="text-sm text-[#888]">{date}</span>
       </div>
-      <p className="text-gray-700 mt-2">{text}</p>
-      <button className="text-purple-600 text-sm mt-2 hover:underline">
+      <p className="text-[#444] mt-2">{text}</p>
+      <button className="text-sm mt-2 text-[#03588C] hover:underline transition-colors duration-200">
         Reply
       </button>
     </div>

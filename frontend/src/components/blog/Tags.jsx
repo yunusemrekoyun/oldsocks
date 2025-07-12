@@ -1,4 +1,3 @@
-// src/components/Tags.jsx
 import React from "react";
 import TagItem from "./TagItem";
 
@@ -15,7 +14,7 @@ const tags = [
 
 const Tags = () => (
   <div className="mb-8">
-    <h4 className="text-lg font-semibold mb-3">Tags Clouds</h4>
+    <h4 className="text-lg font-semibold mb-3 text-[#0b0b0d]">Tags Clouds</h4>
     <div className="flex flex-wrap">
       {tags.map((t) => (
         <TagItem key={t} tag={t} />

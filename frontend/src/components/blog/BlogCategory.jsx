@@ -1,4 +1,3 @@
-// src/components/BlogCategory.jsx
 import React from "react";
 import BlogCategoryItem from "./BlogCategoryItem";
 
@@ -13,7 +12,7 @@ const categories = [
 
 const BlogCategory = () => (
   <div className="mb-8">
-    <h4 className="text-lg font-semibold mb-3">Category</h4>
+    <h4 className="text-lg font-semibold mb-3 text-[#0b0b0d]">Category</h4>
     <ul>
       {categories.map((c) => (
         <BlogCategoryItem key={c.name} {...c} />

@@ -1,10 +1,10 @@
-// src/components/ContactInput.jsx
 import React from "react";
 import PropTypes from "prop-types";
 
 const ContactInput = ({ multiline, placeholder, className }) => {
   const baseStyles =
-    "w-full border border-gray-200 rounded-lg px-4 py-2 focus:outline-none";
+    "w-full border border-light2 text-dark2 bg-white placeholder-dark2 rounded-lg px-4 py-2 focus:outline-none focus:border-dark1";
+
   if (multiline) {
     return (
       <textarea
@@ -13,6 +13,7 @@ const ContactInput = ({ multiline, placeholder, className }) => {
       />
     );
   }
+
   return (
     <input
       type="text"

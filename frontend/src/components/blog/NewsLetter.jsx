@@ -1,20 +1,19 @@
-// src/components/NewsLetter.jsx
 import React from "react";
 
 const NewsLetter = () => (
-  <div className="bg-[#fcfaff] p-6 text-center">
-    <h4 className="text-2xl font-[Playfair] tracking-wide text-black mb-6 border-b border-purple-100 pb-3">
+  <div className="bg-[#f4f4f4] p-6 rounded-lg shadow-sm text-center">
+    <h4 className="text-xl font-[Playfair] tracking-wide text-[#0b0b0d] mb-6 border-b border-[#d9d9d9] pb-3">
       Newsletter
     </h4>
-    <form className="space-y-5">
+    <form className="space-y-4">
       <input
         type="email"
-        placeholder="Enter email"
-        className="w-full px-6 py-5 border border-purple-100 bg-white text-gray-500 text-lg font-light placeholder-gray-400 focus:outline-none"
+        placeholder="Enter your email"
+        className="w-full px-5 py-4 border border-[#d9d9d9] bg-white text-[#333] text-base rounded focus:outline-none focus:ring-2 focus:ring-[#125795] placeholder-gray-500"
       />
       <button
         type="submit"
-        className="w-full py-5 border border-purple-500 text-purple-500 text-xl tracking-widest font-light uppercase hover:bg-purple-50 transition"
+        className="w-full py-4 bg-[#125795] text-white text-sm font-medium uppercase tracking-wider rounded hover:bg-[#0b0b0d] transition"
       >
         Subscribe
       </button>

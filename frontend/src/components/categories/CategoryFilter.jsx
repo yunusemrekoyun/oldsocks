@@ -9,10 +9,10 @@ const CategoryFilter = () => (
     {filters.map((label) => (
       <div
         key={label}
-        className="flex justify-between items-center border border-gray-200 rounded-lg px-4 py-3 cursor-pointer hover:bg-gray-50 transition"
+        className="flex justify-between items-center bg-light2  rounded-xl px-4 py-3 cursor-pointer hover:bg-dark2/5 transition"
       >
-        <span className="text-gray-800">{label}</span>
-        <FaChevronDown className="text-gray-500" />
+        <span className="text-dark1 font-medium tracking-wide">{label}</span>
+        <FaChevronDown className="text-dark2" />
       </div>
     ))}
   </div>

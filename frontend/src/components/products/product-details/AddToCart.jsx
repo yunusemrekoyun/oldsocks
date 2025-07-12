@@ -12,19 +12,17 @@ const AddToCart = ({ price = 30 }) => {
   return (
     <div className="bg-white p-6 rounded-lg shadow-md space-y-6">
       {/* Fiyat */}
-      <div className="text-3xl font-bold text-gray-900">
-        ₺{price.toFixed(2)}
-      </div>
+      <div className="text-3xl font-bold text-dark1">₺{price.toFixed(2)}</div>
 
       {/* Beden Seçimi */}
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-2">
+        <label className="block text-sm font-medium text-dark2 mb-2">
           Beden
         </label>
         <select
           value={size}
           onChange={(e) => setSize(e.target.value)}
-          className="w-full border border-gray-200 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-purple-500"
+          className="w-full border border-light2 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-dark1 text-dark1 bg-white"
         >
           <option value="" disabled>
             Seçiniz
@@ -38,27 +36,27 @@ const AddToCart = ({ price = 30 }) => {
 
       {/* Adet Kontrolleri */}
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-2">
+        <label className="block text-sm font-medium text-dark2 mb-2">
           Adet
         </label>
         <div className="flex items-center">
           <button
             onClick={decrement}
-            className="p-2 border border-gray-300 rounded-l-lg hover:bg-gray-100 transition"
+            className="p-2 border border-light2 rounded-l-lg hover:bg-light1 transition"
           >
-            <FaMinus className="text-gray-600" />
+            <FaMinus className="text-dark2" />
           </button>
           <input
             type="text"
             readOnly
             value={qty}
-            className="w-16 text-center border-t border-b border-gray-300 px-2"
+            className="w-16 text-center border-t border-b border-light2 text-dark1 px-2 bg-white"
           />
           <button
             onClick={increment}
-            className="p-2 border border-gray-300 rounded-r-lg hover:bg-gray-100 transition"
+            className="p-2 border border-light2 rounded-r-lg hover:bg-light1 transition"
           >
-            <FaPlus className="text-gray-600" />
+            <FaPlus className="text-dark2" />
           </button>
         </div>
       </div>
@@ -72,8 +70,8 @@ const AddToCart = ({ price = 30 }) => {
         className={`w-full py-3 text-white font-medium rounded-lg transition 
           ${
             size
-              ? "bg-purple-600 hover:bg-purple-700"
-              : "bg-gray-300 cursor-not-allowed"
+              ? "bg-dark1 hover:bg-dark2"
+              : "bg-light2 cursor-not-allowed text-dark2"
           }`}
       >
         Sepete Ekle

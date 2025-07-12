@@ -1,4 +1,3 @@
-// src/pages/ContactPage.jsx
 import React from "react";
 import { FaHome, FaPhoneAlt, FaEnvelope } from "react-icons/fa";
 import BreadCrumb from "../components/breadCrumb/BreadCrumb";
@@ -18,7 +17,7 @@ const ContactPage = () => (
       <section className="grid grid-cols-1 lg:grid-cols-2 gap-12">
         {/* Left: Form */}
         <div>
-          <h2 className="text-3xl font-serif font-bold text-gray-900 mb-6">
+          <h2 className="text-3xl font-playfair font-bold text-dark1 mb-6">
             Get in Touch
           </h2>
           <form className="space-y-6">
@@ -37,7 +36,7 @@ const ContactPage = () => (
             {/* Send Button */}
             <button
               type="submit"
-              className="px-8 py-3 border border-purple-600 text-purple-600 rounded-lg hover:bg-purple-600 hover:text-white transition"
+              className="px-8 py-3 border border-dark1 text-dark1 rounded-lg hover:bg-dark1 hover:text-white transition"
             >
               Send
             </button>
@@ -45,7 +44,7 @@ const ContactPage = () => (
         </div>
 
         {/* Right: Contact Info */}
-        <aside>
+        <aside className="space-y-6">
           <ContactInfo
             Icon={FaHome}
             title="Buttonwood, California"
