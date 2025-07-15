@@ -1,0 +1,30 @@
+// backend/routes/index.js
+const express = require("express");
+const router = express.Router();
+
+const { verifyToken } = require("../middleware/auth");
+const { allowRoles } = require("../middleware/roles");
+
+// Sağlık kontrolü
+router.get("/", (req, res) => {
+  res.json({ message: "API çalışıyor 🚀" });
+});
+
+// sadece giriş yapmış kullanıcılar
+router.get("/protected", verifyToken, (req, res) => {
+  res.json({
+    message: "Buraya eriştin!",
+    user: req.user,
+  });
+});
+
+// sadece admin rolündekiler
+router.get("/admin-only", verifyToken, allowRoles("admin"), (req, res) => {
+  res.json({ message: "Admin paneline hoş geldin." });
+});
+
+// auth rotalarını bağla
+router.use("/auth", require("./auth"));
+router.use("/users", require("./users"));
+
+module.exports = router;

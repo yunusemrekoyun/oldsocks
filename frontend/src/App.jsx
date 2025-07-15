@@ -9,6 +9,7 @@ import BlogPage from "./pages/BlogPage";
 import ContactPage from "./pages/ContactPage";
 import BlogDetailsPage from "./pages/BlogDetailsPage";
 import ProductDetailsPage from "./pages/ProductDetailsPage";
+import AuthPage from "./pages/AuthPage";
 
 const App = () => (
   <BrowserRouter>
@@ -21,6 +22,7 @@ const App = () => (
         <Route path="/contact" element={<ContactPage />} />
         <Route path="/blog-details" element={<BlogDetailsPage />} />
         <Route path="/product-details" element={<ProductDetailsPage />} />
+        <Route path="/profile" element={<AuthPage />} />
       </Routes>
     </Layout>
   </BrowserRouter>

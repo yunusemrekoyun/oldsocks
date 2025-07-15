@@ -7,6 +7,7 @@ import {
   FaPinterestP,
   FaSearch,
   FaShoppingCart,
+  FaUser,
 } from "react-icons/fa";
 
 const Header = () => (
@@ -38,7 +39,7 @@ const Header = () => (
           </nav>
         </div>
 
-        {/* Sağ: Sosyal + Arama + Sepet */}
+        {/* Sağ: Sosyal + Arama + Sepet + Kullanıcı */}
         <div className="flex items-center space-x-5">
           {/* Sosyal ikonlar */}
           <div className="hidden md:flex space-x-3">
@@ -65,6 +66,14 @@ const Header = () => (
               0
             </span>
           </div>
+
+          {/* Kullanıcı simgesi */}
+          <Link
+            to="/profile"
+            className="w-12 h-12 flex items-center justify-center border border-light3 rounded-full hover:border-brand transition"
+          >
+            <FaUser className="text-dark2 hover:text-brand text-base" />
+          </Link>
         </div>
       </div>
     </div>
