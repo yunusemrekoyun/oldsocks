@@ -3,6 +3,12 @@ const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 const User = require("../models/User");
 
+const COOKIE_OPTIONS = {
+  httpOnly: true,
+  secure: process.env.NODE_ENV === "production",
+  sameSite: "lax",
+  maxAge: 7 * 24 * 60 * 60 * 1000, // 7 gün
+};
 const createAccessToken = (user) => {
   return jwt.sign(
     { userId: user._id, role: user.role },
@@ -16,7 +22,6 @@ const createRefreshToken = (user) => {
     expiresIn: process.env.JWT_REFRESH_EXPIRES_IN,
   });
 };
-
 
 exports.register = async (req, res) => {
   try {
@@ -54,7 +59,10 @@ exports.register = async (req, res) => {
     user.refreshTokens.push(refreshToken);
     await user.save();
     // 6) yanıt
-    res.status(201).json({ accessToken, refreshToken });
+    res
+      .cookie("refreshToken", refreshToken, COOKIE_OPTIONS)
+      .status(201)
+      .json({ accessToken });
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Kayıt işlemi başarısız." });
@@ -76,7 +84,9 @@ exports.login = async (req, res) => {
     user.refreshTokens.push(refreshToken);
     await user.save();
     // 4) yanıt
-    res.json({ accessToken, refreshToken });
+    res
+      .cookie("refreshToken", refreshToken, COOKIE_OPTIONS)
+      .json({ accessToken });
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Giriş işlemi başarısız." });
@@ -85,7 +95,7 @@ exports.login = async (req, res) => {
 
 exports.refresh = async (req, res) => {
   try {
-    const { refreshToken } = req.body;
+    const { refreshToken } = req.cookies;
     if (!refreshToken) return res.status(401).json({ message: "Token yok." });
     // 1) DB’de kayıtlı mı?
     const user = await User.findOne({ refreshTokens: refreshToken });
@@ -100,7 +110,9 @@ exports.refresh = async (req, res) => {
     user.refreshTokens.push(newRefreshToken);
     await user.save();
     // 5) yanıt
-    res.json({ accessToken: newAccessToken, refreshToken: newRefreshToken });
+    res
+      .cookie("refreshToken", newRefreshToken, COOKIE_OPTIONS)
+      .json({ accessToken: newAccessToken });
   } catch (err) {
     console.error(err);
     res.status(403).json({ message: "Token yenileme başarısız." });
@@ -109,14 +121,14 @@ exports.refresh = async (req, res) => {
 
 exports.logout = async (req, res) => {
   try {
-    const { refreshToken } = req.body;
+    const { refreshToken } = req.cookies;
     if (!refreshToken) return res.sendStatus(204);
     // refresh token'ı DB’den temizle
     await User.updateOne(
       { refreshTokens: refreshToken },
       { $pull: { refreshTokens: refreshToken } }
     );
-    res.sendStatus(204);
+    res.clearCookie("refreshToken", COOKIE_OPTIONS).sendStatus(204);
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Çıkış yapılamadı." });

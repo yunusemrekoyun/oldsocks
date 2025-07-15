@@ -25,6 +25,8 @@ router.get("/admin-only", verifyToken, allowRoles("admin"), (req, res) => {
 
 // auth rotalarını bağla
 router.use("/auth", require("./auth"));
+
+// users rotalarını bağla (getMe, updateMe, admin CRUD)
 router.use("/users", require("./users"));
 
 module.exports = router;

@@ -4,6 +4,7 @@ const express = require("express");
 const cors = require("cors");
 const connectDB = require("./config/db");
 const apiRoutes = require("./routes");
+const cookieParser = require("cookie-parser");
 
 const app = express();
 
@@ -18,7 +19,7 @@ app.use(
   })
 );
 app.use(express.json()); // body-parser yerine
-
+app.use(cookieParser());
 // 3) Route’ları mount et
 app.use("/api/v1", apiRoutes);
 

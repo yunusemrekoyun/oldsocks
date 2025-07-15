@@ -1,12 +1,13 @@
 // src/pages/AuthPage.jsx
-import React from "react";
+import React, { useContext } from "react";
 import Auth from "../components/auth/Auth";
 import UserAccount from "../components/user/UserAccount";
+import { AuthContext } from "../context/AuthContext";
 
 const AuthPage = () => {
-  // Bu fonksiyon yerine ileride token kontrolü veya context kullanılacak
-  const isLoggedIn = false; // 👈 test için burayı true/false yaparak değiştir
+  const { isLoggedIn } = useContext(AuthContext);
 
+  // isLoggedIn zaten boolean, hemen render edebiliriz
   return (
     <div className="min-h-screen p-10">
       {isLoggedIn ? <UserAccount /> : <Auth />}

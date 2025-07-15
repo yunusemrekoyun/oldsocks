@@ -1,7 +1,11 @@
 // src/App.jsx
 import React from "react";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Outlet } from "react-router-dom";
+
 import Layout from "./components/layout/Layout";
+import AdminLayout from "./components/layout/AdminLayout";
+import RequireAdmin from "./components/auth/RequireAdmin";
+
 import HomePage from "./pages/HomePage";
 import ShopPage from "./pages/ShopPage";
 import AboutPage from "./pages/AboutPage";
@@ -13,8 +17,15 @@ import AuthPage from "./pages/AuthPage";
 
 const App = () => (
   <BrowserRouter>
-    <Layout>
-      <Routes>
+    <Routes>
+      {/* Public/User routes */}
+      <Route
+        element={
+          <Layout>
+            <Outlet />
+          </Layout>
+        }
+      >
         <Route path="/" element={<HomePage />} />
         <Route path="/shop" element={<ShopPage />} />
         <Route path="/about" element={<AboutPage />} />
@@ -22,9 +33,25 @@ const App = () => (
         <Route path="/contact" element={<ContactPage />} />
         <Route path="/blog-details" element={<BlogDetailsPage />} />
         <Route path="/product-details" element={<ProductDetailsPage />} />
+        <Route path="/auth" element={<AuthPage />} />
         <Route path="/profile" element={<AuthPage />} />
-      </Routes>
-    </Layout>
+      </Route>
+
+      {/* Admin routes */}
+      <Route element={<RequireAdmin />}>
+        <Route
+          path="/admin/*"
+          element={
+            <AdminLayout>
+              <Outlet />
+            </AdminLayout>
+          }
+        >
+          <Route index element={<div>Hoş geldin Admin!</div>} />
+          {/* future: <Route path="users" element={<AdminUsersPage/>}/> */}
+        </Route>
+      </Route>
+    </Routes>
   </BrowserRouter>
 );
 
