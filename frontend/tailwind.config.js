@@ -1,6 +1,10 @@
 // tailwind.config.js
 export default {
-  content: ["./index.html", "./src/**/*.{js,jsx}"],
+  content: [
+    "./src/**/*.{js,jsx,ts,tsx}",
+    "./node_modules/@material-tailwind/react/components/**/*.js",
+    "./node_modules/@material-tailwind/react/theme/components/**/*.js",
+  ],
   theme: {
     extend: {
       fontFamily: {

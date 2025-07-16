@@ -1,11 +1,9 @@
-// src/App.jsx
 import React from "react";
 import { BrowserRouter, Routes, Route, Outlet } from "react-router-dom";
 
 import Layout from "./components/layout/Layout";
 import AdminLayout from "./components/layout/AdminLayout";
 import RequireAdmin from "./components/auth/RequireAdmin";
-
 import HomePage from "./pages/HomePage";
 import ShopPage from "./pages/ShopPage";
 import AboutPage from "./pages/AboutPage";
@@ -15,10 +13,15 @@ import BlogDetailsPage from "./pages/BlogDetailsPage";
 import ProductDetailsPage from "./pages/ProductDetailsPage";
 import AuthPage from "./pages/AuthPage";
 
+// Admin sayfaları
+import ProductsPage from "./pages/admin/ProductsPage";
+import AdminUsersPage from "./pages/admin/UsersPage";
+import CategoriesPage from "./pages/admin/CategoriesPage";
+
 const App = () => (
   <BrowserRouter>
     <Routes>
-      {/* Public/User routes */}
+      {/* Public / User Routes */}
       <Route
         element={
           <Layout>
@@ -37,10 +40,10 @@ const App = () => (
         <Route path="/profile" element={<AuthPage />} />
       </Route>
 
-      {/* Admin routes */}
+      {/* Admin Routes */}
       <Route element={<RequireAdmin />}>
         <Route
-          path="/admin/*"
+          path="/admin"
           element={
             <AdminLayout>
               <Outlet />
@@ -48,7 +51,9 @@ const App = () => (
           }
         >
           <Route index element={<div>Hoş geldin Admin!</div>} />
-          {/* future: <Route path="users" element={<AdminUsersPage/>}/> */}
+          <Route path="products" element={<ProductsPage />} />
+          <Route path="users" element={<AdminUsersPage />} />
+          <Route path="categories" element={<CategoriesPage />} />
         </Route>
       </Route>
     </Routes>
