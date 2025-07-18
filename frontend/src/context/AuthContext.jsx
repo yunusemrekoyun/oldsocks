@@ -1,6 +1,5 @@
 // src/context/AuthContext.jsx
 /* eslint-disable react-refresh/only-export-components */
-// src/context/AuthContext.jsx
 import React, { createContext, useState, useEffect } from "react";
 import api from "../../api";
 
@@ -14,20 +13,26 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(isLoggedIn);
 
   useEffect(() => {
+    // Eğer login değilsek, hemen çık
     if (!isLoggedIn) {
       setRole(null);
       setLoading(false);
+      localStorage.removeItem("accessToken");
       return;
     }
+
     setLoading(true);
     api
-      .get("/users/me", { skipAuthRefresh: true })
+      .get("/users/me")
       .then((res) => {
         setRole(res.data.role);
       })
-      .catch(() => {
+      .catch((err) => {
+        console.warn("[AuthContext] /users/me hatası:", err.response?.status);
+        // 403/401 gelirse oturumu kapat
         setRole(null);
         setIsLoggedIn(false);
+        localStorage.removeItem("accessToken");
       })
       .finally(() => {
         setLoading(false);
