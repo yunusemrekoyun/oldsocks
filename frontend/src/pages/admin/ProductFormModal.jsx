@@ -13,17 +13,28 @@ export default function ProductFormModal({ product, onClose, onSaved }) {
     api.get("/categories").then((res) => setCategories(res.data));
   }, []);
 
-  // 2) Form state’in initial’i: hem parent hem child dropdown’u doldurmak için
+  // 2) Form state’in initial’i
   useEffect(() => {
     if (product) {
+      // product.category: { _id, name, parent: { _id } | null }
       const cat = product.category || {};
-      const parentId =
-        typeof cat.parent === "object" ? cat.parent?._id : cat?.parent;
+      let parent = "";
+      let category = "";
+
+      if (cat.parent && typeof cat.parent === "object") {
+        // Bu bir alt kategori ürünü
+        parent = cat.parent._id;
+        category = cat._id;
+      } else {
+        // Sadece üst kategori ürünü
+        parent = cat._id;
+        category = "";
+      }
 
       setForm({
         name: product.name || "",
-        parent: parentId || "",
-        category: cat._id || (typeof cat === "string" ? cat : ""),
+        parent,
+        category,
         video: undefined,
         images: [],
         price: product.price ?? "",
@@ -80,7 +91,9 @@ export default function ProductFormModal({ product, onClose, onSaved }) {
         "color",
       ].forEach((k) => fd.append(k, form[k]));
       fd.append("sizes", form.sizes);
-      fd.append("category", form.category);
+      // Alt kategori seçilmişse onu yoksa ana kategori id’sini kullan
+      const categoryId = form.category || form.parent;
+      fd.append("category", categoryId);
 
       if (isEdit) {
         await api.put(`/products/${product._id}`, fd, {
@@ -101,11 +114,10 @@ export default function ProductFormModal({ product, onClose, onSaved }) {
 
   if (!form) return null;
 
-  // 3) parentCats = üst kategoriler, childCats = seçilen üstün alt kategorileri
+  // 3) parentCats = ana kategoriler, childCats = seçilen ana kategorinin alt kategorileri
   const parentCats = categories.filter((c) => !c.parent);
-  const childCats = categories.filter(
-    (c) => c.parent && String(c.parent._id) === form.parent
-  );
+  const selectedParent = parentCats.find((c) => c._id === form.parent);
+  const childCats = selectedParent?.children || [];
 
   return (
     <form
@@ -124,7 +136,7 @@ export default function ProductFormModal({ product, onClose, onSaved }) {
         />
       </div>
 
-      {/* Mevcut video / görüntüler */}
+      {/* Mevcut Video / Resimler */}
       {isEdit && product.video && (
         <div>
           <label className="block">Mevcut Video</label>
@@ -136,13 +148,18 @@ export default function ProductFormModal({ product, onClose, onSaved }) {
           <label className="block">Mevcut Resimler</label>
           <div className="flex gap-2 flex-wrap">
             {product.images.map((img, i) => (
-              <img key={i} src={img} className="w-24 h-24 rounded" />
+              <img
+                key={i}
+                src={img}
+                alt={`img-${i}`}
+                className="w-24 h-24 rounded"
+              />
             ))}
           </div>
         </div>
       )}
 
-      {/* Yeni dosyalar */}
+      {/* Yeni Dosyalar */}
       <div>
         <label>Yeni Video</label>
         <input
@@ -163,11 +180,11 @@ export default function ProductFormModal({ product, onClose, onSaved }) {
         />
       </div>
 
-      {/* Fiyat/Stok/Color */}
+      {/* Fiyat / Stok / Renk */}
       <div className="grid grid-cols-2 gap-4">
         {["price", "originalPrice", "discount", "stock", "color"].map((k) => (
           <div key={k}>
-            <label>{k}</label>
+            <label className="block">{k}</label>
             <input
               name={k}
               value={form[k]}
@@ -185,9 +202,9 @@ export default function ProductFormModal({ product, onClose, onSaved }) {
         <select
           name="parent"
           value={form.parent}
-          onChange={(e) => {
-            setForm((f) => ({ ...f, parent: e.target.value, category: "" }));
-          }}
+          onChange={(e) =>
+            setForm((f) => ({ ...f, parent: e.target.value, category: "" }))
+          }
           className="w-full border px-2 py-1 rounded"
           required
         >
@@ -200,24 +217,25 @@ export default function ProductFormModal({ product, onClose, onSaved }) {
         </select>
       </div>
 
-      {/* Alt Kategori */}
-      <div>
-        <label className="block">Alt Kategori</label>
-        <select
-          name="category"
-          value={form.category}
-          onChange={handleChange}
-          className="w-full border px-2 py-1 rounded"
-          required
-        >
-          <option value="">Seçin</option>
-          {childCats.map((c) => (
-            <option key={c._id} value={c._id}>
-              {c.name}
-            </option>
-          ))}
-        </select>
-      </div>
+      {/* Alt Kategori (opsiyonel) */}
+      {childCats.length > 0 && (
+        <div>
+          <label className="block">Alt Kategori (opsiyonel)</label>
+          <select
+            name="category"
+            value={form.category}
+            onChange={handleChange}
+            className="w-full border px-2 py-1 rounded"
+          >
+            <option value="">Ana kategoriyi kullan</option>
+            {childCats.map((c) => (
+              <option key={c._id} value={c._id}>
+                {c.name}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
 
       {/* Bedenler */}
       <div>
