@@ -10,15 +10,9 @@ export default function ProductGrid() {
   useEffect(() => {
     api
       .get("/products")
-      .then((res) => {
-        setProducts(res.data);
-      })
-      .catch((err) => {
-        console.error("Ürünler getirilirken hata:", err);
-      })
-      .finally(() => {
-        setLoading(false);
-      });
+      .then((res) => setProducts(res.data))
+      .catch((err) => console.error("Ürünler getirilirken hata:", err))
+      .finally(() => setLoading(false));
   }, []);
 
   if (loading) {
@@ -40,6 +34,7 @@ export default function ProductGrid() {
           {products.map((p) => (
             <ProductGridItem
               key={p._id}
+              id={p._id}
               video={p.video}
               name={p.name}
               price={p.price}

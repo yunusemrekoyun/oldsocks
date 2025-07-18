@@ -4,16 +4,14 @@ import PropTypes from "prop-types";
 import { Link } from "react-router-dom";
 import { FaStar, FaVolumeMute, FaVolumeUp } from "react-icons/fa";
 
-const ProductGridItem = ({ video, name, price, rating }) => {
+export default function ProductGridItem({ id, video, name, price, rating }) {
   const videoRef = useRef(null);
   const [isHovered, setIsHovered] = useState(false);
   const [isMuted, setIsMuted] = useState(true);
 
   const handleMouseEnter = () => {
     setIsHovered(true);
-    if (videoRef.current) {
-      videoRef.current.play();
-    }
+    videoRef.current?.play();
   };
 
   const handleMouseLeave = () => {
@@ -28,15 +26,16 @@ const ProductGridItem = ({ video, name, price, rating }) => {
     e.preventDefault();
     e.stopPropagation();
     if (videoRef.current) {
-      videoRef.current.muted = !videoRef.current.muted;
-      setIsMuted(videoRef.current.muted);
+      const newMuted = !videoRef.current.muted;
+      videoRef.current.muted = newMuted;
+      setIsMuted(newMuted);
     }
   };
 
   return (
     <Link
-      to={`/product-details`}
-      className="block relative bg-white rounded-xl overflow-hidden shadow hover:shadow-lg transition-shadow duration-300 group"
+      to={`/product-details/${id}`}
+      className="group relative rounded-xl overflow-hidden bg-white shadow border border-light2 hover:shadow-xl transition-all duration-300"
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
     >
@@ -78,7 +77,7 @@ const ProductGridItem = ({ video, name, price, rating }) => {
       </div>
     </Link>
   );
-};
+}
 
 ProductGridItem.propTypes = {
   id: PropTypes.oneOfType([PropTypes.string, PropTypes.number]).isRequired,
@@ -91,5 +90,3 @@ ProductGridItem.propTypes = {
 ProductGridItem.defaultProps = {
   rating: 0,
 };
-
-export default ProductGridItem;

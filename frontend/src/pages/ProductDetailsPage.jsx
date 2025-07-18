@@ -5,7 +5,7 @@ import api from "../../api";
 
 import BreadCrumb from "../components/breadCrumb/BreadCrumb";
 import ProductDetails from "../components/products/product-details/ProductDetails";
-import ProductMiniMap from "../components/products/product-details/ProductMiniMap";
+import SimilarProducts from "../components/products/product-details/SimilarProducts";
 import AddToCart from "../components/products/product-details/AddToCart";
 import Campaigns from "../components/campaigns/Campaigns";
 import Services from "../components/services/Services";
@@ -30,30 +30,32 @@ export default function ProductDetailsPage() {
       .finally(() => setLoading(false));
   }, [id]);
 
-  if (loading) {
-    return <div className="text-center py-10">Ürün yükleniyor…</div>;
-  }
-  if (error) {
+  if (loading) return <div className="text-center py-10">Ürün yükleniyor…</div>;
+  if (error)
     return <div className="text-center py-10 text-red-600">{error}</div>;
-  }
-  if (!product) {
+  if (!product)
     return <div className="text-center py-10">Ürün bulunamadı.</div>;
-  }
+
+  // product.category bazen nesne, bazen string olabileceği için güvenli alalım
+  const cat = product.category;
+  const categoryId = cat?._id ?? (typeof cat === "string" ? cat : null);
 
   return (
     <>
-      {/* Eğer BreadCrumb kategori ve isim isterse onlara da prop ver */}
       <BreadCrumb category={product.category} name={product.name} />
 
       <main className="container mx-auto px-4 py-12 grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* Üst açıklama ve galeri */}
+        {/* Detaylar */}
         <section className="lg:col-span-2">
           <ProductDetails product={product} />
         </section>
 
-        {/* Fiyat, beden seçimi, sepete ekle */}
+        {/* Sağ sidebar */}
         <aside className="lg:col-span-1 space-y-6">
-          <ProductMiniMap images={product.images} />
+          <SimilarProducts
+            categoryId={categoryId}
+            currentProductId={product._id}
+          />
           <AddToCart price={product.price} sizes={product.sizes} />
         </aside>
       </main>
