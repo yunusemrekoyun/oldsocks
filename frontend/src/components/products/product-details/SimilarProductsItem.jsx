@@ -31,29 +31,31 @@ export default function SimilarProductItem({ id, video, name, price, rating }) {
   return (
     <Link
       to={`/product-details/${id}`}
-      className="group relative rounded-lg overflow-hidden bg-white shadow hover:shadow-lg transition"
+      className="group relative rounded-xl overflow-hidden bg-white shadow hover:shadow-lg transition flex flex-col h-full"
       onMouseEnter={onEnter}
       onMouseLeave={onLeave}
     >
-      {hovered && (
-        <button
-          onClick={toggleMute}
-          className="absolute top-2 right-2 bg-white p-1 rounded-full shadow z-10"
-        >
-          {muted ? <FaVolumeMute /> : <FaVolumeUp />}
-        </button>
-      )}
-      <video
-        ref={videoRef}
-        src={video}
-        muted
-        playsInline
-        preload="metadata"
-        className="w-full h-40 object-contain transition-transform group-hover:scale-105"
-      />
-      <div className="p-2 text-center">
-        <h4 className="text-sm font-medium">{name}</h4>
-        <div className="flex justify-center mt-1">
+      <div className="relative">
+        <video
+          ref={videoRef}
+          src={video}
+          muted
+          playsInline
+          preload="metadata"
+          className="w-full h-48 object-contain transition-transform duration-300 group-hover:scale-105 bg-gray-100"
+        />
+        {hovered && (
+          <button
+            onClick={toggleMute}
+            className="absolute top-2 right-2 bg-white p-1 rounded-full shadow z-10"
+          >
+            {muted ? <FaVolumeMute /> : <FaVolumeUp />}
+          </button>
+        )}
+      </div>
+      <div className="p-3 text-center flex flex-col justify-between flex-grow">
+        <h4 className="text-sm font-medium line-clamp-2">{name}</h4>
+        <div className="flex justify-center my-1">
           {Array.from({ length: 5 }).map((_, i) => (
             <FaStar
               key={i}
@@ -63,7 +65,7 @@ export default function SimilarProductItem({ id, video, name, price, rating }) {
             />
           ))}
         </div>
-        <p className="mt-1 font-semibold">${price.toFixed(2)}</p>
+        <p className="mt-1 font-semibold text-primary">${price.toFixed(2)}</p>
       </div>
     </Link>
   );
@@ -76,6 +78,7 @@ SimilarProductItem.propTypes = {
   price: PropTypes.number.isRequired,
   rating: PropTypes.number,
 };
+
 SimilarProductItem.defaultProps = {
   rating: 0,
 };

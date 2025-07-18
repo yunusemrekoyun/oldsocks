@@ -39,6 +39,9 @@ export default function ProductDetailsPage() {
   // product.category bazen nesne, bazen string olabileceği için güvenli alalım
   const cat = product.category;
   const categoryId = cat?._id ?? (typeof cat === "string" ? cat : null);
+  // Eğer kategori bir alt kategori ise onu atlayıp parent’ı al, yoksa kendisi
+  const rootCategoryId =
+    cat && typeof cat === "object" && cat.parent ? cat.parent._id : categoryId;
 
   return (
     <>
@@ -53,7 +56,7 @@ export default function ProductDetailsPage() {
         {/* Sağ sidebar */}
         <aside className="lg:col-span-1 space-y-6">
           <SimilarProducts
-            categoryId={categoryId}
+            categoryId={rootCategoryId}
             currentProductId={product._id}
           />
           <AddToCart price={product.price} sizes={product.sizes} />
