@@ -28,9 +28,8 @@ const ProductGridItem = ({ video, name, price, rating }) => {
     e.preventDefault();
     e.stopPropagation();
     if (videoRef.current) {
-      const muted = !videoRef.current.muted;
-      videoRef.current.muted = muted;
-      setIsMuted(muted);
+      videoRef.current.muted = !videoRef.current.muted;
+      setIsMuted(videoRef.current.muted);
     }
   };
 
@@ -57,7 +56,7 @@ const ProductGridItem = ({ video, name, price, rating }) => {
       <video
         ref={videoRef}
         src={video}
-        muted
+        muted={isMuted}
         playsInline
         preload="metadata"
         className="w-full h-64 object-contain transition duration-300"

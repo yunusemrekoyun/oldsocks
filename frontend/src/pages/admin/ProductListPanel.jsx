@@ -30,7 +30,9 @@ export default function ProductListPanel({
           />
           <div className="mt-2 text-sm">
             <p>{p.price}₺</p>
-            <p className="text-gray-500">{p.category.name}</p>
+            <p className="text-gray-500">
+              {p.category?.name || "Kategori Yok"}
+            </p>
           </div>
           <button
             className="absolute top-2 right-2 opacity-0 group-hover:opacity-100"

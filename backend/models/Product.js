@@ -1,22 +1,56 @@
-// backend/models/Product.js
 const mongoose = require("mongoose");
 
 const ProductSchema = new mongoose.Schema(
   {
-    video: { type: String, required: true }, // Ürün hover video URL’si
-    images: [{ type: String, required: true }], // 1–4 arası resim URL’leri
-    price: { type: Number, required: true }, // İndirimli fiyat
-    originalPrice: { type: Number, required: true }, // Normal fiyat
-    discount: { type: Number, default: 0 }, // Yüzdelik indirim
+    name: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+    video: {
+      type: String,
+      required: true, // hover video URL
+    },
+    images: [
+      {
+        type: String,
+        required: true, // 1–4 image URLs
+      },
+    ],
+    price: {
+      type: Number,
+      required: true, // indirimli fiyat
+    },
+    originalPrice: {
+      type: Number,
+      required: true, // normal fiyat
+    },
+    discount: {
+      type: Number,
+      default: 0, // yüzde indirim
+    },
     category: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Category",
-      required: true,
+      required: true, // alt veya üst kategori ID’si
     },
-    stock: { type: Number, default: 0 },
-    sizes: [{ type: String }], // null olabilir
-    description: { type: String, default: "" },
-    color: { type: String, default: "" },
+    stock: {
+      type: Number,
+      default: 0,
+    },
+    sizes: [
+      {
+        type: String,
+      },
+    ],
+    description: {
+      type: String,
+      default: "",
+    },
+    color: {
+      type: String,
+      default: "",
+    },
   },
   { timestamps: true }
 );

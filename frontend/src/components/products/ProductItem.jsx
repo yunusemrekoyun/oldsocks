@@ -3,14 +3,14 @@ import PropTypes from "prop-types";
 import { Link } from "react-router-dom";
 import { FaVolumeMute, FaVolumeUp, FaStar } from "react-icons/fa";
 
-const ProductItem = ({ video, name, price, rating }) => {
+const ProductItem = ({ id, video, name, price, rating }) => {
   const videoRef = useRef(null);
-  const [isMuted, setIsMuted] = useState(true);
   const [isHovered, setIsHovered] = useState(false);
+  const [isMuted, setIsMuted] = useState(true);
 
   const handleMouseEnter = () => {
     setIsHovered(true);
-    if (videoRef.current) videoRef.current.play();
+    videoRef.current?.play();
   };
 
   const handleMouseLeave = () => {
@@ -33,12 +33,12 @@ const ProductItem = ({ video, name, price, rating }) => {
 
   return (
     <Link
-      to="/product-details"
+      to={`/product-details/${id}`}
       className="group relative rounded-xl overflow-hidden bg-white shadow border border-light2 hover:shadow-xl transition-all duration-300"
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
     >
-      {/* Ses İkonu */}
+      {/* Ses Butonu */}
       {isHovered && (
         <button
           onClick={toggleMute}
@@ -86,6 +86,7 @@ const ProductItem = ({ video, name, price, rating }) => {
 };
 
 ProductItem.propTypes = {
+  id: PropTypes.oneOfType([PropTypes.string, PropTypes.number]).isRequired,
   video: PropTypes.string.isRequired,
   name: PropTypes.string.isRequired,
   price: PropTypes.number.isRequired,

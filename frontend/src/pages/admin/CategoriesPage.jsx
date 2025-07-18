@@ -8,16 +8,12 @@ import api from "../../../api";
 export default function CategoriesPage() {
   const [cats, setCats] = useState([]);
   const [activeCat, setActiveCat] = useState(null);
-  const [showListFull, setShowListFull] = useState(false);
+  const [showList, setShowList] = useState(false);
   const [showForm, setShowForm] = useState(false);
 
   const fetchCats = async () => {
-    try {
-      const { data } = await api.get("/categories");
-      setCats(data);
-    } catch (e) {
-      console.error(e);
-    }
+    const { data } = await api.get("/categories");
+    setCats(data);
   };
 
   useEffect(() => {
@@ -32,54 +28,46 @@ export default function CategoriesPage() {
     setActiveCat(c);
     setShowForm(true);
   };
-  const closeForm = () => setShowForm(false);
 
   return (
     <div className="p-6 space-y-4">
-      <div className="flex space-x-4">
-        <h1
+      <div className="flex gap-4">
+        <button
           onClick={openNew}
-          className="cursor-pointer text-lg font-semibold px-4 py-2 bg-blue-100 rounded hover:bg-blue-200"
+          className="px-4 py-2 bg-blue-100 rounded hover:bg-blue-200"
         >
           Kategori Ekle
-        </h1>
-        <h1
-          onClick={() => setShowListFull((f) => !f)}
-          className="cursor-pointer text-lg font-semibold px-4 py-2 bg-green-100 rounded hover:bg-green-200"
+        </button>
+        <button
+          onClick={() => setShowList((f) => !f)}
+          className="px-4 py-2 bg-green-100 rounded hover:bg-green-200"
         >
-          {showListFull ? "Listeyi Küçült" : "Kategori Listesi"}
-        </h1>
+          {showList ? "Listeyi Gizle" : "Kategori Listesi"}
+        </button>
       </div>
 
-      {showListFull ? (
-        <Window title="Kategori Listesi" onClose={() => setShowListFull(false)}>
+      {showList && (
+        <Window title="Kategori Listesi" onClose={() => setShowList(false)}>
           <CategoryListPanel
             categories={cats}
             onEdit={openEdit}
             onDelete={fetchCats}
-            isFull={true}
+            isFull
           />
         </Window>
-      ) : (
-        <CategoryListPanel
-          categories={cats}
-          onEdit={openEdit}
-          onDelete={fetchCats}
-          isFull={false}
-        />
       )}
 
       {showForm && (
         <Window
           title={activeCat ? "Kategori Düzenle" : "Yeni Kategori"}
-          onClose={closeForm}
+          onClose={() => setShowForm(false)}
         >
           <CategoryFormModal
             category={activeCat}
-            onClose={closeForm}
+            onClose={() => setShowForm(false)}
             onSaved={() => {
               fetchCats();
-              closeForm();
+              setShowForm(false);
             }}
           />
         </Window>

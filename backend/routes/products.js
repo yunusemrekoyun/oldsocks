@@ -2,15 +2,13 @@ const router = require("express").Router();
 const { verifyToken } = require("../middleware/auth");
 const { allowRoles } = require("../middleware/roles");
 const productCtrl = require("../controllers/productController");
-const {
-  uploadProductFiles,
-  uploadCategoryImage,
-} = require("../middleware/upload");
+const { uploadProductFiles } = require("../middleware/upload");
 
-// GET Routes
+// Public
 router.get("/", productCtrl.getProducts);
 router.get("/:id", productCtrl.getProduct);
 
+// Admin-only
 router.post(
   "/",
   verifyToken,

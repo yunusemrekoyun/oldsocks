@@ -2,9 +2,13 @@
 const Category = require("../models/Category");
 
 // — Public —
+
+// Tüm kategorileri parent + children populate ile getir
 exports.getCategories = async (req, res) => {
   try {
-    const cats = await Category.find().populate("parent", "name");
+    const cats = await Category.find()
+      .populate("parent", "name")
+      .populate("children", "name image parent");
     res.json(cats);
   } catch (err) {
     console.error(err);
@@ -12,12 +16,12 @@ exports.getCategories = async (req, res) => {
   }
 };
 
+// Tek bir kategori getir
 exports.getCategory = async (req, res) => {
   try {
-    const cat = await Category.findById(req.params.id).populate(
-      "parent",
-      "name"
-    );
+    const cat = await Category.findById(req.params.id)
+      .populate("parent", "name")
+      .populate("children", "name image parent");
     if (!cat) return res.status(404).json({ message: "Kategori bulunamadı." });
     res.json(cat);
   } catch (err) {
@@ -26,60 +30,98 @@ exports.getCategory = async (req, res) => {
   }
 };
 
+// — Admin —
+
+// Yeni kategori + isteğe bağlı alt kategorileri de oluştur
 exports.createCategory = async (req, res) => {
   try {
-    const { name, parent } = req.body;
-    const image = req.file?.path; // Cloudinary URL
-
+    const { name, parent, children } = req.body;
+    const image = req.file?.path;
     if (!name || !image) {
       return res.status(400).json({ message: "İsim ve görsel zorunludur." });
     }
-
+    // parent varsa kontrol et
     if (parent && !(await Category.exists({ _id: parent }))) {
       return res.status(400).json({ message: "Geçersiz parent kategori." });
     }
-
-    const newCategory = await Category.create({ name, image, parent });
-    res.status(201).json(newCategory);
+    // 1) Ana kategoriyi oluştur
+    const newCat = await Category.create({
+      name,
+      image,
+      parent: parent || null,
+    });
+    // 2) Eğer kullanıcı virgülle ayırarak gönderdiği alt kategori isimleri varsa, her birini ekle
+    if (children) {
+      const names = children
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean);
+      await Promise.all(
+        names.map((childName) =>
+          Category.create({ name: childName, image, parent: newCat._id })
+        )
+      );
+    }
+    // 3) populate edip dön
+    const populated = await Category.findById(newCat._id)
+      .populate("parent", "name")
+      .populate("children", "name image parent");
+    res.status(201).json(populated);
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Kategori oluşturulurken hata oluştu." });
   }
 };
+
+// Var olan kategoriyi güncelle ve isteğe bağlı yeni alt kategorileri ekle
 exports.updateCategory = async (req, res) => {
   try {
-    const { name, parent } = req.body;
-
-    // Güncelleme objesini oluştur
+    const { name, parent, children } = req.body;
     const updates = { name };
-
-    // Yeni görsel yüklendiyse güncelle
-    if (req.file) {
-      updates.image = req.file.path; // Cloudinary'den gelen URL
-    }
-
-    // Parent varsa geçerli mi kontrol et
+    if (req.file) updates.image = req.file.path;
+    // parent kontrolü
     if (parent) {
-      const parentExists = await Category.exists({ _id: parent });
-      if (!parentExists) {
+      if (!(await Category.exists({ _id: parent }))) {
         return res.status(400).json({ message: "Geçersiz parent kategori." });
       }
       updates.parent = parent;
+    } else {
+      updates.parent = null;
     }
-
-    const cat = await Category.findByIdAndUpdate(req.params.id, updates, {
+    // kategori güncelle
+    const updated = await Category.findByIdAndUpdate(req.params.id, updates, {
       new: true,
     });
-
-    if (!cat) return res.status(404).json({ message: "Kategori bulunamadı." });
-
-    res.json(cat);
+    if (!updated)
+      return res.status(404).json({ message: "Kategori bulunamadı." });
+    // alt kategorileri ekle
+    if (children) {
+      const names = children
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean);
+      await Promise.all(
+        names.map((childName) =>
+          Category.create({
+            name: childName,
+            image: updated.image,
+            parent: updated._id,
+          })
+        )
+      );
+    }
+    // populate edip dön
+    const populated = await Category.findById(updated._id)
+      .populate("parent", "name")
+      .populate("children", "name image parent");
+    res.json(populated);
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Kategori güncellenirken hata oluştu." });
   }
 };
 
+// Sil
 exports.deleteCategory = async (req, res) => {
   try {
     const cat = await Category.findByIdAndDelete(req.params.id);

@@ -1,4 +1,3 @@
-// src/pages/admin/ProductsPage.jsx
 import React, { useState, useEffect } from "react";
 import ProductFormModal from "./ProductFormModal";
 import ProductListPanel from "./ProductListPanel";
@@ -10,17 +9,21 @@ export default function ProductsPage() {
   const [activeProduct, setActiveProduct] = useState(null);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [isListFull, setIsListFull] = useState(false);
+  const [loadingList, setLoadingList] = useState(false);
 
   useEffect(() => {
-    fetch();
+    fetchProducts();
   }, []);
 
-  const fetch = async () => {
+  const fetchProducts = async () => {
+    setLoadingList(true);
     try {
       const { data } = await api.get("/products");
       setProducts(data);
     } catch (e) {
       console.error(e);
+    } finally {
+      setLoadingList(false);
     }
   };
 
@@ -29,15 +32,24 @@ export default function ProductsPage() {
     setIsFormOpen(true);
   };
 
-  const openEditForm = (prod) => {
-    setActiveProduct(prod);
-    setIsFormOpen(true);
+  const openEditForm = async (prod) => {
+    setLoadingList(true);
+    try {
+      const { data } = await api.get(`/products/${prod._id}`);
+      setActiveProduct(data);
+      setIsFormOpen(true);
+    } catch (err) {
+      console.error("Ürün detayları alınamadı", err);
+    } finally {
+      setLoadingList(false);
+    }
   };
 
   const closeForm = () => setIsFormOpen(false);
+  const closeList = () => setIsListFull(false);
 
   const onSaved = () => {
-    fetch();
+    fetchProducts();
     closeForm();
   };
 
@@ -45,52 +57,42 @@ export default function ProductsPage() {
     <div className="p-6 space-y-4">
       {/* Başlıklar */}
       <div className="flex space-x-4">
-        <h1
-          className="cursor-pointer text-lg font-semibold px-4 py-2 bg-blue-100 rounded hover:bg-blue-200"
+        <button
           onClick={openNewForm}
+          className="text-lg font-semibold px-4 py-2 bg-blue-100 rounded hover:bg-blue-200"
         >
           Ürün Ekle
-        </h1>
-        <h1
-          className="cursor-pointer text-lg font-semibold px-4 py-2 bg-green-100 rounded hover:bg-green-200"
+        </button>
+        <button
           onClick={() => setIsListFull((f) => !f)}
+          className="text-lg font-semibold px-4 py-2 bg-green-100 rounded hover:bg-green-200"
         >
           {isListFull ? "Listeyi Küçült" : "Ürün Listesi"}
-        </h1>
-      </div>
-      {isListFull && (
-        <Window title="Ürün Listesi" onClose={() => setIsListFull(false)}>
-          <ProductListPanel
-            products={products}
-            onEdit={openEditForm}
-            onDelete={fetch}
-            isFull={true}
-          />
-        </Window>
-      )}
-      {!isListFull && (
-        <div className="relative">
-          <ProductListPanel
-            products={products}
-            onEdit={openEditForm}
-            onDelete={fetch}
-            isFull={false}
-          />
-        </div>
-      )}
-      <div
-        className={`${
-          isListFull ? "fixed inset-0 bg-white z-20 p-10 overflow-auto" : ""
-        }`}
-      >
-        <ProductListPanel
-          products={products}
-          onEdit={openEditForm}
-          onDelete={fetch}
-          isFull={isListFull}
-        />
+        </button>
       </div>
 
+      {/* Kısa liste loading */}
+      {loadingList && !isListFull && (
+        <div className="text-center">Ürünler yükleniyor…</div>
+      )}
+
+      {/* Tam ekran liste */}
+      {isListFull && (
+        <Window title="Ürün Listesi" onClose={closeList}>
+          {loadingList ? (
+            <div className="text-center">Ürünler yükleniyor…</div>
+          ) : (
+            <ProductListPanel
+              products={products}
+              onEdit={openEditForm}
+              onDelete={fetchProducts}
+              isFull
+            />
+          )}
+        </Window>
+      )}
+
+      {/* Form modal */}
       {isFormOpen && (
         <Window
           title={activeProduct ? "Ürün Düzenle" : "Yeni Ürün"}
@@ -98,7 +100,7 @@ export default function ProductsPage() {
         >
           <ProductFormModal
             product={activeProduct}
-            onClose={closeForm} // içten de kapatmak için
+            onClose={closeForm}
             onSaved={onSaved}
           />
         </Window>

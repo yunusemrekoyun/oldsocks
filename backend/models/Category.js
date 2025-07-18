@@ -1,4 +1,3 @@
-// backend/models/Category.js
 const mongoose = require("mongoose");
 
 const CategorySchema = new mongoose.Schema(
@@ -11,16 +10,26 @@ const CategorySchema = new mongoose.Schema(
     image: {
       type: String,
       required: true,
-    }, // multer ile yüklenip URL saklanacak
+    },
     parent: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Category",
       default: null,
-    }, // alt kategori ise parent gösterir, yoksa null
+    },
   },
   {
     timestamps: true,
+    toObject: { virtuals: true },
+    toJSON: { virtuals: true },
   }
 );
+
+// “children” sanal alanı: parent’ı bu kategoriye işaret edenleri getirir
+CategorySchema.virtual("children", {
+  ref: "Category",
+  localField: "_id",
+  foreignField: "parent",
+  justOne: false,
+});
 
 module.exports = mongoose.model("Category", CategorySchema);
