@@ -1,12 +1,15 @@
 // src/pages/CheckoutPage.jsx
 import React, { useState, useMemo, useEffect, useRef } from "react";
-import { Navigate } from "react-router-dom";
+import { Navigate, useNavigate } from "react-router-dom";
 import { useCart } from "../context/useCart";
+import { useAuth } from "../context/AuthContext";
 import api from "../../api";
 
 export default function CheckoutPage() {
   // ─── TÜM HOOK’LAR BURADA:
   const { items, clearCart } = useCart();
+  const { isLoggedIn, loading: authLoading } = useAuth();
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [htmlContent, setHtmlContent] = useState(null);
   const containerRef = useRef(null);
@@ -22,16 +25,22 @@ export default function CheckoutPage() {
     c.innerHTML = htmlContent;
     Array.from(c.querySelectorAll("script")).forEach((old) => {
       const s = document.createElement("script");
-      if (old.src) {
-        s.src = old.src;
-      } else {
-        s.textContent = old.innerHTML;
-      }
+      if (old.src) s.src = old.src;
+      else s.textContent = old.innerHTML;
       document.head.appendChild(s);
     });
   }, [htmlContent]);
 
   // ─── KOŞULLU RENDER BLOKLARI:
+
+  // 0) Önce auth loading & kontrol
+  if (authLoading) {
+    return <div className="text-center p-4">Yükleniyor…</div>;
+  }
+  if (!isLoggedIn) {
+    alert("Ödeme yapabilmek için önce giriş yapmalısınız.");
+    return <Navigate to="/auth" replace />;
+  }
 
   // 1) Sepet boşsa ve form da yoksa cart’a dön
   if (items.length === 0 && !htmlContent) {
@@ -50,7 +59,7 @@ export default function CheckoutPage() {
     );
   }
 
-  // 3) Normal ödeme özeti ekranı
+  // ─── Normal ödeme özeti ekranı
   const handlePayment = async () => {
     setLoading(true);
     try {
@@ -63,7 +72,12 @@ export default function CheckoutPage() {
       setHtmlContent(html);
     } catch (err) {
       console.error("Ödeme başlatılamadı:", err);
-      alert("Ödeme başlatılamadı.");
+      if (err.response?.status === 401) {
+        alert("Oturumunuz sona ermiş. Lütfen tekrar giriş yapın.");
+        navigate("/auth");
+      } else {
+        alert("Ödeme başlatılamadı. Lütfen tekrar deneyin.");
+      }
     } finally {
       setLoading(false);
     }

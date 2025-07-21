@@ -1,4 +1,3 @@
-// src/App.jsx
 import React from "react";
 import {
   BrowserRouter,
@@ -11,6 +10,7 @@ import {
 import Layout from "./components/layout/Layout";
 import AdminLayout from "./components/layout/AdminLayout";
 import RequireAdmin from "./components/auth/RequireAdmin";
+import RequireAuth from "./components/auth/RequireAuth";
 
 import HomePage from "./pages/HomePage";
 import ShopPage from "./pages/ShopPage";
@@ -23,71 +23,71 @@ import AuthPage from "./pages/AuthPage";
 import CartPage from "./pages/CartPage";
 import CheckoutPage from "./pages/CheckoutPage";
 import PaymentResultPage from "./pages/PaymentResultPage";
-import NotFoundPage from "./pages/NotFoundPage"; // Eğer varsa
+import NotFoundPage from "./pages/NotFoundPage";
 
 // Admin sayfaları
 import ProductsPage from "./pages/admin/ProductsPage";
 import AdminUsersPage from "./pages/admin/UsersPage";
 import CategoriesPage from "./pages/admin/CategoriesPage";
 
-const App = () => (
-  <BrowserRouter>
-    <Routes>
-      {/* Public / User Routes */}
-      <Route
-        element={
-          <Layout>
-            <Outlet />
-          </Layout>
-        }
-      >
-        <Route path="/" element={<HomePage />} />
-        <Route path="/shop" element={<ShopPage />} />
-        <Route path="/about" element={<AboutPage />} />
-        <Route path="/blog" element={<BlogPage />} />
-        <Route path="/contact" element={<ContactPage />} />
-        <Route path="/blog-details" element={<BlogDetailsPage />} />
-        <Route path="/product-details/:id" element={<ProductDetailsPage />} />
-
-        <Route path="/cart" element={<CartPage />} />
-        <Route path="/checkout" element={<CheckoutPage />} />
-
-        {/* Iyzico callback sonucunu burada yakalayıp PaymentResultPage render edecek */}
-        <Route path="/payment-result" element={<PaymentResultPage />} />
-
-        <Route path="/auth" element={<AuthPage />} />
-        <Route path="/profile" element={<AuthPage />} />
-
-        {/*
-          Eğer NotFoundPage'in yoksa alttaki satırı:
-            <Route path="*" element={<NotFoundPage />} />
-          yerine
-            <Route path="*" element={<Navigate to="/" replace />} />
-          olarak değiştir.
-        */}
-        <Route path="*" element={<NotFoundPage />} />
-      </Route>
-
-      {/* Admin Routes */}
-      <Route element={<RequireAdmin />}>
+export default function App() {
+  return (
+    <BrowserRouter>
+      <Routes>
+        {/* Public / User Routes */}
         <Route
-          path="/admin"
           element={
-            <AdminLayout>
+            <Layout>
               <Outlet />
-            </AdminLayout>
+            </Layout>
           }
         >
-          <Route index element={<div>Hoş geldin Admin!</div>} />
-          <Route path="products" element={<ProductsPage />} />
-          <Route path="users" element={<AdminUsersPage />} />
-          <Route path="categories" element={<CategoriesPage />} />
-          {/* Admin altındaki 404’ler için de: */}
-          <Route path="*" element={<Navigate to="/admin" replace />} />
-        </Route>
-      </Route>
-    </Routes>
-  </BrowserRouter>
-);
+          <Route path="/" element={<HomePage />} />
+          <Route path="/shop" element={<ShopPage />} />
+          <Route path="/about" element={<AboutPage />} />
+          <Route path="/blog" element={<BlogPage />} />
+          <Route path="/contact" element={<ContactPage />} />
+          <Route path="/blog-details" element={<BlogDetailsPage />} />
+          <Route path="/product-details/:id" element={<ProductDetailsPage />} />
 
-export default App;
+          <Route path="/cart" element={<CartPage />} />
+
+          {/* Checkout, önce oturum kontrolü */}
+          <Route
+            path="/checkout"
+            element={
+              <RequireAuth>
+                <CheckoutPage />
+              </RequireAuth>
+            }
+          />
+
+          <Route path="/payment-result" element={<PaymentResultPage />} />
+
+          <Route path="/auth" element={<AuthPage />} />
+          <Route path="/profile" element={<AuthPage />} />
+
+          <Route path="*" element={<NotFoundPage />} />
+        </Route>
+
+        {/* Admin Routes */}
+        <Route element={<RequireAdmin />}>
+          <Route
+            path="/admin"
+            element={
+              <AdminLayout>
+                <Outlet />
+              </AdminLayout>
+            }
+          >
+            <Route index element={<div>Hoş geldin Admin!</div>} />
+            <Route path="products" element={<ProductsPage />} />
+            <Route path="users" element={<AdminUsersPage />} />
+            <Route path="categories" element={<CategoriesPage />} />
+            <Route path="*" element={<Navigate to="/admin" replace />} />
+          </Route>
+        </Route>
+      </Routes>
+    </BrowserRouter>
+  );
+}
