@@ -3,7 +3,7 @@ import React, { useContext, useEffect, useState } from "react";
 import api from "../../../api";
 import { AuthContext } from "../../context/AuthContext";
 
-const UserAccount = () => {
+export default function UserAccount() {
   const { isLoggedIn } = useContext(AuthContext);
   const [user, setUser] = useState(null);
   const [error, setError] = useState("");
@@ -13,7 +13,6 @@ const UserAccount = () => {
       setError("Oturum açılmamış");
       return;
     }
-
     api
       .get("/users/me")
       .then((res) => setUser(res.data))
@@ -36,6 +35,4 @@ const UserAccount = () => {
       </p>
     </div>
   );
-};
-
-export default UserAccount;
+}

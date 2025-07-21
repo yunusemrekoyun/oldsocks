@@ -1,4 +1,17 @@
+// backend/models/User.js
 const mongoose = require("mongoose");
+
+const AddressSchema = new mongoose.Schema(
+  {
+    title: { type: String, required: true },
+    street: { type: String, required: true },
+    mainaddress: { type: String, required: true },
+    city: { type: String, required: true },
+    district: { type: String },
+    postalCode: { type: String },
+  },
+  { _id: true }
+);
 
 const UserSchema = new mongoose.Schema(
   {
@@ -7,13 +20,8 @@ const UserSchema = new mongoose.Schema(
     email: { type: String, required: true, unique: true, lowercase: true },
     password: { type: String, required: true },
     phone: { type: String },
-    address: {
-      street: { type: String },
-      mainaddress: { type: String },
-      city: { type: String },
-      postalCode: { type: String },
-      district: { type: String },
-    },
+    // Eskiden tekil address vardı; şimdi birden fazla adres saklayabiliyoruz
+    addresses: { type: [AddressSchema], default: [] },
     avatar: { type: String },
     role: { type: String, enum: ["user", "admin"], default: "user" },
     refreshTokens: { type: [String], default: [] },

@@ -1,18 +1,15 @@
 // src/pages/AuthPage.jsx
 import React, { useContext } from "react";
 import Auth from "../components/auth/Auth";
-import UserAccount from "../components/user/UserAccount";
+import UserAccountLayout from "../components/user/UserAccountLayout";
 import { AuthContext } from "../context/AuthContext";
 
-const AuthPage = () => {
+export default function AuthPage() {
   const { isLoggedIn } = useContext(AuthContext);
 
-  // isLoggedIn zaten boolean, hemen render edebiliriz
   return (
     <div className="min-h-screen p-10">
-      {isLoggedIn ? <UserAccount /> : <Auth />}
+      {isLoggedIn ? <UserAccountLayout /> : <Auth />}
     </div>
   );
-};
-
-export default AuthPage;
+}

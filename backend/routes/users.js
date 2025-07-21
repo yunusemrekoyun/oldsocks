@@ -5,6 +5,10 @@ const { allowRoles } = require("../middleware/roles");
 const {
   getMe,
   updateMe,
+  getAddresses,
+  addAddress,
+  updateAddress,
+  deleteAddress,
   getAllUsers,
   getUserById,
   updateUser,
@@ -12,8 +16,14 @@ const {
 } = require("../controllers/userController");
 
 // — Normal user endpoints —
-router.get("/me", verifyToken, getMe); // GET  /api/v1/users/me
-router.put("/me", verifyToken, updateMe); // PUT  /api/v1/users/me
+router.get("/me", verifyToken, getMe); // GET    /api/v1/users/me
+router.put("/me", verifyToken, updateMe); // PUT    /api/v1/users/me
+
+// — Address management for logged-in user —
+router.get("/me/addresses", verifyToken, getAddresses); // GET    /api/v1/users/me/addresses
+router.post("/me/addresses", verifyToken, addAddress); // POST   /api/v1/users/me/addresses
+router.put("/me/addresses/:addrId", verifyToken, updateAddress); // PUT    /api/v1/users/me/addresses/:addrId
+router.delete("/me/addresses/:addrId", verifyToken, deleteAddress); // DELETE /api/v1/users/me/addresses/:addrId
 
 // — Admin-only endpoints —
 router.get("/", verifyToken, allowRoles("admin"), getAllUsers); // GET    /api/v1/users
