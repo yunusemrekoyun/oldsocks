@@ -63,10 +63,16 @@ exports.createProduct = async (req, res) => {
 exports.getProducts = async (req, res) => {
   try {
     const products = await Product.find()
-      .select("name video images price originalPrice discount category")
+      .select(
+        "name video images price originalPrice discount sizes color category"
+      )
       .populate({
         path: "category",
         select: "name image parent",
+        populate: {
+          path: "parent",
+          select: "name",
+        },
       });
     res.json(products);
   } catch (err) {

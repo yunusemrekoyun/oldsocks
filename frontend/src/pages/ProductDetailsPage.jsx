@@ -59,7 +59,13 @@ export default function ProductDetailsPage() {
             categoryId={rootCategoryId}
             currentProductId={product._id}
           />
-          <AddToCart price={product.price} sizes={product.sizes} />
+          <AddToCart
+            price={product.price}
+            sizes={product.sizes}
+            productId={product._id}
+            productName={product.name}
+            image={product.images?.[0]} // veya fallback eklenebilir
+          />
         </aside>
       </main>
 

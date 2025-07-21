@@ -18,8 +18,12 @@ app.use(
     credentials: true,
   })
 );
-app.use(express.json()); // body-parser yerine
+// JSON gövdeleri için
+app.use(express.json());
+// HTML form-urlencoded (Iyzico callback POST verisi)
+app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
+
 // 3) Route’ları mount et
 app.use("/api/v1", apiRoutes);
 

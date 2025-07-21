@@ -1,15 +1,34 @@
 // src/components/AddToCart.jsx
 import React, { useState } from "react";
 import { FaPlus, FaMinus } from "react-icons/fa";
+import { useCart } from "../../../context/useCart";
 
-export default function AddToCart({ price = 0, sizes = [] }) {
+export default function AddToCart({
+  price = 0,
+  sizes = [],
+  productId,
+  productName,
+  image,
+}) {
   const [selectedSize, setSelectedSize] = useState("");
   const [qty, setQty] = useState(1);
+  const { addToCart } = useCart(); // <-- context'ten fonksiyon
 
   const increment = () => setQty((q) => q + 1);
   const decrement = () => setQty((q) => Math.max(1, q - 1));
-
   const canAdd = sizes.length === 0 || selectedSize !== "";
+
+  const handleAddToCart = () => {
+    const item = {
+      id: productId,
+      name: productName,
+      image,
+      price,
+      size: selectedSize,
+      qty,
+    };
+    addToCart(item);
+  };
 
   return (
     <div className="bg-white p-6 rounded-lg shadow-md space-y-6">
@@ -68,9 +87,7 @@ export default function AddToCart({ price = 0, sizes = [] }) {
 
       {/* Sepete Ekle */}
       <button
-        onClick={() => {
-          /* sepete ekle işlemi (selectedSize ve qty kullan) */
-        }}
+        onClick={handleAddToCart}
         disabled={!canAdd}
         className={`w-full py-3 text-white font-medium rounded-lg transition 
           ${

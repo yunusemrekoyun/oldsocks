@@ -10,6 +10,7 @@ const HomePage = () => (
   <>
     <Hero />
     <Categories />
+
     <ProductGrid />
     <SecondHero />
     <Campaigns />

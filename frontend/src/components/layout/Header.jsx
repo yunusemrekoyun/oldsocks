@@ -10,11 +10,11 @@ import {
 } from "react-icons/fa";
 import Logout from "../auth/Logout";
 import { AuthContext } from "../../context/AuthContext";
+import { useCart } from "../../context/useCart"; // ⬅️ EKLENDİ
 
 const Header = () => {
-  // Header her route değiştiğinde yeniden render olur, bu da login durumunu
-  // anında güncellememizi sağlar.
   const { isLoggedIn } = useContext(AuthContext);
+  const { items } = useCart(); // ⬅️ EKLENDİ
 
   return (
     <header className="bg-light1 border-b border-light2">
@@ -63,12 +63,17 @@ const Header = () => {
             </div>
 
             {/* Sepet */}
-            <div className="relative w-12 h-12 flex items-center justify-center bg-dark2 rounded-full hover:bg-brand transition">
+            <Link
+              to="/cart"
+              className="relative w-12 h-12 flex items-center justify-center bg-dark2 rounded-full hover:bg-brand transition"
+            >
               <FaShoppingCart className="text-white text-base" />
-              <span className="absolute -top-1 -right-1 bg-light1 text-dark1 text-[10px] font-bold w-5 h-5 rounded-full flex items-center justify-center shadow">
-                0
-              </span>
-            </div>
+              {items.length > 0 && (
+                <span className="absolute -top-1 -right-1 bg-light1 text-dark1 text-[10px] font-bold w-5 h-5 rounded-full flex items-center justify-center shadow">
+                  {items.length}
+                </span>
+              )}
+            </Link>
 
             {/* Kullanıcı */}
             <Link

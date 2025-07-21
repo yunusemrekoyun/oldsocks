@@ -68,25 +68,30 @@ exports.createCategory = async (req, res) => {
   }
 };
 
-// Var olan ana kategoriyi güncelle (+yeni alt kategori ekleyebilirsin)
 exports.updateCategory = async (req, res) => {
   try {
     const { name, children } = req.body;
     const updates = { name };
     if (req.file) updates.image = req.file.path;
 
+    // 1) Ana kategoriyi güncelle
     const updated = await Category.findByIdAndUpdate(req.params.id, updates, {
       new: true,
     });
     if (!updated)
       return res.status(404).json({ message: "Kategori bulunamadı." });
 
-    // yeni alt kategori isimleri ekle
-    if (children) {
+    // 2) Eğer form’dan 'children' alanı gelmişse:
+    if (children !== undefined) {
+      // a) Önce hepsini sil
+      await Category.deleteMany({ parent: updated._id });
+
+      // b) Sonra yeni listeyi oluştur
       const names = children
         .split(",")
         .map((c) => c.trim())
         .filter(Boolean);
+
       await Promise.all(
         names.map((nm) =>
           Category.create({
@@ -98,17 +103,16 @@ exports.updateCategory = async (req, res) => {
       );
     }
 
-    const populated = await Category.findById(updated._id).populate(
-      "children",
-      "name image"
-    );
+    // 3) Son halini dön
+    const populated = await Category.findById(updated._id)
+      .populate("children", "name image")
+      .populate("parent", "name");
     res.json(populated);
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Kategori güncellenirken hata oluştu." });
   }
 };
-
 // Sil (alt kategorileri de istersen ayrı endpoint’le silebilirsin)
 exports.deleteCategory = async (req, res) => {
   try {
