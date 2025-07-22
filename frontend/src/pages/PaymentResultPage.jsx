@@ -1,10 +1,16 @@
+// src/pages/PaymentResultPage.jsx
 import React, { useEffect, useState } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
+import api from "../../api";
 
 export default function PaymentResultPage() {
   const [searchParams] = useSearchParams();
   const status = searchParams.get("status"); // "success" veya "failure"
   const paymentId = searchParams.get("paymentId"); // sadece success’te gelir
+  let conversationId = searchParams.get("conversationId");
+  if (!conversationId) {
+    conversationId = searchParams.get("conversation_id");
+  }
   const rawMessage = searchParams.get("message"); // sadece failure’ta gelir
   const navigate = useNavigate();
 
@@ -12,8 +18,18 @@ export default function PaymentResultPage() {
   const [message, setMessage] = useState("");
 
   useEffect(() => {
-    if (status === "failure") {
-      // Token eksik hatasını daha anlaşılır yap
+    if (status === "success" && conversationId && paymentId) {
+      // siparişi kaydetmek için backend'e bildir
+      api
+        .post("/orders/confirm", { conversationId, paymentId })
+        .then(() => {
+          setMessage("Siparişiniz başarıyla kaydedildi!");
+        })
+        .catch(() => {
+          setMessage("Sipariş kaydı sırasında bir hata oluştu.");
+        });
+    } else if (status === "failure") {
+      // Token eksik vb. hataları daha anlaşılır yap
       if (rawMessage?.includes("Token gönderilmesi")) {
         setMessage(
           "Ödeme servisine erişim sağlanamadı. Lütfen tekrar deneyin."
@@ -23,7 +39,7 @@ export default function PaymentResultPage() {
       }
     }
     setLoaded(true);
-  }, [status, rawMessage]);
+  }, [status, rawMessage, conversationId, paymentId]);
 
   if (!loaded) {
     return <div className="text-center p-10">Sonuç alınıyor…</div>;
@@ -37,6 +53,7 @@ export default function PaymentResultPage() {
             Ödeme Başarılı 🎉
           </h2>
           <p className="mb-2">Ödeme Numaranız: {paymentId}</p>
+          {message && <p className="text-center max-w-md mb-4">{message}</p>}
         </>
       ) : (
         <>

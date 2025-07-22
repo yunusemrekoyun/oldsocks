@@ -3,13 +3,52 @@ const iyzipay = require("../config/iyzico");
 const { v4: uuidv4 } = require("uuid");
 const User = require("../models/User");
 
+// ★ Yeni ekleme:
+const Order = require("../models/Order");
+
 exports.createPaymentRedirect = async (req, res) => {
   try {
     const { cartItems, totalPrice } = req.body;
     const userId = req.user.userId;
     const userDoc = await User.findById(userId).lean();
 
-    // fallback değerler
+    // 1) Order için benzersiz conversationId üret
+    const conversationId = uuidv4();
+
+    // 2) Kullanıcının seçili adresini al (ilk adresi varsayıyoruz)
+    //    Eğer henüz address array’ini entegre etmediyseniz userDoc.address yerine eski tekil alanı kullanın.
+    let addr = userDoc.addresses?.[0] || {
+      title: "Varsayılan Adres",
+      mainaddress: userDoc.address?.mainaddress || "Adres yok",
+      street: userDoc.address?.street || "",
+      city: userDoc.address?.city || "Şehir yok",
+      district: userDoc.address?.district || "",
+      postalCode: userDoc.address?.postalCode || "",
+    };
+
+    // 3) DB’ye Pending bir Order kaydı ekle
+    await Order.create({
+      user: userId,
+      items: cartItems.map((it) => ({
+        productId: it.id,
+        name: it.name,
+        price: it.price,
+        qty: it.qty,
+      })),
+      totalPrice,
+      address: {
+        title: addr.title,
+        mainaddress: addr.mainaddress,
+        street: addr.street,
+        district: addr.district,
+        city: addr.city,
+        postalCode: addr.postalCode,
+      },
+      conversationId,
+      status: "pending",
+    });
+
+    // 4) Fallback mantığı (eski kodunuzdan kopya)
     const fallback = {
       firstName: "Müşteri",
       lastName: "Soyad",
@@ -30,16 +69,17 @@ exports.createPaymentRedirect = async (req, res) => {
       userDoc?.identityNumber ||
       (missing.push("identityNumber") && fallback.identityNumber);
     const registrationAddress =
-      userDoc?.address?.mainaddress ||
+      userDoc?.addresses?.[0]?.mainaddress ||
       (missing.push("registrationAddress") && fallback.address.mainaddress);
     const city =
-      userDoc?.address?.city || (missing.push("city") && fallback.address.city);
+      userDoc?.addresses?.[0]?.city ||
+      (missing.push("city") && fallback.address.city);
 
     if (missing.length) {
       console.log(`[Iyzico] fallback kullanıldı: ${missing.join(", ")}`);
     }
 
-    // Sepet satırlarını Iyzico formatına çevir
+    // 5) Sepet satırlarını Iyzico’ya uygun formata çevir
     const basketItems = cartItems.map((it) => ({
       id: it.id,
       price: (it.price * it.qty).toFixed(2),
@@ -49,16 +89,15 @@ exports.createPaymentRedirect = async (req, res) => {
       quantity: it.qty,
     }));
 
-    // Iyzico create request
+    // 6) Iyzico isteği
     const request = {
       locale: "tr",
-      conversationId: uuidv4(),
+      conversationId, // ⇐ buraya önce oluşturduğumuz conversationId
       price: totalPrice.toFixed(2),
       paidPrice: totalPrice.toFixed(2),
       currency: "TRY",
       basketId: uuidv4(),
       paymentGroup: "PRODUCT",
-      // callback → Iyzico buraya token’la dönecek
       callbackUrl: `${process.env.BACKEND_ORIGIN}/api/v1/payment/callback`,
       enabledInstallments: [1, 2, 3],
       buyer: {
@@ -93,7 +132,7 @@ exports.createPaymentRedirect = async (req, res) => {
         console.error("[Iyzico] create hata:", err || result);
         return res.status(500).send("Ödeme başlatılamadı.");
       }
-      // Kullanıcıyı otomatik submit eden küçük HTML
+      // Kullanıcıyı otomatik form submit ile Iyzico’ya yollayan HTML
       res.send(`
         <!DOCTYPE html>
         <html lang="tr">
@@ -112,11 +151,7 @@ exports.createPaymentRedirect = async (req, res) => {
 };
 
 exports.paymentCallback = async (req, res) => {
-  // hem GET hem POST için token’ı al
   const token = req.query.token || req.body.token;
-  console.log("[Iyzico Callback] method:", req.method);
-  console.log("[Iyzico Callback] token:", token);
-
   if (!token) {
     const msg = encodeURIComponent("Token gönderilmesi zorunludur");
     return res.redirect(
@@ -133,10 +168,22 @@ exports.paymentCallback = async (req, res) => {
         `${process.env.FRONTEND_ORIGIN}/payment-result?status=failure&message=${msg}`
       );
     }
-    // Başarılıysa front’a yönlendir
+
+    // Başarılıysa
     const paymentId = result.paymentId || result.paymentTransactionId;
+    const conversationId = result.conversationId; // bu bazen undefined olabilir
+
+    // Query param’leri dinamik inşa edelim:
+    const params = new URLSearchParams();
+    params.set("status", "success");
+    params.set("paymentId", paymentId);
+    if (conversationId) {
+      // sadece gerçek bir değerse ekle
+      params.set("conversationId", conversationId);
+    }
+
     return res.redirect(
-      `${process.env.FRONTEND_ORIGIN}/payment-result?status=success&paymentId=${paymentId}`
+      `${process.env.FRONTEND_ORIGIN}/payment-result?${params.toString()}`
     );
   });
 };

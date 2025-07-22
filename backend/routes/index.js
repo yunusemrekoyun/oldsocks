@@ -31,6 +31,10 @@ router.use("/users", require("./users"));
 router.use("/products", require("./products"));
 router.use("/categories", require("./categories"));
 
+// orders rotaları
+router.use("/orders", require("./orders"));
+
+
 //payment routes
 router.use("/payment", require("./payment"));
 module.exports = router;
