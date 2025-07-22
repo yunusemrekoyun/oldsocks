@@ -5,45 +5,37 @@ import api from "../../api";
 
 export default function PaymentResultPage() {
   const [searchParams] = useSearchParams();
-  const status = searchParams.get("status"); // "success" veya "failure"
-  const paymentId = searchParams.get("paymentId"); // sadece success’te gelir
-  let conversationId = searchParams.get("conversationId");
-  if (!conversationId) {
-    conversationId = searchParams.get("conversation_id");
-  }
-  const rawMessage = searchParams.get("message"); // sadece failure’ta gelir
+  const status = searchParams.get("status");
+  const paymentId = searchParams.get("paymentId");
+  // hem camelCase hem snake_case yakalayalım
+  const conversationId =
+    searchParams.get("conversationId") || searchParams.get("conversation_id");
   const navigate = useNavigate();
 
   const [loaded, setLoaded] = useState(false);
   const [message, setMessage] = useState("");
+  const [orderNumber, setOrderNumber] = useState("");
 
   useEffect(() => {
-    if (status === "success" && conversationId && paymentId) {
-      // siparişi kaydetmek için backend'e bildir
+    if (status === "success" && paymentId && conversationId) {
       api
         .post("/orders/confirm", { conversationId, paymentId })
-        .then(() => {
+        .then((res) => {
+          setOrderNumber(res.data.orderNumber);
           setMessage("Siparişiniz başarıyla kaydedildi!");
         })
-        .catch(() => {
+        .catch((err) => {
+          console.error("Sipariş onaylama hatası:", err);
           setMessage("Sipariş kaydı sırasında bir hata oluştu.");
         });
     } else if (status === "failure") {
-      // Token eksik vb. hataları daha anlaşılır yap
-      if (rawMessage?.includes("Token gönderilmesi")) {
-        setMessage(
-          "Ödeme servisine erişim sağlanamadı. Lütfen tekrar deneyin."
-        );
-      } else {
-        setMessage(decodeURIComponent(rawMessage || ""));
-      }
+      const raw = searchParams.get("message") || "";
+      setMessage(decodeURIComponent(raw));
     }
     setLoaded(true);
-  }, [status, rawMessage, conversationId, paymentId]);
+  }, [status, paymentId, conversationId, searchParams]);
 
-  if (!loaded) {
-    return <div className="text-center p-10">Sonuç alınıyor…</div>;
-  }
+  if (!loaded) return <div className="text-center p-10">Sonuç alınıyor…</div>;
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center p-6">
@@ -53,6 +45,12 @@ export default function PaymentResultPage() {
             Ödeme Başarılı 🎉
           </h2>
           <p className="mb-2">Ödeme Numaranız: {paymentId}</p>
+          {orderNumber && (
+            <p className="mb-4">
+              Sipariş Numaranız:{" "}
+              <span className="font-semibold">{orderNumber}</span>
+            </p>
+          )}
           {message && <p className="text-center max-w-md mb-4">{message}</p>}
         </>
       ) : (

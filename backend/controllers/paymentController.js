@@ -2,8 +2,6 @@
 const iyzipay = require("../config/iyzico");
 const { v4: uuidv4 } = require("uuid");
 const User = require("../models/User");
-
-// ★ Yeni ekleme:
 const Order = require("../models/Order");
 
 exports.createPaymentRedirect = async (req, res) => {
@@ -12,11 +10,13 @@ exports.createPaymentRedirect = async (req, res) => {
     const userId = req.user.userId;
     const userDoc = await User.findById(userId).lean();
 
-    // 1) Order için benzersiz conversationId üret
+    // 1) Benzersiz ID’ler
     const conversationId = uuidv4();
+    const orderNumber = Math.floor(
+      1000000000 + Math.random() * 9000000000
+    ).toString(); // 10 haneyi sağlar
 
-    // 2) Kullanıcının seçili adresini al (ilk adresi varsayıyoruz)
-    //    Eğer henüz address array’ini entegre etmediyseniz userDoc.address yerine eski tekil alanı kullanın.
+    // 2) Adres
     let addr = userDoc.addresses?.[0] || {
       title: "Varsayılan Adres",
       mainaddress: userDoc.address?.mainaddress || "Adres yok",
@@ -26,8 +26,9 @@ exports.createPaymentRedirect = async (req, res) => {
       postalCode: userDoc.address?.postalCode || "",
     };
 
-    // 3) DB’ye Pending bir Order kaydı ekle
+    // 3) “pending” durumda yeni sipariş kaydı
     await Order.create({
+      orderNumber,
       user: userId,
       items: cartItems.map((it) => ({
         productId: it.id,
@@ -48,7 +49,7 @@ exports.createPaymentRedirect = async (req, res) => {
       status: "pending",
     });
 
-    // 4) Fallback mantığı (eski kodunuzdan kopya)
+    // 4) Fallback mantığı (mevcut kodundan alıntı)
     const fallback = {
       firstName: "Müşteri",
       lastName: "Soyad",
@@ -79,7 +80,7 @@ exports.createPaymentRedirect = async (req, res) => {
       console.log(`[Iyzico] fallback kullanıldı: ${missing.join(", ")}`);
     }
 
-    // 5) Sepet satırlarını Iyzico’ya uygun formata çevir
+    // 5) Sepet satırlarını Iyzico formatına çevir
     const basketItems = cartItems.map((it) => ({
       id: it.id,
       price: (it.price * it.qty).toFixed(2),
@@ -92,7 +93,7 @@ exports.createPaymentRedirect = async (req, res) => {
     // 6) Iyzico isteği
     const request = {
       locale: "tr",
-      conversationId, // ⇐ buraya önce oluşturduğumuz conversationId
+      conversationId, // burada pending kayıttakiyle eşleşecek
       price: totalPrice.toFixed(2),
       paidPrice: totalPrice.toFixed(2),
       currency: "TRY",
@@ -132,7 +133,7 @@ exports.createPaymentRedirect = async (req, res) => {
         console.error("[Iyzico] create hata:", err || result);
         return res.status(500).send("Ödeme başlatılamadı.");
       }
-      // Kullanıcıyı otomatik form submit ile Iyzico’ya yollayan HTML
+      // Form’u otomatik submit eden HTML
       res.send(`
         <!DOCTYPE html>
         <html lang="tr">
@@ -169,18 +170,14 @@ exports.paymentCallback = async (req, res) => {
       );
     }
 
-    // Başarılıysa
     const paymentId = result.paymentId || result.paymentTransactionId;
-    const conversationId = result.conversationId; // bu bazen undefined olabilir
+    const conversationId = result.conversationId; // bazen undefined olabilir
 
-    // Query param’leri dinamik inşa edelim:
+    // query param’leri güvenli oluştur
     const params = new URLSearchParams();
     params.set("status", "success");
     params.set("paymentId", paymentId);
-    if (conversationId) {
-      // sadece gerçek bir değerse ekle
-      params.set("conversationId", conversationId);
-    }
+    if (conversationId) params.set("conversationId", conversationId);
 
     return res.redirect(
       `${process.env.FRONTEND_ORIGIN}/payment-result?${params.toString()}`

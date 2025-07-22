@@ -2,12 +2,14 @@
 import React, { useState } from "react";
 import UserAccount from "./UserAccount";
 import AddressList from "./AddressList";
+import OrdersList from "./OrdersList"; // ← ekledik
 
 export default function UserAccountLayout() {
   const [tab, setTab] = useState("profile");
   const tabs = [
     { key: "profile", label: "Profil Bilgileri" },
     { key: "addresses", label: "Adresler" },
+    { key: "orders", label: "Siparişlerim" }, // ← yeni
   ];
 
   return (
@@ -35,6 +37,7 @@ export default function UserAccountLayout() {
       <main className="flex-1">
         {tab === "profile" && <UserAccount />}
         {tab === "addresses" && <AddressList />}
+        {tab === "orders" && <OrdersList />}
       </main>
     </div>
   );

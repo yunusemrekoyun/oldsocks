@@ -10,6 +10,9 @@ const OrderItemSchema = new mongoose.Schema({
 
 const OrderSchema = new mongoose.Schema(
   {
+    // ★ 10 haneli, benzersiz bir sipariş numarası:
+    orderNumber: { type: String, required: true, unique: true },
+
     user: { type: mongoose.Types.ObjectId, ref: "User", required: true },
     items: { type: [OrderItemSchema], required: true },
     totalPrice: { type: Number, required: true },
@@ -23,10 +26,9 @@ const OrderSchema = new mongoose.Schema(
       postalCode: { type: String },
     },
 
-    // ◀️ Burayı zorunluluktan çıkarıyoruz:
-    paymentId: { type: String, default: "" },
+    // paymentId artık “pending” aşamasında boş olabilir
+    paymentId: { type: String },
 
-    // conversationId zaten createPaymentRedirect’te kendimiz üretiyoruz
     conversationId: { type: String, required: true, unique: true },
 
     status: {
