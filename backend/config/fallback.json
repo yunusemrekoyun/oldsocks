@@ -1,0 +1,9 @@
+{
+  "firstName": "Müşteri",
+  "lastName": "Soyad",
+  "phone": "+900000000000",
+  "email": "no-reply@fallback.com",
+  "identityNumber": "11111111111",
+  "registrationAddress": "Adres yok",
+  "city": "Şehir yok"
+}

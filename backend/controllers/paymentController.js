@@ -1,32 +1,57 @@
-// backend/controllers/paymentController.js
 const iyzipay = require("../config/iyzico");
 const { v4: uuidv4 } = require("uuid");
 const User = require("../models/User");
 const Order = require("../models/Order");
+const fallbackData = require("../config/fallback.json");
 
 exports.createPaymentRedirect = async (req, res) => {
   try {
-    const { cartItems, totalPrice } = req.body;
+    const { cartItems, totalPrice, addressId, useFallback } = req.body;
     const userId = req.user.userId;
     const userDoc = await User.findById(userId).lean();
 
-    // 1) Benzersiz ID’ler
+    // 1) Adres seçim / fallback
+    let addr = userDoc.addresses?.find((a) => a._id.toString() === addressId) ||
+      userDoc.addresses?.[0] || {
+        title: "Varsayılan Adres",
+        mainaddress: fallbackData.registrationAddress,
+        street: "",
+        district: "",
+        city: fallbackData.city,
+        postalCode: "",
+      };
+
+    // 2) Eksik müşteri bilgileri
+    const missing = [];
+    const name =
+      userDoc.firstName ||
+      (missing.push("firstName") && fallbackData.firstName);
+    const surname =
+      userDoc.lastName || (missing.push("lastName") && fallbackData.lastName);
+    const gsmNumber =
+      userDoc.phone || (missing.push("phone") && fallbackData.phone);
+    const email =
+      userDoc.email || (missing.push("email") && fallbackData.email);
+    const identityNumber =
+      userDoc.identityNumber ||
+      (missing.push("identityNumber") && fallbackData.identityNumber);
+    const registrationAddress =
+      addr.mainaddress ||
+      (missing.push("registrationAddress") && fallbackData.registrationAddress);
+    const city = addr.city || (missing.push("city") && fallbackData.city);
+
+    // 3) Eksik var, fallback onayı yok → 206 ile dön
+    if (!useFallback && missing.length > 0) {
+      return res.status(206).json({
+        message: "Eksik kullanıcı verisi var.",
+        missing,
+        fallbackData,
+      });
+    }
+
+    // 4) Pending sipariş kaydı
     const conversationId = uuidv4();
-    const orderNumber = Math.floor(
-      1000000000 + Math.random() * 9000000000
-    ).toString(); // 10 haneyi sağlar
-
-    // 2) Adres
-    let addr = userDoc.addresses?.[0] || {
-      title: "Varsayılan Adres",
-      mainaddress: userDoc.address?.mainaddress || "Adres yok",
-      street: userDoc.address?.street || "",
-      city: userDoc.address?.city || "Şehir yok",
-      district: userDoc.address?.district || "",
-      postalCode: userDoc.address?.postalCode || "",
-    };
-
-    // 3) “pending” durumda yeni sipariş kaydı
+    const orderNumber = Math.floor(1e9 + Math.random() * 9e9).toString();
     await Order.create({
       orderNumber,
       user: userId,
@@ -49,38 +74,7 @@ exports.createPaymentRedirect = async (req, res) => {
       status: "pending",
     });
 
-    // 4) Fallback mantığı (mevcut kodundan alıntı)
-    const fallback = {
-      firstName: "Müşteri",
-      lastName: "Soyad",
-      phone: "+900000000000",
-      email: "no-reply@fallback.com",
-      identityNumber: "11111111111",
-      address: { mainaddress: "Adres yok", city: "Şehir yok" },
-    };
-    const missing = [];
-    const name =
-      userDoc?.firstName || (missing.push("firstName") && fallback.firstName);
-    const surname =
-      userDoc?.lastName || (missing.push("lastName") && fallback.lastName);
-    const gsmNumber =
-      userDoc?.phone || (missing.push("phone") && fallback.phone);
-    const email = userDoc?.email || (missing.push("email") && fallback.email);
-    const identityNumber =
-      userDoc?.identityNumber ||
-      (missing.push("identityNumber") && fallback.identityNumber);
-    const registrationAddress =
-      userDoc?.addresses?.[0]?.mainaddress ||
-      (missing.push("registrationAddress") && fallback.address.mainaddress);
-    const city =
-      userDoc?.addresses?.[0]?.city ||
-      (missing.push("city") && fallback.address.city);
-
-    if (missing.length) {
-      console.log(`[Iyzico] fallback kullanıldı: ${missing.join(", ")}`);
-    }
-
-    // 5) Sepet satırlarını Iyzico formatına çevir
+    // 5) Iyzico’ya yollanacak sepet formatı
     const basketItems = cartItems.map((it) => ({
       id: it.id,
       price: (it.price * it.qty).toFixed(2),
@@ -90,16 +84,17 @@ exports.createPaymentRedirect = async (req, res) => {
       quantity: it.qty,
     }));
 
-    // 6) Iyzico isteği
+    // 6) Iyzico create isteği
     const request = {
       locale: "tr",
-      conversationId, // burada pending kayıttakiyle eşleşecek
+      conversationId,
       price: totalPrice.toFixed(2),
       paidPrice: totalPrice.toFixed(2),
       currency: "TRY",
       basketId: uuidv4(),
       paymentGroup: "PRODUCT",
-      callbackUrl: `${process.env.BACKEND_ORIGIN}/api/v1/payment/callback`,
+      // callback’e conversationId de ekliyoruz:
+      callbackUrl: `${process.env.BACKEND_ORIGIN}/api/v1/payment/callback?conversationId=${conversationId}`,
       enabledInstallments: [1, 2, 3],
       buyer: {
         id: userId,
@@ -131,18 +126,16 @@ exports.createPaymentRedirect = async (req, res) => {
     iyzipay.checkoutFormInitialize.create(request, (err, result) => {
       if (err || result.status !== "success") {
         console.error("[Iyzico] create hata:", err || result);
+        // Ödeme başlatılamadı → pending kaydı silebiliriz
+        Order.deleteOne({ conversationId }).catch(console.error);
         return res.status(500).send("Ödeme başlatılamadı.");
       }
-      // Form’u otomatik submit eden HTML
+      // Başarılı → form HTML’i dön
       res.send(`
-        <!DOCTYPE html>
-        <html lang="tr">
-          <head><meta charset="utf-8"/></head>
-          <body>
-            ${result.checkoutFormContent}
-            <script>document.querySelector('form').submit();</script>
-          </body>
-        </html>
+        <!DOCTYPE html><html lang="tr"><head><meta charset="utf-8"/></head><body>
+          ${result.checkoutFormContent}
+          <script>document.querySelector('form').submit();</script>
+        </body></html>
       `);
     });
   } catch (e) {
@@ -153,6 +146,7 @@ exports.createPaymentRedirect = async (req, res) => {
 
 exports.paymentCallback = async (req, res) => {
   const token = req.query.token || req.body.token;
+  const convFromQuery = req.query.conversationId;
   if (!token) {
     const msg = encodeURIComponent("Token gönderilmesi zorunludur");
     return res.redirect(
@@ -160,27 +154,42 @@ exports.paymentCallback = async (req, res) => {
     );
   }
 
-  iyzipay.checkoutForm.retrieve({ locale: "tr", token }, (err, result) => {
-    if (err || result.status !== "success") {
-      const msg = encodeURIComponent(
-        (err || result).errorMessage || "Ödeme başarısız"
+  iyzipay.checkoutForm.retrieve(
+    { locale: "tr", token },
+    async (err, result) => {
+      // başarısız ödeme → pending kaydı sil
+      if (err || result.status !== "success") {
+        const convId = convFromQuery || (result && result.conversationId);
+        if (convId) {
+          await Order.deleteOne({ conversationId: convId }).catch(
+            console.error
+          );
+        }
+        const msg = encodeURIComponent(
+          (err || result).errorMessage || "Ödeme başarısız"
+        );
+        return res.redirect(
+          `${process.env.FRONTEND_ORIGIN}/payment-result?status=failure&message=${msg}`
+        );
+      }
+
+      // başarılı ödeme → db güncelle
+      const paymentId = result.paymentId || result.paymentTransactionId;
+      const conversationId = convFromQuery || result.conversationId;
+      await Order.findOneAndUpdate(
+        { conversationId },
+        { paymentId, status: "paid" }
       );
+
+      // redirect’e tüm parametreleri ekle
+      const params = new URLSearchParams({
+        status: "success",
+        paymentId,
+        conversationId,
+      });
       return res.redirect(
-        `${process.env.FRONTEND_ORIGIN}/payment-result?status=failure&message=${msg}`
+        `${process.env.FRONTEND_ORIGIN}/payment-result?${params.toString()}`
       );
     }
-
-    const paymentId = result.paymentId || result.paymentTransactionId;
-    const conversationId = result.conversationId; // bazen undefined olabilir
-
-    // query param’leri güvenli oluştur
-    const params = new URLSearchParams();
-    params.set("status", "success");
-    params.set("paymentId", paymentId);
-    if (conversationId) params.set("conversationId", conversationId);
-
-    return res.redirect(
-      `${process.env.FRONTEND_ORIGIN}/payment-result?${params.toString()}`
-    );
-  });
+  );
 };

@@ -4,7 +4,11 @@ const Order = require("../models/Order");
 // — Kullanıcının kendi siparişlerini listeler
 exports.getMyOrders = async (req, res) => {
   const userId = req.user.userId;
-  const orders = await Order.find({ user: userId }).sort("-createdAt");
+  const orders = await Order.find({
+    user: userId,
+    status: { $in: ["paid", "shipped", "completed"] },
+  }).sort("-createdAt");
+
   res.json(orders);
 };
 

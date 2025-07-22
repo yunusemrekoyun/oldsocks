@@ -1,24 +1,19 @@
-// src/pages/CheckoutPage.jsx
 import React, { useState, useMemo, useEffect, useRef } from "react";
 import { Navigate, useNavigate } from "react-router-dom";
-import { useCart } from "../context/useCart";
+import { useCart } from "../context/useCart"; // ← clearCart ekledik
 import { useAuth } from "../context/AuthContext";
 import api from "../../api";
 
 export default function CheckoutPage() {
-  // ─── TÜM HOOK’LAR BURADA:
-  const { items, clearCart } = useCart();
+  const { items } = useCart();
   const { isLoggedIn, loading: authLoading } = useAuth();
   const navigate = useNavigate();
-
   const [loading, setLoading] = useState(false);
   const [htmlContent, setHtmlContent] = useState(null);
   const containerRef = useRef(null);
 
-  // Yeni: adresleri çekmek için state’ler
   const [addresses, setAddresses] = useState([]);
   const [addrLoading, setAddrLoading] = useState(true);
-
   const [selectedAddress, setSelectedAddress] = useState(null);
 
   const totalPrice = useMemo(
@@ -32,61 +27,33 @@ export default function CheckoutPage() {
       .get("/users/me/addresses")
       .then(({ data }) => {
         setAddresses(data);
-        if (data.length > 0) {
-          setSelectedAddress(data[0]._id);
-        }
-      })
-      .catch(() => {
-        setAddresses([]);
+        if (data.length) setSelectedAddress(data[0]._id);
       })
       .finally(() => setAddrLoading(false));
   }, []);
 
-  // Iyzico gömülü form script’lerini çalıştır
+  // Iyzico script’lerini inject
   useEffect(() => {
     if (!htmlContent) return;
     const c = containerRef.current;
     c.innerHTML = htmlContent;
     Array.from(c.querySelectorAll("script")).forEach((old) => {
       const s = document.createElement("script");
-      if (old.src) s.src = old.src;
-      else s.textContent = old.innerHTML;
+      old.src ? (s.src = old.src) : (s.textContent = old.innerHTML);
       document.head.appendChild(s);
     });
   }, [htmlContent]);
 
-  // ─── KOŞULLU RENDER BLOKLARI:
-
-  // 0) Auth yükleniyorsa
-  if (authLoading) {
-    return <div className="text-center p-4">Yükleniyor…</div>;
-  }
-  // 1) Girişli değilse
+  // Auth / sepet boş kontrol
+  if (authLoading) return <div className="p-4">Yükleniyor…</div>;
   if (!isLoggedIn) {
     alert("Ödeme yapabilmek için önce giriş yapmalısınız.");
     return <Navigate to="/auth" replace />;
   }
-  // 2) Sepet boşsa ve form da yoksa cart’a dön
-  if (items.length === 0 && !htmlContent) {
+  if (!htmlContent && items.length === 0) {
     return <Navigate to="/cart" replace />;
   }
-  // 3) Gömülü Iyzico formu varsa
-  if (htmlContent) {
-    return (
-      <div className="min-h-screen bg-light1 text-dark1 py-10 px-4">
-        <div
-          ref={containerRef}
-          className="max-w-3xl mx-auto bg-white rounded-xl shadow-md p-6"
-        />
-      </div>
-    );
-  }
-
-  // 4) Adresler yüklenirken bekle
-  if (addrLoading) {
-    return <div className="text-center p-4">Adresler yükleniyor…</div>;
-  }
-  // 5) Adres yoksa adres ekleme sayfasına yönlendir
+  if (addrLoading) return <div className="p-4">Adresler yükleniyor…</div>;
   if (addresses.length === 0) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center p-6">
@@ -95,7 +62,7 @@ export default function CheckoutPage() {
         </p>
         <button
           onClick={() => navigate("/auth")}
-          className="px-4 py-2 bg-dark1 text-white rounded hover:bg-dark2"
+          className="px-4 py-2 bg-dark1 text-white rounded"
         >
           Adres Ekle
         </button>
@@ -103,21 +70,44 @@ export default function CheckoutPage() {
     );
   }
 
-  // ─── Normal ödeme özeti ekranı (adres seçimi dahil)
-  const handlePayment = async () => {
+  const attemptPayment = async (useFallback = false) => {
     if (!selectedAddress) {
       alert("Lütfen bir adres seçin.");
       return;
     }
     setLoading(true);
     try {
-      const { data: html } = await api.post(
+      const response = await api.post(
         "/payment/create-redirect",
-        { cartItems: items, totalPrice, addressId: selectedAddress },
+        {
+          cartItems: items,
+          totalPrice,
+          addressId: selectedAddress,
+          useFallback,
+        },
         { responseType: "text" }
       );
-      clearCart();
-      setHtmlContent(html);
+
+      // 206 → fallback onayı
+      if (response.status === 206) {
+        const { missing } = JSON.parse(response.data);
+        if (
+          window.confirm(
+            `Aşağıdaki müşteri bilgileri eksik: ${missing.join(
+              ", "
+            )}. Fallback verileri kullanılsın mı?`
+          )
+        ) {
+          return attemptPayment(true);
+        } else {
+          alert("Lütfen profilinizden eksik bilgileri tamamlayın.");
+          return;
+        }
+      }
+
+      // 200 OK → form HTML’i geldi → sepeti temizle + embed et
+
+      setHtmlContent(response.data);
     } catch (err) {
       console.error("Ödeme başlatılamadı:", err);
       if (err.response?.status === 401) {
@@ -131,12 +121,25 @@ export default function CheckoutPage() {
     }
   };
 
+  // Eğer htmlContent set edildiyse, formu render et
+  if (htmlContent) {
+    return (
+      <div className="min-h-screen bg-light1 text-dark1 py-10 px-4">
+        <div
+          ref={containerRef}
+          className="max-w-3xl mx-auto bg-white rounded-xl shadow-md p-6"
+        />
+      </div>
+    );
+  }
+
+  // Normal ödeme özeti + adres seçimi
   return (
     <div className="min-h-screen bg-light1 text-dark1 py-10 px-4">
       <div className="max-w-3xl mx-auto bg-white rounded-xl shadow-md p-6">
         <h2 className="text-2xl font-semibold mb-4">Ödeme Özeti</h2>
 
-        {/* Yeni: Adres seçimi */}
+        {/* Adres seçimi */}
         <div className="mb-6">
           <h3 className="font-medium mb-2">Gönderim Adresi</h3>
           <fieldset className="space-y-2">
@@ -158,7 +161,7 @@ export default function CheckoutPage() {
           </fieldset>
         </div>
 
-        {/* Ürün özeti */}
+        {/* Ürünler */}
         <ul className="space-y-3 mb-6">
           {items.map((it, i) => (
             <li
@@ -187,9 +190,9 @@ export default function CheckoutPage() {
           <span>₺{totalPrice.toFixed(2)}</span>
         </div>
 
-        {/* Ödeme butonu */}
+        {/* Öde */}
         <button
-          onClick={handlePayment}
+          onClick={() => attemptPayment(false)}
           disabled={loading}
           className={`mt-6 w-full py-3 rounded text-white transition ${
             loading ? "bg-gray-400" : "bg-dark1 hover:bg-dark2"
