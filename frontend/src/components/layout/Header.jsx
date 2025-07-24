@@ -1,5 +1,5 @@
 // src/components/layout/Header.jsx
-import React, { useContext } from "react";
+import React, { useContext, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   FaTwitter,
@@ -10,12 +10,12 @@ import {
 } from "react-icons/fa";
 import Logout from "../auth/Logout";
 import { AuthContext } from "../../context/AuthContext";
-import { useCart } from "../../context/useCart"; // ⬅️ EKLENDİ
-
+import { useCart } from "../../context/useCart";
+import SearchModal from "../search/SearchModal";
 const Header = () => {
   const { isLoggedIn } = useContext(AuthContext);
-  const { items } = useCart(); // ⬅️ EKLENDİ
-
+  const { items } = useCart();
+  const [showSearch, setShowSearch] = useState(false);
   return (
     <header className="bg-light1 border-b border-light2">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -58,7 +58,10 @@ const Header = () => {
             </div>
 
             {/* Arama */}
-            <div className="hidden md:flex w-10 h-10 items-center justify-center border border-light3 rounded-full hover:border-brand transition">
+            <div
+              className="hidden md:flex w-10 h-10 items-center justify-center border border-light3 rounded-full hover:border-brand transition cursor-pointer"
+              onClick={() => setShowSearch(true)}
+            >
               <FaSearch className="text-dark2 hover:text-brand text-sm" />
             </div>
 
@@ -88,6 +91,7 @@ const Header = () => {
           </div>
         </div>
       </div>
+      <SearchModal open={showSearch} onClose={() => setShowSearch(false)} />
     </header>
   );
 };
