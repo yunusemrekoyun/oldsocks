@@ -3,7 +3,7 @@ const multer = require("multer");
 const { CloudinaryStorage } = require("multer-storage-cloudinary");
 const cloudinary = require("../config/cloudinary");
 
-// Tek bir storage üzerinden image/video ayrımı
+// ── Ürün resim/video upload (mevcut)
 const storage = new CloudinaryStorage({
   cloudinary,
   params: async (req, file) => {
@@ -16,10 +16,9 @@ const storage = new CloudinaryStorage({
     };
   },
 });
-
 const uploadProductFiles = multer({ storage });
 
-// Kategori için ayrı bırak (bozmana gerek yok)
+// ── Kategori resmi upload (mevcut)
 const categoryStorage = new CloudinaryStorage({
   cloudinary,
   params: {
@@ -30,7 +29,31 @@ const categoryStorage = new CloudinaryStorage({
 });
 const uploadCategoryImage = multer({ storage: categoryStorage });
 
+// ── Kampanya resmi upload (yeni)
+const campaignStorage = new CloudinaryStorage({
+  cloudinary,
+  params: {
+    folder: "campaigns",
+    resource_type: "image",
+    format: async () => "png",
+  },
+});
+const uploadCampaignImage = multer({ storage: campaignStorage });
+
+const miniCampaignStorage = new CloudinaryStorage({
+  cloudinary,
+  params: {
+    folder: "mini-campaigns",
+    resource_type: "image",
+    format: "png",
+  },
+});
+const uploadMiniCampaignImage = multer({ storage: miniCampaignStorage });
+
+// Hepsini export ediyoruz
 module.exports = {
+  uploadProductFiles,
   uploadCategoryImage,
-  uploadProductFiles, // ✅ video ve images tek multer
+  uploadCampaignImage,
+  uploadMiniCampaignImage,
 };

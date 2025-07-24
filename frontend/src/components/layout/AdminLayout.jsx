@@ -39,6 +39,16 @@ export default function AdminLayout({ children }) {
       icon: <UserCircleIcon className="w-5 h-5" />,
       path: "/admin/users",
     },
+    {
+      label: "Kampanyalar",
+      icon: <TagIcon className="w-5 h-5" />,
+      path: "/admin/campaigns",
+    },
+    {
+      label: "Mini Kampanyalar",
+      icon: <TagIcon className="w-5 h-5" />,
+      path: "/admin/minicampaigns",
+    },
   ];
 
   const isActive = (path) => location.pathname === path;

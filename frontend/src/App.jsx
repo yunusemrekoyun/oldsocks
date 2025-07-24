@@ -29,7 +29,8 @@ import NotFoundPage from "./pages/NotFoundPage";
 import ProductsPage from "./pages/admin/ProductsPage";
 import AdminUsersPage from "./pages/admin/UsersPage";
 import CategoriesPage from "./pages/admin/CategoriesPage";
-
+import CampaignsPage from "./pages/admin/CampaignsPage";
+import MiniCampaignsPage from "./pages/admin/MiniCampaignsPage";
 export default function App() {
   return (
     <BrowserRouter>
@@ -85,6 +86,8 @@ export default function App() {
             <Route path="users" element={<AdminUsersPage />} />
             <Route path="categories" element={<CategoriesPage />} />
             <Route path="*" element={<Navigate to="/admin" replace />} />
+            <Route path="campaigns" element={<CampaignsPage />} />
+            <Route path="minicampaigns" element={<MiniCampaignsPage />} />
           </Route>
         </Route>
       </Routes>

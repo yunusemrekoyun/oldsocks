@@ -31,9 +31,13 @@ router.use("/users", require("./users"));
 router.use("/products", require("./products"));
 router.use("/categories", require("./categories"));
 
+// campaign rotaları
+router.use("/campaigns", require("./campaign"));
+
+// mini campaign rotaları
+router.use("/mini-campaigns", require("./miniCampaigns"));
 // orders rotaları
 router.use("/orders", require("./orders"));
-
 
 //payment routes
 router.use("/payment", require("./payment"));

@@ -23,7 +23,10 @@ const CampaignItem = ({ image, title, buttonText, onClick }) => (
         {title}
       </h3>
       <button
-        onClick={onClick}
+        onClick={(e) => {
+          e.stopPropagation();
+          onClick();
+        }}
         className="mt-4 px-5 py-2 bg-dark3 hover:bg-dark2 text-white text-sm font-medium rounded transition"
       >
         {buttonText}
@@ -40,7 +43,7 @@ CampaignItem.propTypes = {
 };
 
 CampaignItem.defaultProps = {
-  buttonText: "Read More",
+  buttonText: "Detayları Gör",
   onClick: () => {},
 };
 

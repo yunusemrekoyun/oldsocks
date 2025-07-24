@@ -1,18 +1,22 @@
+// src/components/products/ProductItem.jsx
 import React, { useRef, useState } from "react";
 import PropTypes from "prop-types";
 import { Link } from "react-router-dom";
 import { FaVolumeMute, FaVolumeUp, FaStar } from "react-icons/fa";
 
-const ProductItem = ({ id, video, name, price, rating }) => {
+const ProductItem = ({ id, video, poster, name, price, rating }) => {
   const videoRef = useRef(null);
   const [isHovered, setIsHovered] = useState(false);
   const [isMuted, setIsMuted] = useState(true);
 
   const handleMouseEnter = () => {
     setIsHovered(true);
-    videoRef.current?.play();
+    if (videoRef.current && video) {
+      videoRef.current.play().catch(() => {
+        /* ignore AbortError */
+      });
+    }
   };
-
   const handleMouseLeave = () => {
     setIsHovered(false);
     if (videoRef.current) {
@@ -20,14 +24,12 @@ const ProductItem = ({ id, video, name, price, rating }) => {
       videoRef.current.currentTime = 0;
     }
   };
-
   const toggleMute = (e) => {
     e.preventDefault();
     e.stopPropagation();
     if (videoRef.current) {
-      const newMuted = !videoRef.current.muted;
-      videoRef.current.muted = newMuted;
-      setIsMuted(newMuted);
+      videoRef.current.muted = !videoRef.current.muted;
+      setIsMuted(videoRef.current.muted);
     }
   };
 
@@ -38,8 +40,7 @@ const ProductItem = ({ id, video, name, price, rating }) => {
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
     >
-      {/* Ses Butonu */}
-      {isHovered && (
+      {isHovered && video && (
         <button
           onClick={toggleMute}
           className="absolute top-3 right-3 bg-white border border-gray-200 p-1 rounded-full z-10 shadow-md hover:border-purple-500 transition"
@@ -53,14 +54,23 @@ const ProductItem = ({ id, video, name, price, rating }) => {
       )}
 
       <div className="bg-light1 h-56 flex items-center justify-center overflow-hidden">
-        <video
-          ref={videoRef}
-          src={video}
-          muted
-          playsInline
-          preload="metadata"
-          className="h-full w-full object-contain transition-transform duration-300 group-hover:scale-105"
-        />
+        {video ? (
+          <video
+            ref={videoRef}
+            src={video}
+            poster={poster}
+            muted
+            playsInline
+            preload="metadata"
+            className="h-full w-full object-contain transition-transform duration-300 group-hover:scale-105"
+          />
+        ) : (
+          <img
+            src={poster}
+            alt={name}
+            className="h-full w-full object-contain transition-transform duration-300 group-hover:scale-105"
+          />
+        )}
       </div>
 
       <div className="p-4">
@@ -87,13 +97,16 @@ const ProductItem = ({ id, video, name, price, rating }) => {
 
 ProductItem.propTypes = {
   id: PropTypes.oneOfType([PropTypes.string, PropTypes.number]).isRequired,
-  video: PropTypes.string.isRequired,
+  video: PropTypes.string,
+  poster: PropTypes.string,
   name: PropTypes.string.isRequired,
   price: PropTypes.number.isRequired,
   rating: PropTypes.number,
 };
 
 ProductItem.defaultProps = {
+  video: null,
+  poster: null,
   rating: 0,
 };
 

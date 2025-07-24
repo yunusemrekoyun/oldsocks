@@ -1,4 +1,3 @@
-// src/components/categories/CategoryFilter.jsx
 import React, { useState, useEffect } from "react";
 import { FaChevronDown, FaCheck } from "react-icons/fa";
 
@@ -7,6 +6,8 @@ export default function CategoryFilter({
   categories,
   filters,
   onFilterChange,
+  campaignTitle,
+  onClearCampaign,
 }) {
   const [open, setOpen] = useState({
     category: true,
@@ -31,65 +32,40 @@ export default function CategoryFilter({
     });
   }, [filters.priceRange, minPrice, maxPrice]);
 
-  // Parent seçilince subCategory panelini aç
-  useEffect(() => {
-    if (filters.category.length) {
-      setOpen((o) => ({ ...o, subCategory: true }));
-    }
-  }, [filters.category]);
-
   const toggleFilter = (key, val) => {
     const prev = filters[key];
-    let next;
-    if (Array.isArray(prev)) {
-      next = prev.includes(val)
-        ? prev.filter((x) => x !== val)
-        : [...prev, val];
-    } else {
-      next = val;
-    }
+    const next = prev.includes(val)
+      ? prev.filter((x) => x !== val)
+      : [...prev, val];
     onFilterChange({ ...filters, [key]: next });
   };
 
-  // Parent kategoriler
+  // Parent & subcategory hiyerarşisi
   const parentCats = categories.filter((c) => !c.parent);
-
-  // Alt kategorileri çıkar ve tekilleştir
-  const allSub = parentCats.flatMap((parent) =>
-    (parent.children || []).map((child) => ({
-      value: child._id,
-      label: child.name,
-      parent: parent._id,
+  const allSub = parentCats.flatMap((p) =>
+    (p.children || []).map((ch) => ({
+      value: ch._id,
+      label: ch.name,
+      parent: p._id,
     }))
   );
-  const subCats = Array.from(
-    new Map(allSub.map((item) => [item.value, item])).values()
-  );
+  const subCats = Array.from(new Map(allSub.map((i) => [i.value, i])).values());
+  const subOptions = filters.category.length
+    ? subCats.filter((s) => filters.category.includes(s.parent))
+    : [];
 
-  // Seçili parent’a göre alt gruplar
-  const subOptions =
-    filters.category.length > 0
-      ? subCats.filter((item) => filters.category.includes(item.parent))
-      : [];
-
-  // Diğer dinamik seçenekler
   const sizes = Array.from(new Set(products.flatMap((p) => p.sizes))).sort();
   const colors = Array.from(new Set(products.map((p) => p.color))).filter(
     Boolean
   );
 
-  // Bölümler
   const sections = [
     {
       label: "Category",
       key: "category",
       options: parentCats.map((c) => ({ value: c._id, label: c.name })),
     },
-    {
-      label: "Subcategory",
-      key: "subCategory",
-      options: subOptions,
-    },
+    { label: "Subcategory", key: "subCategory", options: subOptions },
     {
       label: "Size",
       key: "sizes",
@@ -101,22 +77,6 @@ export default function CategoryFilter({
       options: colors.map((c) => ({ value: c, label: c })),
     },
   ];
-
-  // Clear Filters kontrolü
-  const anyActive =
-    filters.category.length > 0 ||
-    filters.subCategory.length > 0 ||
-    filters.sizes.length > 0 ||
-    filters.colors.length > 0 ||
-    filters.priceRange[0] > minPrice ||
-    filters.priceRange[1] < maxPrice;
-  const defaultFilters = {
-    category: [],
-    subCategory: [],
-    sizes: [],
-    colors: [],
-    priceRange: [minPrice, maxPrice],
-  };
 
   return (
     <div className="space-y-4">
@@ -135,14 +95,10 @@ export default function CategoryFilter({
           </div>
           {open[key] && (
             <div className="mt-2 grid grid-cols-2 gap-2 px-2">
-              {key === "subCategory" && !filters.category.length ? (
-                <div className="col-span-2 text-sm text-dark2">
-                  Önce parent seçin
-                </div>
-              ) : options.length === 0 ? (
+              {options.length === 0 ? (
                 <div className="col-span-2 text-sm text-dark2">Seçenek yok</div>
               ) : (
-                options.map(({ value, label: L }) => {
+                options.map(({ value, label }) => {
                   const checked = filters[key].includes(value);
                   return (
                     <div
@@ -157,7 +113,7 @@ export default function CategoryFilter({
                       >
                         {checked && <FaCheck className="text-white w-3 h-3" />}
                       </div>
-                      <span className="text-sm text-dark1">{L}</span>
+                      <span className="text-sm text-dark1">{label}</span>
                     </div>
                   );
                 })
@@ -167,7 +123,7 @@ export default function CategoryFilter({
         </div>
       ))}
 
-      {/* Price range */}
+      {/* Price Range */}
       <div>
         <div
           className="flex justify-between items-center bg-light2 rounded-xl px-4 py-3 cursor-pointer hover:bg-dark2/5 transition"
@@ -185,34 +141,30 @@ export default function CategoryFilter({
             <div className="flex items-center space-x-2">
               <input
                 type="number"
-                value={priceInput.min}
                 placeholder={minPrice}
-                className="w-1/2 border px-2 py-1 rounded"
+                value={priceInput.min}
                 onChange={(e) =>
                   setPriceInput((p) => ({ ...p, min: e.target.value }))
                 }
+                className="w-1/2 border px-2 py-1 rounded"
               />
               <input
                 type="number"
-                value={priceInput.max}
                 placeholder={maxPrice}
-                className="w-1/2 border px-2 py-1 rounded"
+                value={priceInput.max}
                 onChange={(e) =>
                   setPriceInput((p) => ({ ...p, max: e.target.value }))
                 }
+                className="w-1/2 border px-2 py-1 rounded"
               />
             </div>
             <div className="flex justify-end">
               <button
-                type="button"
                 className="px-3 py-1 bg-dark1 text-white rounded"
                 onClick={() => {
                   const low = Number(priceInput.min) || minPrice;
                   const high = Number(priceInput.max) || maxPrice;
-                  onFilterChange({
-                    ...filters,
-                    priceRange: [low, high],
-                  });
+                  onFilterChange({ ...filters, priceRange: [low, high] });
                 }}
               >
                 Apply
@@ -225,15 +177,18 @@ export default function CategoryFilter({
         )}
       </div>
 
-      {/* Clear filters */}
-      {anyActive && (
-        <div className="text-center mt-4">
+      {/* Kampanya Baloncuğu */}
+      {campaignTitle && (
+        <div className="mt-6 flex items-center space-x-2">
+          <span className="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm">
+            {campaignTitle}
+          </span>
           <button
-            type="button"
-            className="text-red-600 underline text-sm"
-            onClick={() => onFilterChange(defaultFilters)}
+            onClick={onClearCampaign}
+            className="text-red-500 text-lg leading-none"
+            title="Kampanyayı temizle"
           >
-            Clear filters
+            ×
           </button>
         </div>
       )}
