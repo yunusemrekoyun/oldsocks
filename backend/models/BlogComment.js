@@ -20,6 +20,7 @@ const BlogCommentSchema = new Schema(
         ref: "BlogCommentReply",
       },
     ],
+    approved: { type: Boolean, default: false }, // ← eklendi
   },
   { timestamps: true }
 );

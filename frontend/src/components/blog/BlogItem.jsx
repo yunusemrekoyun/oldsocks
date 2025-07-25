@@ -1,3 +1,4 @@
+// src/components/blog/BlogItem.jsx
 import React from "react";
 import PropTypes from "prop-types";
 import { FaUserAlt, FaFolderOpen, FaComments } from "react-icons/fa";
@@ -11,11 +12,11 @@ const BlogItem = ({
   author,
   category,
   comments,
+  to, // yeni prop
 }) => (
   <article className="group bg-white rounded-xl shadow-md hover:shadow-xl transition overflow-hidden border border-light2">
-    {/* Görsel + tarih etiketi */}
     <div className="relative overflow-hidden">
-      <Link to="/blog-details">
+      <Link to={to}>
         <img
           src={image}
           alt={title}
@@ -26,18 +27,13 @@ const BlogItem = ({
         {date}
       </div>
     </div>
-
-    {/* İçerik */}
     <div className="p-6">
-      <Link to="/blog-details">
+      <Link to={to}>
         <h3 className="text-2xl font-serif font-bold text-dark1 group-hover:text-black transition duration-300">
           {title}
         </h3>
       </Link>
-
       <p className="text-dark2 text-sm leading-relaxed mt-3 mb-5">{excerpt}</p>
-
-      {/* Bilgi alanı */}
       <div className="flex flex-wrap items-center gap-4 text-sm text-dark2">
         <span className="flex items-center gap-1">
           <FaUserAlt className="text-xs" />
@@ -64,6 +60,7 @@ BlogItem.propTypes = {
   author: PropTypes.string.isRequired,
   category: PropTypes.string.isRequired,
   comments: PropTypes.number.isRequired,
+  to: PropTypes.string.isRequired,
 };
 
 export default BlogItem;

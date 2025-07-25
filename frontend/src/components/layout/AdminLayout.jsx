@@ -1,4 +1,4 @@
-// src/components/layout/AdminLayout.jsx
+// --- Updated src/components/layout/AdminLayout.jsx ---
 import React, { useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import {
@@ -17,11 +17,13 @@ import {
   Bars3Icon,
   XMarkIcon,
   PencilIcon as BlogIcon,
+  ChatBubbleLeftEllipsisIcon,
 } from "@heroicons/react/24/solid";
 
 export default function AdminLayout({ children }) {
   const [open, setOpen] = useState(false);
   const [blogMenuOpen, setBlogMenuOpen] = useState(false);
+  const [commentsMenuOpen, setCommentsMenuOpen] = useState(false);
   const location = useLocation();
 
   const navItems = [
@@ -72,6 +74,7 @@ export default function AdminLayout({ children }) {
             onClick={() => {
               setOpen(false);
               setBlogMenuOpen(false);
+              setCommentsMenuOpen(false);
             }}
             className={`flex items-center gap-3 rounded px-3 py-2 text-sm font-medium transition
               ${
@@ -125,6 +128,50 @@ export default function AdminLayout({ children }) {
                 }`}
             >
               Blog Kategorileri
+            </Link>
+          </div>
+        )}
+
+        {/* Yorumlar menüsü */}
+        <button
+          onClick={() => setCommentsMenuOpen((o) => !o)}
+          className={`w-full text-left flex items-center gap-3 rounded px-3 py-2 text-sm font-medium transition
+            ${
+              isActive("/admin/comments") || isActive("/admin/replies")
+                ? "bg-blue-100 text-blue-700"
+                : "hover:bg-gray-100 text-gray-800"
+            }`}
+        >
+          <ListItemPrefix>
+            <ChatBubbleLeftEllipsisIcon className="w-5 h-5" />
+          </ListItemPrefix>
+          Yorumlar
+        </button>
+        {commentsMenuOpen && (
+          <div className="pl-10 space-y-1">
+            <Link
+              to="/admin/comments"
+              onClick={() => setOpen(false)}
+              className={`block rounded px-3 py-1 text-sm transition
+                ${
+                  isActive("/admin/comments")
+                    ? "bg-blue-50 text-blue-700 font-semibold"
+                    : "hover:bg-gray-100 text-gray-800"
+                }`}
+            >
+              Yorumlar
+            </Link>
+            <Link
+              to="/admin/replies"
+              onClick={() => setOpen(false)}
+              className={`block rounded px-3 py-1 text-sm transition
+                ${
+                  isActive("/admin/replies")
+                    ? "bg-blue-50 text-blue-700 font-semibold"
+                    : "hover:bg-gray-100 text-gray-800"
+                }`}
+            >
+              Yanıtlar
             </Link>
           </div>
         )}

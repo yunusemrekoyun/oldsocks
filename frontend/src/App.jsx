@@ -33,6 +33,7 @@ import CampaignsPage from "./pages/admin/CampaignsPage";
 import MiniCampaignsPage from "./pages/admin/MiniCampaignsPage";
 import BlogsPage from "./pages/admin/BlogsPage";
 import BlogCategoriesPage from "./pages/admin/BlogCategoriesPage";
+import CommentsPage from "./pages/admin/CommentsPage";
 export default function App() {
   return (
     <BrowserRouter>
@@ -50,7 +51,7 @@ export default function App() {
           <Route path="/about" element={<AboutPage />} />
           <Route path="/blog" element={<BlogPage />} />
           <Route path="/contact" element={<ContactPage />} />
-          <Route path="/blog-details" element={<BlogDetailsPage />} />
+          <Route path="/blog/:slug" element={<BlogDetailsPage />} />
           <Route path="/product-details/:id" element={<ProductDetailsPage />} />
 
           <Route path="/cart" element={<CartPage />} />
@@ -92,6 +93,7 @@ export default function App() {
             <Route path="minicampaigns" element={<MiniCampaignsPage />} />
             <Route path="blogs" element={<BlogsPage />} />
             <Route path="blog-categories" element={<BlogCategoriesPage />} />
+            <Route path="comments" element={<CommentsPage />} />
           </Route>
         </Route>
       </Routes>

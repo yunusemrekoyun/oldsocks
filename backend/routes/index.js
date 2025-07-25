@@ -6,44 +6,42 @@ const { verifyToken } = require("../middleware/auth");
 const { allowRoles } = require("../middleware/roles");
 
 // Sağlık kontrolü
-router.get("/", (req, res) => {
-  res.json({ message: "API çalışıyor 🚀" });
-});
+router.get("/", (req, res) => res.json({ message: "API çalışıyor 🚀" }));
 
-// sadece giriş yapmış kullanıcılar
-router.get("/protected", verifyToken, (req, res) => {
-  res.json({
-    message: "Buraya eriştin!",
-    user: req.user,
-  });
-});
+// sadece login’li
+router.get("/protected", verifyToken, (req, res) =>
+  res.json({ message: "Buraya eriştin!", user: req.user })
+);
 
-// sadece admin rolündekiler
-router.get("/admin-only", verifyToken, allowRoles("admin"), (req, res) => {
-  res.json({ message: "Admin paneline hoş geldin." });
-});
+// sadece admin
+router.get("/admin-only", verifyToken, allowRoles("admin"), (req, res) =>
+  res.json({ message: "Admin paneline hoş geldin." })
+);
 
-// auth rotalarını bağla
+// auth
 router.use("/auth", require("./auth"));
 
-// users rotalarını bağla (getMe, updateMe, admin CRUD)
+// users, products, categories, campaigns, mini-campaigns, orders…
 router.use("/users", require("./users"));
 router.use("/products", require("./products"));
 router.use("/categories", require("./categories"));
-
-// campaign rotaları
 router.use("/campaigns", require("./campaign"));
-
-// mini campaign rotaları
 router.use("/mini-campaigns", require("./miniCampaigns"));
-// orders rotaları
 router.use("/orders", require("./orders"));
 
-// blog rotaları
+// blog & blog-categories
 router.use("/blogs", require("./blog"));
-
-// blog category rotaları
 router.use("/blog-categories", require("./blogCategories"));
-//payment routes
+
+// ** Yorum / yanıt rotaları buraya **
+// artık /comments/... ve /replies/... altında çalışacak
+router.use("/comments", require("./blogComments"));
+router.use("/replies", require("./blogReplies"));
+
+// payment
 router.use("/payment", require("./payment"));
+
+// user profile picture
+router.use("/profile-pictures", require("./userProfilePictures"));
+
 module.exports = router;

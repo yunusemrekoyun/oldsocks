@@ -4,7 +4,7 @@ const { CloudinaryStorage } = require("multer-storage-cloudinary");
 const cloudinary = require("../config/cloudinary");
 
 // — Ürün resim/video upload (mevcut) —
-const storage = new CloudinaryStorage({
+const productStorage = new CloudinaryStorage({
   cloudinary,
   params: async (req, file) => {
     const isVideo = file.mimetype.startsWith("video/");
@@ -16,7 +16,7 @@ const storage = new CloudinaryStorage({
     };
   },
 });
-const uploadProductFiles = multer({ storage });
+const uploadProductFiles = multer({ storage: productStorage });
 
 // — Kategori resmi upload (mevcut) —
 const categoryStorage = new CloudinaryStorage({
@@ -46,12 +46,12 @@ const miniCampaignStorage = new CloudinaryStorage({
   params: {
     folder: "mini-campaigns",
     resource_type: "image",
-    format: "png",
+    format: async () => "png",
   },
 });
 const uploadMiniCampaignImage = multer({ storage: miniCampaignStorage });
 
-// — Blog cover resmi upload (YENİ EKLENDİ) —
+// — Blog cover resmi upload (mevcut) —
 const blogCoverStorage = new CloudinaryStorage({
   cloudinary,
   params: {
@@ -62,11 +62,24 @@ const blogCoverStorage = new CloudinaryStorage({
 });
 const uploadBlogCover = multer({ storage: blogCoverStorage });
 
+// — Kullanıcı profil resmi upload (yeni) —
+const profilePictureStorage = new CloudinaryStorage({
+  cloudinary,
+  params: {
+    folder: "user_profile_pictures",
+    resource_type: "image",
+    format: async () => "png",
+    public_id: (req, file) => `profile_${req.user.userId}_${Date.now()}`,
+  },
+});
+const uploadProfilePicture = multer({ storage: profilePictureStorage });
+
 // Hepsini export ediyoruz
 module.exports = {
   uploadProductFiles,
   uploadCategoryImage,
   uploadCampaignImage,
   uploadMiniCampaignImage,
-  uploadBlogCover, 
+  uploadBlogCover,
+  uploadProfilePicture,
 };

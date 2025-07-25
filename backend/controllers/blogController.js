@@ -25,14 +25,12 @@ exports.createBlog = async (req, res) => {
     const categories = parseArrayField(req.body.categories);
     const tags = parseArrayField(req.body.tags);
 
-    // required
     if (!title || !content || !req.file) {
       return res.status(400).json({
         message: "title, content ve coverImage (file) zorunludur.",
       });
     }
 
-    // category validation
     for (let cid of categories) {
       if (!(await BlogCategory.exists({ _id: cid }))) {
         return res.status(400).json({ message: `Invalid category ID: ${cid}` });
@@ -61,44 +59,54 @@ exports.createBlog = async (req, res) => {
   }
 };
 
-// Read all
+// Read all blogs (public)
 exports.getBlogs = async (req, res) => {
   try {
+    // 1) Tüm blogları çek, author.avatar ile
     const blogs = await Blog.find()
-      .populate("author", "firstName lastName email")
+      .populate("author", "firstName lastName avatar bio")
       .populate("categories", "name slug")
       .select("-content")
       .sort({ createdAt: -1 });
-    res.json(blogs);
+
+    // 2) Approved yorum sayılarını aggregation ile grupla
+    const blogIds = blogs.map((b) => b._id);
+    const counts = await BlogComment.aggregate([
+      { $match: { blog: { $in: blogIds }, approved: true } },
+      { $group: { _id: "$blog", count: { $sum: 1 } } },
+    ]);
+    const countMap = {};
+    counts.forEach((c) => {
+      countMap[c._id.toString()] = c.count;
+    });
+
+    // 3) Sonuca commentsCount ekle
+    const result = blogs.map((b) => {
+      const obj = b.toObject();
+      obj.commentsCount = countMap[b._id.toString()] || 0;
+      return obj;
+    });
+
+    return res.json(result);
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Error fetching blogs." });
+    console.error("Error fetching blogs:", err);
+    return res.status(500).json({ message: "Error fetching blogs." });
   }
 };
 
-// Read single
+// Read single blog (public)
 exports.getBlog = async (req, res) => {
   try {
+    // slug veya _id ile bulunabilir
     const query = /^[0-9a-fA-F]{24}$/.test(req.params.slugOrId)
       ? { _id: req.params.slugOrId }
       : { slug: req.params.slugOrId };
 
     const blog = await Blog.findOne(query)
-      .populate("author", "firstName lastName email avatarUrl")
+      // author'ı avatar ile birlikte çek
+      .populate("author", "firstName lastName avatar bio email")
       .populate("categories", "name slug")
-      .populate({
-        path: "comments",
-        populate: [
-          { path: "author", select: "firstName lastName avatarUrl" },
-          {
-            path: "replies",
-            populate: {
-              path: "author",
-              select: "firstName lastName avatarUrl",
-            },
-          },
-        ],
-      });
+      .populate("tags", "name");
 
     if (!blog) return res.status(404).json({ message: "Blog not found." });
     res.json(blog);
@@ -108,7 +116,7 @@ exports.getBlog = async (req, res) => {
   }
 };
 
-// Update
+// Update existing blog (admin)
 exports.updateBlog = async (req, res) => {
   try {
     const { title, subtitle, excerpt, content, status } = req.body;
@@ -119,7 +127,6 @@ exports.updateBlog = async (req, res) => {
       return res.status(400).json({ message: "title ve content zorunludur." });
     }
 
-    // category validation
     for (let cid of categories) {
       if (!(await BlogCategory.exists({ _id: cid }))) {
         return res.status(400).json({ message: `Invalid category ID: ${cid}` });
@@ -146,13 +153,13 @@ exports.updateBlog = async (req, res) => {
   }
 };
 
-// Delete
+// Delete blog (admin)
 exports.deleteBlog = async (req, res) => {
   try {
     const deleted = await Blog.findByIdAndDelete(req.params.id);
     if (!deleted) return res.status(404).json({ message: "Blog not found." });
 
-    // isteğe bağlı: yorum + reply temizle
+    // İlgili yorum ve yanıtları temizle
     await BlogComment.deleteMany({ blog: req.params.id });
     await BlogCommentReply.deleteMany({ comment: { $in: deleted.comments } });
 

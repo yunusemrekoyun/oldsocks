@@ -14,6 +14,7 @@ const BlogCommentReplySchema = new Schema(
       required: true,
     },
     text: { type: String, required: true, trim: true },
+    approved: { type: Boolean, default: false }, // ← eklendi
   },
   { timestamps: true }
 );
