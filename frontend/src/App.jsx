@@ -1,3 +1,4 @@
+// src/App.jsx
 import React from "react";
 import {
   BrowserRouter,
@@ -34,6 +35,8 @@ import MiniCampaignsPage from "./pages/admin/MiniCampaignsPage";
 import BlogsPage from "./pages/admin/BlogsPage";
 import BlogCategoriesPage from "./pages/admin/BlogCategoriesPage";
 import CommentsPage from "./pages/admin/CommentsPage";
+import CommentRepliesPage from "./pages/admin/CommentRepliesPage"; // ← yeni eklendi
+
 export default function App() {
   return (
     <BrowserRouter>
@@ -53,7 +56,6 @@ export default function App() {
           <Route path="/contact" element={<ContactPage />} />
           <Route path="/blog/:slug" element={<BlogDetailsPage />} />
           <Route path="/product-details/:id" element={<ProductDetailsPage />} />
-
           <Route path="/cart" element={<CartPage />} />
 
           {/* Checkout, önce oturum kontrolü */}
@@ -67,10 +69,8 @@ export default function App() {
           />
 
           <Route path="/payment-result" element={<PaymentResultPage />} />
-
           <Route path="/auth" element={<AuthPage />} />
           <Route path="/profile" element={<AuthPage />} />
-
           <Route path="*" element={<NotFoundPage />} />
         </Route>
 
@@ -88,12 +88,17 @@ export default function App() {
             <Route path="products" element={<ProductsPage />} />
             <Route path="users" element={<AdminUsersPage />} />
             <Route path="categories" element={<CategoriesPage />} />
-            <Route path="*" element={<Navigate to="/admin" replace />} />
             <Route path="campaigns" element={<CampaignsPage />} />
             <Route path="minicampaigns" element={<MiniCampaignsPage />} />
             <Route path="blogs" element={<BlogsPage />} />
             <Route path="blog-categories" element={<BlogCategoriesPage />} />
+
+            {/* yorum/yanıt yönetim sayfaları */}
             <Route path="comments" element={<CommentsPage />} />
+            <Route path="replies" element={<CommentRepliesPage />} />
+            {/* ← eklendi */}
+
+            <Route path="*" element={<Navigate to="/admin" replace />} />
           </Route>
         </Route>
       </Routes>

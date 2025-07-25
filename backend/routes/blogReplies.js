@@ -5,7 +5,7 @@ const { allowRoles } = require("../middleware/roles");
 const ctrl = require("../controllers/blogReplyController");
 
 // — Admin paneli için —
-// Tüm yanıtları listele (approved filtresiyle)
+// Tüm yanıtları listele
 router.get("/replies", verifyToken, allowRoles("admin"), ctrl.getAllReplies);
 // Tek bir yanıtı getir
 router.get("/replies/:id", verifyToken, allowRoles("admin"), ctrl.getReply);
@@ -16,15 +16,14 @@ router.patch(
   allowRoles("admin"),
   ctrl.approveReply
 );
-
-// — Public / Kullanıcı işlemleri —
-// Bir yorumun sadece onaylı yanıtlarını getir
-router.get("/comments/:commentId/replies", ctrl.getRepliesByComment);
-// Yeni yanıt ekle (login required)
-router.post("/comments/:commentId/replies", verifyToken, ctrl.createReply);
-
-// — Silme (sahibi veya admin) —
 // Yanıt sil
 router.delete("/replies/:id", verifyToken, ctrl.deleteReply);
+
+// — Public / Kullanıcı işlemleri —
+// Bir yorumun onaylı yanıtlarını getir (→ GET /comments/:commentId/replies)
+router.get("/comments/:commentId/replies", ctrl.getRepliesByComment);
+// Yeni yanıt ekle (login required)
+// → POST /comments/:commentId/replies
+router.post("/comments/:commentId/replies", verifyToken, ctrl.createReply);
 
 module.exports = router;

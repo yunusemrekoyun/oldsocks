@@ -59,11 +59,17 @@ exports.createBlog = async (req, res) => {
   }
 };
 
-// Read all blogs (public)
+// Read all blogs (public), with optional tag filter
 exports.getBlogs = async (req, res) => {
   try {
-    // 1) Tüm blogları çek, author.avatar ile
-    const blogs = await Blog.find()
+    const { tag } = req.query;
+    const filter = {};
+    if (tag) {
+      filter.tags = tag;
+    }
+
+    // 1) Tüm (veya filtreli) blogları çek, author.avatar ile
+    const blogs = await Blog.find(filter)
       .populate("author", "firstName lastName avatar bio")
       .populate("categories", "name slug")
       .select("-content")
@@ -97,16 +103,14 @@ exports.getBlogs = async (req, res) => {
 // Read single blog (public)
 exports.getBlog = async (req, res) => {
   try {
-    // slug veya _id ile bulunabilir
-    const query = /^[0-9a-fA-F]{24}$/.test(req.params.slugOrId)
-      ? { _id: req.params.slugOrId }
-      : { slug: req.params.slugOrId };
+    const slugOrId = req.params.slugOrId;
+    const query = /^[0-9a-fA-F]{24}$/.test(slugOrId)
+      ? { _id: slugOrId }
+      : { slug: slugOrId };
 
     const blog = await Blog.findOne(query)
-      // author'ı avatar ile birlikte çek
       .populate("author", "firstName lastName avatar bio email")
-      .populate("categories", "name slug")
-      .populate("tags", "name");
+      .populate("categories", "name slug");
 
     if (!blog) return res.status(404).json({ message: "Blog not found." });
     res.json(blog);
@@ -167,5 +171,21 @@ exports.deleteBlog = async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Error deleting blog." });
+  }
+};
+
+// Read all tags with counts (public)
+exports.getTags = async (req, res) => {
+  try {
+    const tags = await Blog.aggregate([
+      { $unwind: "$tags" },
+      { $group: { _id: "$tags", count: { $sum: 1 } } },
+      { $project: { tag: "$_id", count: 1, _id: 0 } },
+      { $sort: { count: -1 } },
+    ]);
+    res.json(tags);
+  } catch (err) {
+    console.error("Error fetching tags:", err);
+    res.status(500).json({ message: "Error fetching tags." });
   }
 };

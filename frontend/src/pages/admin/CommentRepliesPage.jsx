@@ -1,53 +1,53 @@
-// src/pages/admin/CommentsPage.jsx
+// src/pages/admin/CommentRepliesPage.jsx
 import React, { useEffect, useState } from "react";
 import api from "../../../api";
 import { Button, IconButton } from "@material-tailwind/react";
 import { TrashIcon, CheckIcon } from "@heroicons/react/24/outline";
 
-export default function CommentsPage() {
+export default function CommentRepliesPage() {
   const [filter, setFilter] = useState("approved"); // approved | pending
-  const [comments, setComments] = useState([]);
+  const [replies, setReplies] = useState([]);
   const [loading, setLoading] = useState(false);
 
-  const fetchComments = async () => {
+  const fetchReplies = async () => {
     setLoading(true);
     try {
       const approved = filter === "approved";
-      const { data } = await api.get(`/comments?approved=${approved}`);
-      setComments(data);
+      const { data } = await api.get(`/replies?approved=${approved}`);
+      setReplies(data);
     } catch (err) {
-      console.error("Yorumlar yüklenemedi:", err);
+      console.error("Yanıtlar yüklenemedi:", err);
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchComments();
+    fetchReplies();
   }, [filter]);
 
   const handleApprove = async (id) => {
     try {
-      await api.patch(`/comments/${id}/approve`);
-      fetchComments();
+      await api.patch(`/replies/${id}/approve`);
+      fetchReplies();
     } catch (err) {
-      console.error("Yorum onaylanamadı:", err);
+      console.error("Yanıt onaylanamadı:", err);
     }
   };
 
   const handleDelete = async (id) => {
     if (!window.confirm("Silmek istediğinize emin misiniz?")) return;
     try {
-      await api.delete(`/comments/${id}`);
-      fetchComments();
+      await api.delete(`/replies/${id}`);
+      fetchReplies();
     } catch (err) {
-      console.error("Yorum silinemedi:", err);
+      console.error("Yanıt silinemedi:", err);
     }
   };
 
   return (
     <div>
-      <h4 className="text-2xl mb-4">Yorum Yönetimi</h4>
+      <h4 className="text-2xl mb-4">Yorum Yanıtlarını Yönet</h4>
 
       <div className="flex gap-4 mb-6">
         <Button
@@ -70,18 +70,18 @@ export default function CommentsPage() {
         <div>Yükleniyor…</div>
       ) : (
         <ul className="space-y-4">
-          {comments.map((c) => (
+          {replies.map((r) => (
             <li
-              key={c._id}
+              key={r._id}
               className="p-4 bg-white rounded shadow flex justify-between items-start"
             >
               <div>
                 <p className="font-medium">
-                  {c.author.firstName} {c.author.lastName}
+                  {r.author.firstName} {r.author.lastName}
                 </p>
-                <p className="text-sm mt-1">{c.text}</p>
+                <p className="text-sm mt-1">{r.text}</p>
                 <p className="text-xs text-gray-500 mt-1">
-                  {new Date(c.createdAt).toLocaleString()}
+                  {new Date(r.createdAt).toLocaleString()}
                 </p>
               </div>
               <div className="flex gap-2">
@@ -89,7 +89,7 @@ export default function CommentsPage() {
                   <IconButton
                     variant="text"
                     color="green"
-                    onClick={() => handleApprove(c._id)}
+                    onClick={() => handleApprove(r._id)}
                   >
                     <CheckIcon className="h-5 w-5" />
                   </IconButton>
@@ -97,7 +97,7 @@ export default function CommentsPage() {
                 <IconButton
                   variant="text"
                   color="red"
-                  onClick={() => handleDelete(c._id)}
+                  onClick={() => handleDelete(r._id)}
                 >
                   <TrashIcon className="h-5 w-5" />
                 </IconButton>
