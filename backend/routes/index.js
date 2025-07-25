@@ -39,6 +39,11 @@ router.use("/mini-campaigns", require("./miniCampaigns"));
 // orders rotaları
 router.use("/orders", require("./orders"));
 
+// blog rotaları
+router.use("/blogs", require("./blog"));
+
+// blog category rotaları
+router.use("/blog-categories", require("./blogCategories"));
 //payment routes
 router.use("/payment", require("./payment"));
 module.exports = router;

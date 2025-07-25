@@ -31,6 +31,8 @@ import AdminUsersPage from "./pages/admin/UsersPage";
 import CategoriesPage from "./pages/admin/CategoriesPage";
 import CampaignsPage from "./pages/admin/CampaignsPage";
 import MiniCampaignsPage from "./pages/admin/MiniCampaignsPage";
+import BlogsPage from "./pages/admin/BlogsPage";
+import BlogCategoriesPage from "./pages/admin/BlogCategoriesPage";
 export default function App() {
   return (
     <BrowserRouter>
@@ -88,6 +90,8 @@ export default function App() {
             <Route path="*" element={<Navigate to="/admin" replace />} />
             <Route path="campaigns" element={<CampaignsPage />} />
             <Route path="minicampaigns" element={<MiniCampaignsPage />} />
+            <Route path="blogs" element={<BlogsPage />} />
+            <Route path="blog-categories" element={<BlogCategoriesPage />} />
           </Route>
         </Route>
       </Routes>
