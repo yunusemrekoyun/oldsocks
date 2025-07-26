@@ -35,7 +35,8 @@ import MiniCampaignsPage from "./pages/admin/MiniCampaignsPage";
 import BlogsPage from "./pages/admin/BlogsPage";
 import BlogCategoriesPage from "./pages/admin/BlogCategoriesPage";
 import CommentsPage from "./pages/admin/CommentsPage";
-import CommentRepliesPage from "./pages/admin/CommentRepliesPage"; // ← yeni eklendi
+import CommentRepliesPage from "./pages/admin/CommentRepliesPage";
+import InstagramPostsPage from "./pages/admin/InstagramPostsPage";
 
 export default function App() {
   return (
@@ -93,10 +94,11 @@ export default function App() {
             <Route path="blogs" element={<BlogsPage />} />
             <Route path="blog-categories" element={<BlogCategoriesPage />} />
 
-            {/* yorum/yanıt yönetim sayfaları */}
             <Route path="comments" element={<CommentsPage />} />
             <Route path="replies" element={<CommentRepliesPage />} />
-            {/* ← eklendi */}
+            <Route path="instagram-posts" element={<InstagramPostsPage />} />
+
+            {/* Admin için 404 */}
 
             <Route path="*" element={<Navigate to="/admin" replace />} />
           </Route>

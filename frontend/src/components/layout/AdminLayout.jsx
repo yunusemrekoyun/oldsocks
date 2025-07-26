@@ -18,12 +18,14 @@ import {
   XMarkIcon,
   PencilIcon as BlogIcon,
   ChatBubbleLeftEllipsisIcon,
+  CameraIcon,
 } from "@heroicons/react/24/solid";
 
 export default function AdminLayout({ children }) {
   const [open, setOpen] = useState(false);
   const [blogMenuOpen, setBlogMenuOpen] = useState(false);
   const [commentsMenuOpen, setCommentsMenuOpen] = useState(false);
+  const [instagramMenuOpen, setInstagramMenuOpen] = useState(false);
   const location = useLocation();
 
   const navItems = [
@@ -75,6 +77,7 @@ export default function AdminLayout({ children }) {
               setOpen(false);
               setBlogMenuOpen(false);
               setCommentsMenuOpen(false);
+              setInstagramMenuOpen(false);
             }}
             className={`flex items-center gap-3 rounded px-3 py-2 text-sm font-medium transition
               ${
@@ -175,16 +178,46 @@ export default function AdminLayout({ children }) {
             </Link>
           </div>
         )}
+
+        {/* Instagram menüsü */}
+        <button
+          onClick={() => setInstagramMenuOpen((o) => !o)}
+          className={`w-full text-left flex items-center gap-3 rounded px-3 py-2 text-sm font-medium transition
+            ${
+              isActive("/admin/instagram-posts")
+                ? "bg-blue-100 text-blue-700"
+                : "hover:bg-gray-100 text-gray-800"
+            }`}
+        >
+          <ListItemPrefix>
+            <CameraIcon className="w-5 h-5" />
+          </ListItemPrefix>
+          Instagram
+        </button>
+        {instagramMenuOpen && (
+          <div className="pl-10 space-y-1">
+            <Link
+              to="/admin/instagram-posts"
+              onClick={() => setOpen(false)}
+              className={`block rounded px-3 py-1 text-sm transition
+                ${
+                  isActive("/admin/instagram-posts")
+                    ? "bg-blue-50 text-blue-700 font-semibold"
+                    : "hover:bg-gray-100 text-gray-800"
+                }`}
+            >
+              Gönderiler
+            </Link>
+          </div>
+        )}
       </List>
     </Card>
   );
 
   return (
     <div className="min-h-screen flex bg-gray-50">
-      {/* Desktop Sidebar */}
       <div className="hidden md:block w-64 sticky top-0">{SidebarContent}</div>
 
-      {/* Mobile Sidebar */}
       <Drawer open={open} onClose={() => setOpen(false)} className="md:hidden">
         <div className="p-4 flex justify-between items-center">
           <Typography variant="h6">Menü</Typography>
@@ -195,14 +228,12 @@ export default function AdminLayout({ children }) {
         {SidebarContent}
       </Drawer>
 
-      {/* Mobile Toggle */}
       <div className="md:hidden fixed top-4 left-4 z-[999]">
         <IconButton variant="text" onClick={() => setOpen(true)}>
           <Bars3Icon className="h-6 w-6 text-gray-800" />
         </IconButton>
       </div>
 
-      {/* Main Content */}
       <main className="flex-1 p-6 pt-16 md:pt-6">{children}</main>
     </div>
   );

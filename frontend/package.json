@@ -13,6 +13,7 @@
     "@heroicons/react": "^2.2.0",
     "@material-tailwind/react": "^2.1.10",
     "axios": "^1.10.0",
+    "keen-slider": "^6.8.6",
     "prop-types": "^15.8.1",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",

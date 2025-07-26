@@ -2,7 +2,7 @@
 import React, { useContext, useState } from "react";
 import { Link } from "react-router-dom";
 import {
-  FaTwitter,
+  FaInstagram,
   FaFacebookF,
   FaSearch,
   FaShoppingCart,
@@ -46,7 +46,7 @@ const Header = () => {
           <div className="flex items-center space-x-5">
             {/* Sosyal ikonlar */}
             <div className="hidden md:flex space-x-3">
-              {[FaTwitter, FaFacebookF].map((Icon, i) => (
+              {[FaInstagram, FaFacebookF].map((Icon, i) => (
                 <a
                   key={i}
                   href="#"

@@ -42,4 +42,7 @@ router.use("/payment", require("./payment"));
 // profil resmi
 router.use("/profile-pictures", require("./userProfilePictures"));
 
+// Instagram postları
+router.use("/instagram-posts", require("./instagramPostRoutes"));
+
 module.exports = router;
