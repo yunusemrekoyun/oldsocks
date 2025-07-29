@@ -65,12 +65,15 @@ const Header = () => {
               <FaSearch className="text-dark2 hover:text-brand text-sm" />
             </div>
 
-            {/* Sepet */}
             <Link
               to="/cart"
+              id="cart-icon" // ← buraya eklendi
               className="relative w-12 h-12 flex items-center justify-center bg-dark2 rounded-full hover:bg-brand transition"
             >
-              <FaShoppingCart className="text-white text-base" />
+              <FaShoppingCart
+                className="text-white text-base transition-transform duration-300"
+                id="cart-icon-inner" // ← animasyon için eklendi
+              />
               {items.length > 0 && (
                 <span className="absolute -top-1 -right-1 bg-light1 text-dark1 text-[10px] font-bold w-5 h-5 rounded-full flex items-center justify-center shadow">
                   {items.length}

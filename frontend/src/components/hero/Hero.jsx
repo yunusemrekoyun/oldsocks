@@ -17,7 +17,6 @@ export default function Hero() {
   const swiperRef = useRef(null);
   const [activeIndex, setActiveIndex] = useState(0);
 
-  // Swiper instance’ı hazır olduğunda / slide değiştiğinde activeIndex’i güncelle
   const onSlideChange = useCallback(() => {
     setActiveIndex(swiperRef.current.swiper.realIndex);
   }, []);
@@ -25,12 +24,24 @@ export default function Hero() {
   useEffect(() => {
     const swiper = swiperRef.current.swiper;
     swiper.on("slideChange", onSlideChange);
-    // initialize
     setActiveIndex(swiper.realIndex);
+
     return () => swiper.off("slideChange", onSlideChange);
   }, [onSlideChange]);
 
-  // Video bittiğinde sonraki slide’a geç
+  // Aktif video slide'ında autoplay'yi garantiye almak için
+  useEffect(() => {
+    const videos = document.querySelectorAll("video");
+    videos.forEach((video, idx) => {
+      if (idx === activeIndex) {
+        video.currentTime = 0;
+        video.play().catch((e) => console.warn("Video play hatası:", e));
+      } else {
+        video.pause();
+      }
+    });
+  }, [activeIndex]);
+
   const handleVideoEnd = () => {
     swiperRef.current.swiper.slideNext();
   };
@@ -38,23 +49,21 @@ export default function Hero() {
   return (
     <section className="relative w-full h-screen overflow-hidden">
       <Swiper ref={swiperRef} slidesPerView={1} loop className="h-full">
-        {slides.map(({ id, video }) => (
+        {slides.map(({ id, video }, idx) => (
           <SwiperSlide key={id}>
             <div className="relative w-full h-full">
-              {/* Arka plan videosu */}
               <video
                 src={video}
                 className="w-full h-full object-cover"
-                autoPlay
+                autoPlay={activeIndex === idx}
                 muted
                 playsInline
+                preload="auto"
                 onEnded={handleVideoEnd}
               />
 
-              {/* Koyu overlay */}
               <div className="absolute inset-0 bg-black bg-opacity-40" />
 
-              {/* Başlık + buton */}
               <div className="absolute inset-0 flex flex-col items-center justify-center text-center px-4">
                 <h1 className="text-4xl md:text-6xl lg:text-7xl font-serif font-bold text-white uppercase leading-tight">
                   Fashion <br /> Changing <br /> Always
@@ -68,7 +77,6 @@ export default function Hero() {
         ))}
       </Swiper>
 
-      {/* Custom “büyük segmentler” pagination */}
       <div className="absolute bottom-8 left-1/2 transform -translate-x-1/2 flex items-center space-x-4 z-50">
         {slides.map((_, idx) => (
           <div

@@ -11,12 +11,24 @@ export default {
         playfair: ['"Playfair Display"', "serif"],
       },
       colors: {
-        black: "#000000", // Tam siyah
-        dark1: "#141414", // Koyu gri 1
-        dark2: "#1B1B1B", // Koyu gri 2
-        white: "#FFFFFF", // Beyaz
-        light1: "#F3F3F3", // Açık gri 1
-        light2: "#E1E1E1", // Açık gri 2
+        black: "#000000",
+        dark1: "#141414",
+        dark2: "#1B1B1B",
+        white: "#FFFFFF",
+        light1: "#F3F3F3",
+        light2: "#E1E1E1",
+      },
+      keyframes: {
+        shake: {
+          "0%": { transform: "rotate(0deg)" },
+          "25%": { transform: "rotate(-10deg)" },
+          "50%": { transform: "rotate(10deg)" },
+          "75%": { transform: "rotate(-10deg)" },
+          "100%": { transform: "rotate(0deg)" },
+        },
+      },
+      animation: {
+        shake: "shake 0.4s ease-in-out",
       },
     },
   },

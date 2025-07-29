@@ -31,41 +31,54 @@ export default function SimilarProductItem({ id, video, name, price, rating }) {
   return (
     <Link
       to={`/product-details/${id}`}
-      className="group relative rounded-xl overflow-hidden bg-white shadow hover:shadow-lg transition flex flex-col h-full"
+      className="group relative rounded-2xl overflow-hidden bg-white shadow-md hover:shadow-xl border border-light2 transition-all duration-300 flex flex-col h-full"
       onMouseEnter={onEnter}
       onMouseLeave={onLeave}
     >
-      <div className="relative">
+      {/* Video Alanı */}
+      <div className="relative h-64 overflow-hidden bg-light1">
         <video
           ref={videoRef}
           src={video}
           muted
           playsInline
           preload="metadata"
-          className="w-full h-48 object-contain transition-transform duration-300 group-hover:scale-105 bg-gray-100"
+          className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
         />
         {hovered && (
           <button
             onClick={toggleMute}
-            className="absolute top-2 right-2 bg-white p-1 rounded-full shadow z-10"
+            className="absolute top-2 right-2 bg-white/90 p-2 rounded-full shadow-md z-10 hover:scale-110 transition"
           >
-            {muted ? <FaVolumeMute /> : <FaVolumeUp />}
+            {muted ? (
+              <FaVolumeMute className="text-dark2" />
+            ) : (
+              <FaVolumeUp className="text-dark2" />
+            )}
           </button>
         )}
       </div>
-      <div className="p-3 text-center flex flex-col justify-between flex-grow">
-        <h4 className="text-sm font-medium line-clamp-2">{name}</h4>
-        <div className="flex justify-center my-1">
+
+      {/* İçerik */}
+      <div className="flex flex-col justify-between flex-grow p-4 space-y-2">
+        <h4 className="text-dark1 text-sm font-semibold leading-snug line-clamp-2 text-center">
+          {name}
+        </h4>
+
+        <div className="flex justify-center gap-1">
           {Array.from({ length: 5 }).map((_, i) => (
             <FaStar
               key={i}
               className={`h-4 w-4 ${
-                i < rating ? "text-yellow-400" : "text-gray-300"
+                i < rating ? "text-yellow-400" : "text-light2"
               }`}
             />
           ))}
         </div>
-        <p className="mt-1 font-semibold text-primary">${price.toFixed(2)}</p>
+
+        <p className="text-dark1 font-bold text-sm text-center mt-1">
+          ${price.toFixed(2)}
+        </p>
       </div>
     </Link>
   );

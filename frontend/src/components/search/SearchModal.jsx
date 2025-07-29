@@ -1,7 +1,6 @@
-// src/components/SearchModal.jsx
 import React, { useEffect, useState, useRef } from "react";
 import { FaSearch } from "react-icons/fa";
-import { useNavigate } from "react-router-dom"; // ← EKLENDİ
+import { useNavigate } from "react-router-dom";
 import api from "../../../api";
 
 export default function SearchModal({ open, onClose }) {
@@ -9,9 +8,8 @@ export default function SearchModal({ open, onClose }) {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState([]);
   const containerRef = useRef(null);
-  const navigate = useNavigate(); // ← EKLENDİ
+  const navigate = useNavigate();
 
-  // Ürünleri bir kez çek
   useEffect(() => {
     if (!open) return;
     api
@@ -21,7 +19,6 @@ export default function SearchModal({ open, onClose }) {
     setQuery("");
   }, [open]);
 
-  // Her query değişiminde filtrele
   useEffect(() => {
     if (!query) {
       setResults([]);
@@ -31,7 +28,6 @@ export default function SearchModal({ open, onClose }) {
     setResults(allProducts.filter((p) => p.name.toLowerCase().includes(q)));
   }, [query, allProducts]);
 
-  // Modal dışına tıklayınca kapa
   useEffect(() => {
     function handler(e) {
       if (containerRef.current && !containerRef.current.contains(e.target)) {
@@ -51,8 +47,8 @@ export default function SearchModal({ open, onClose }) {
   if (!open) return null;
 
   const handleSelect = (id) => {
-    onClose(); // modal’ı kapat
-    navigate(`/product-details/${id}`); // detay sayfasına git
+    onClose();
+    navigate(`/product-details/${id}`);
   };
 
   return (
@@ -76,24 +72,44 @@ export default function SearchModal({ open, onClose }) {
             onChange={(e) => setQuery(e.target.value)}
           />
         </div>
+
         <div className="max-h-64 overflow-auto">
           {query ? (
             results.length ? (
               results.map((p) => (
                 <div
                   key={p._id}
-                  className="py-2 hover:bg-gray-100 cursor-pointer flex justify-between items-center"
-                  onClick={() => handleSelect(p._id)} // ← EKLENDİ
+                  onClick={() => handleSelect(p._id)}
+                  className="py-3 px-4 hover:bg-gray-100 cursor-pointer flex items-center justify-between rounded transition group"
                 >
-                  <span>{p.name}</span>
-                  {/* Thumbnail olarak ilk resim */}
-                  {p.images?.[0] && (
-                    <img
-                      src={p.images[0]}
-                      alt={p.name}
-                      className="h-8 w-8 object-cover rounded"
-                    />
-                  )}
+                  {/* Sol: Görsel */}
+                  <div className="flex items-center space-x-4">
+                    {p.images?.[0] && (
+                      <img
+                        src={p.images[0]}
+                        alt={p.name}
+                        className="h-12 w-12 object-cover rounded shadow"
+                      />
+                    )}
+                    {/* Orta: Ad */}
+                    <div>
+                      <div className="text-dark1 font-medium group-hover:underline">
+                        {p.name}
+                      </div>
+                      <div className="text-sm text-gray-500">
+                        {p.description?.slice(0, 50)}...
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Sağ: Fiyat + Puan */}
+                  <div className="text-right space-y-1 min-w-[80px]">
+                    <div className="text-dark1 font-semibold">
+                      ₺{p.price.toFixed(2)}
+                    </div>
+                    {/* Yıldız simülasyonu (sabit 4 yıldız gibi düşün) */}
+                    <div className="text-yellow-400 text-xs">★★★★★</div>
+                  </div>
                 </div>
               ))
             ) : (
@@ -108,6 +124,7 @@ export default function SearchModal({ open, onClose }) {
           )}
         </div>
       </div>
+
       <style>{`
         @keyframes fadeIn {
           from { opacity: 0 }

@@ -10,7 +10,6 @@ export default function UserAccount() {
   const [file, setFile] = useState(null);
   const [error, setError] = useState("");
 
-  // Kullanıcı ve profil fotoğrafını çek
   useEffect(() => {
     if (!isLoggedIn) {
       setError("Oturum açılmamış");
@@ -56,48 +55,51 @@ export default function UserAccount() {
       .catch((err) => setError(err.response?.data?.message || "Silme hatası"));
   };
 
-  if (error) return <div className="text-red-500">{error}</div>;
-  if (!user) return <div>Yükleniyor…</div>;
+  if (error) return <div className="text-red-500 text-center mt-10">{error}</div>;
+  if (!user) return <div className="text-center mt-10">Yükleniyor…</div>;
 
   return (
-    <div className="p-6 bg-white rounded shadow-md space-y-4">
-      <h2 className="text-xl font-bold">Hoş geldin, {user.firstName}!</h2>
-      <p>
-        <strong>Email:</strong> {user.email}
-      </p>
-      <p>
-        <strong>Telefon:</strong> {user.phone || "-"}
-      </p>
+    <div className="max-w-xl mx-auto bg-white shadow-xl rounded-2xl p-8 mt-10 space-y-6 border border-gray-200">
+      <h2 className="text-2xl font-semibold text-gray-800 text-center">
+        Hoş geldin, <span className="text-blue-600">{user.firstName}</span>!
+      </h2>
 
-      <div className="mt-4">
-        <h3 className="font-semibold mb-2">Profil Resmin</h3>
-        <div className="flex items-center gap-4 mb-2">
+      <div className="space-y-2 text-sm sm:text-base text-gray-700">
+        <p><span className="font-medium">Email:</span> {user.email}</p>
+        <p><span className="font-medium">Telefon:</span> {user.phone || "-"}</p>
+      </div>
+
+      <div className="pt-4 border-t border-gray-200">
+        <h3 className="text-lg font-semibold mb-3 text-gray-800">Profil Resmin</h3>
+        <div className="flex items-center gap-5 flex-wrap">
           <img
             src={profilePic?.url || defaultAvatar}
             alt="Profil"
-            className="w-24 h-24 rounded-full object-cover"
+            className="w-28 h-28 rounded-full object-cover ring-2 ring-blue-500 shadow-md hover:scale-105 transition-transform duration-300"
           />
-          {profilePic && (
+          <div className="space-y-2">
+            {profilePic && (
+              <button
+                onClick={handleDelete}
+                className="px-4 py-1.5 bg-red-500 hover:bg-red-600 text-white rounded-full text-sm transition"
+              >
+                Sil
+              </button>
+            )}
+            <input
+              type="file"
+              accept="image/*"
+              onChange={handleFileChange}
+              className="block text-sm text-gray-600"
+            />
             <button
-              onClick={handleDelete}
-              className="px-3 py-1 bg-red-500 text-white rounded"
+              onClick={handleUpload}
+              className="mt-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-full text-sm transition"
             >
-              Sil
+              {profilePic ? "Güncelle" : "Yükle"}
             </button>
-          )}
+          </div>
         </div>
-        <input
-          type="file"
-          accept="image/*"
-          onChange={handleFileChange}
-          className="mt-2"
-        />
-        <button
-          onClick={handleUpload}
-          className="mt-2 px-4 py-2 bg-blue-600 text-white rounded"
-        >
-          {profilePic ? "Güncelle" : "Yükle"}
-        </button>
       </div>
     </div>
   );

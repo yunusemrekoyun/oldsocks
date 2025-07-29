@@ -79,42 +79,52 @@ export default function CategoryFilter({
   ];
 
   return (
-    <div className="space-y-4">
+  <div className="bg-white shadow-xl rounded-xl overflow-hidden border border-light2">
+    <div className="bg-gradient-to-r from-dark1 to-dark2 px-6 py-4 text-white font-bold text-lg tracking-wide uppercase">
+      Filtrele
+    </div>
+
+    <div className="divide-y divide-light2">
       {sections.map(({ label, key, options }) => (
         <div key={key}>
-          <div
-            className="flex justify-between items-center bg-light2 rounded-xl px-4 py-3 cursor-pointer hover:bg-dark2/5 transition"
+          <button
             onClick={() => setOpen((o) => ({ ...o, [key]: !o[key] }))}
+            className="w-full flex justify-between items-center px-6 py-4 text-dark1 font-semibold hover:bg-light1 transition"
           >
-            <span className="text-dark1 font-medium">{label}</span>
-            <FaChevronDown
-              className={`text-dark2 transform ${
-                open[key] ? "rotate-180" : ""
-              } transition`}
-            />
-          </div>
+            <span className="flex items-center gap-2">
+              <FaChevronDown
+                className={`transform transition-transform ${
+                  open[key] ? "rotate-180" : "rotate-0"
+                }`}
+              />
+              {label}
+            </span>
+            <span className="text-xs text-dark2">
+              {filters[key]?.length || 0} seçildi
+            </span>
+          </button>
+
           {open[key] && (
-            <div className="mt-2 grid grid-cols-2 gap-2 px-2">
+            <div className="px-6 pb-4 pt-2 grid grid-cols-2 gap-3">
               {options.length === 0 ? (
-                <div className="col-span-2 text-sm text-dark2">Seçenek yok</div>
+                <span className="col-span-2 text-sm text-dark2 italic">
+                  Seçenek yok
+                </span>
               ) : (
                 options.map(({ value, label }) => {
                   const checked = filters[key].includes(value);
                   return (
-                    <div
+                    <button
                       key={value}
-                      className="flex items-center space-x-2 cursor-pointer"
                       onClick={() => toggleFilter(key, value)}
+                      className={`text-sm px-3 py-1 rounded-full border transition ${
+                        checked
+                          ? "bg-dark1 text-white border-dark1"
+                          : "border-light2 text-dark2 hover:bg-light2"
+                      }`}
                     >
-                      <div
-                        className={`w-4 h-4 border rounded ${
-                          checked ? "bg-dark1 border-dark1" : "border-gray-300"
-                        } flex items-center justify-center`}
-                      >
-                        {checked && <FaCheck className="text-white w-3 h-3" />}
-                      </div>
-                      <span className="text-sm text-dark1">{label}</span>
-                    </div>
+                      {label}
+                    </button>
                   );
                 })
               )}
@@ -125,20 +135,25 @@ export default function CategoryFilter({
 
       {/* Price Range */}
       <div>
-        <div
-          className="flex justify-between items-center bg-light2 rounded-xl px-4 py-3 cursor-pointer hover:bg-dark2/5 transition"
-          onClick={() => setOpen((o) => ({ ...o, priceRange: !o.priceRange }))}
+        <button
+          onClick={() =>
+            setOpen((o) => ({ ...o, priceRange: !o.priceRange }))
+          }
+          className="w-full flex justify-between items-center px-6 py-4 text-dark1 font-semibold hover:bg-light1 transition"
         >
-          <span className="text-dark1 font-medium">Price range</span>
-          <FaChevronDown
-            className={`text-dark2 transform ${
-              open.priceRange ? "rotate-180" : ""
-            } transition`}
-          />
-        </div>
+          <span className="flex items-center gap-2">
+            <FaChevronDown
+              className={`transform transition-transform ${
+                open.priceRange ? "rotate-180" : "rotate-0"
+              }`}
+            />
+            Fiyat Aralığı
+          </span>
+        </button>
+
         {open.priceRange && (
-          <div className="mt-2 px-4 space-y-2">
-            <div className="flex items-center space-x-2">
+          <div className="px-6 pb-4 pt-2 space-y-2">
+            <div className="flex gap-2">
               <input
                 type="number"
                 placeholder={minPrice}
@@ -146,7 +161,7 @@ export default function CategoryFilter({
                 onChange={(e) =>
                   setPriceInput((p) => ({ ...p, min: e.target.value }))
                 }
-                className="w-1/2 border px-2 py-1 rounded"
+                className="w-1/2 px-3 py-1 rounded border border-light2 bg-light1 text-dark1"
               />
               <input
                 type="number"
@@ -155,37 +170,35 @@ export default function CategoryFilter({
                 onChange={(e) =>
                   setPriceInput((p) => ({ ...p, max: e.target.value }))
                 }
-                className="w-1/2 border px-2 py-1 rounded"
+                className="w-1/2 px-3 py-1 rounded border border-light2 bg-light1 text-dark1"
               />
             </div>
-            <div className="flex justify-end">
-              <button
-                className="px-3 py-1 bg-dark1 text-white rounded"
-                onClick={() => {
-                  const low = Number(priceInput.min) || minPrice;
-                  const high = Number(priceInput.max) || maxPrice;
-                  onFilterChange({ ...filters, priceRange: [low, high] });
-                }}
-              >
-                Apply
-              </button>
-            </div>
-            <div className="text-xs text-dark2">
+            <button
+              onClick={() => {
+                const low = Number(priceInput.min) || minPrice;
+                const high = Number(priceInput.max) || maxPrice;
+                onFilterChange({ ...filters, priceRange: [low, high] });
+              }}
+              className="w-full bg-dark1 hover:bg-dark2 text-white py-2 rounded font-semibold transition"
+            >
+              Uygula
+            </button>
+            <p className="text-xs text-dark2">
               (min: {minPrice}, max: {maxPrice})
-            </div>
+            </p>
           </div>
         )}
       </div>
 
-      {/* Kampanya Baloncuğu */}
+      {/* Kampanya Etiketi */}
       {campaignTitle && (
-        <div className="mt-6 flex items-center space-x-2">
-          <span className="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm">
+        <div className="px-6 py-4 flex items-center justify-between bg-light1">
+          <span className="bg-white text-dark1 px-3 py-1 rounded-full text-sm font-medium">
             {campaignTitle}
           </span>
           <button
             onClick={onClearCampaign}
-            className="text-red-500 text-lg leading-none"
+            className="text-red-500 text-xl leading-none"
             title="Kampanyayı temizle"
           >
             ×
@@ -193,5 +206,6 @@ export default function CategoryFilter({
         </div>
       )}
     </div>
-  );
+  </div>
+);
 }

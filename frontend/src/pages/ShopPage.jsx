@@ -1,5 +1,5 @@
 // src/pages/ShopPage.jsx
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import BreadCrumb from "../components/breadCrumb/BreadCrumb";
 import CategoryFilter from "../components/categories/CategoryFilter";
@@ -14,6 +14,7 @@ export default function ShopPage() {
   // Normal campaign
   const campaignItems = state?.campaignItems;
   const campaignTitle = state?.campaignTitle;
+
   // Mini campaign
   const miniItems = state?.miniCampaignItems;
   const miniTitle = state?.miniCampaignTitle;
@@ -21,6 +22,10 @@ export default function ShopPage() {
   const [allProducts, setAllProducts] = useState([]);
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
+
+  // Gösterilecek ürün sayısı
+  const [visibleCount, setVisibleCount] = useState(20);
+  const browseRef = useRef(null);
 
   // 1) Kategorileri her durumda çek
   useEffect(() => {
@@ -122,16 +127,29 @@ export default function ShopPage() {
               Browse from {filtered.length} items
             </p>
           </header>
-          <Products products={filtered} />
-          {!title && (
-            <div className="mt-10 text-center">
-              <button className="px-6 py-2 border border-dark1 text-dark1 rounded-full hover:bg-dark1 hover:text-white transition">
+
+          {/* Ürünler */}
+          <Products products={filtered.slice(0, visibleCount)} />
+
+          {/* Browse More butonu */}
+          {visibleCount < filtered.length && !title && (
+            <div ref={browseRef} className="mt-10 text-center">
+              <button
+                className="px-6 py-2 border border-dark1 text-dark1 rounded-full hover:bg-dark1 hover:text-white transition"
+                onClick={() => {
+                  setVisibleCount((prev) => prev + 20);
+                  setTimeout(() => {
+                    browseRef.current?.scrollIntoView({ behavior: "smooth" });
+                  }, 100);
+                }}
+              >
                 Browse More
               </button>
             </div>
           )}
         </section>
       </main>
+
       <Categories />
     </div>
   );

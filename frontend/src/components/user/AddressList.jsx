@@ -1,4 +1,3 @@
-// src/components/user/AddressList.jsx
 import React, { useEffect, useState } from "react";
 import api from "../../../api";
 import AddressCard from "./AddressCard";
@@ -11,7 +10,6 @@ export default function AddressList() {
   const [editingAddr, setEditingAddr] = useState(null);
   const [showForm, setShowForm] = useState(false);
 
-  // Adresleri getir
   const fetchAddresses = () => {
     setLoading(true);
     api
@@ -28,7 +26,6 @@ export default function AddressList() {
 
   useEffect(fetchAddresses, []);
 
-  // Adres sil
   const handleDelete = async (id) => {
     if (!window.confirm("Bu adres silinsin mi?")) return;
     try {
@@ -39,13 +36,11 @@ export default function AddressList() {
     }
   };
 
-  // Düzenleme başlat
   const handleEdit = (addr) => {
     setEditingAddr(addr);
     setShowForm(true);
   };
 
-  // Form tamamlandığında
   const onFormSuccess = () => {
     setShowForm(false);
     setEditingAddr(null);
@@ -56,16 +51,16 @@ export default function AddressList() {
   if (error) return <div className="text-red-600">{error}</div>;
 
   return (
-    <div>
+    <div className="p-6 bg-white rounded shadow-md space-y-6">
       {!showForm && (
         <button
           onClick={() => {
             setEditingAddr(null);
             setShowForm(true);
           }}
-          className="mb-4 px-4 py-2 bg-dark1 text-white rounded hover:bg-dark2"
+          className="px-5 py-2 bg-dark1 text-white rounded hover:bg-dark2 transition"
         >
-          Yeni Adres Ekle
+          + Yeni Adres Ekle
         </button>
       )}
 
@@ -80,7 +75,7 @@ export default function AddressList() {
         />
       )}
 
-      <div className="grid gap-4 md:grid-cols-2">
+      <div className="grid gap-4 sm:grid-cols-1 md:grid-cols-2">
         {addresses.map((addr) => (
           <AddressCard
             key={addr._id}

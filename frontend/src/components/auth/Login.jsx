@@ -3,11 +3,12 @@ import React, { useState, useContext } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../../../api";
 import { AuthContext } from "../../context/AuthContext";
-const Login = () => {
+import { motion } from "framer-motion";
+
+const Login = ({ onSwitch }) => {
   const [form, setForm] = useState({ email: "", password: "" });
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
-  
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
   const { setIsLoggedIn } = useContext(AuthContext);
@@ -25,13 +26,11 @@ const Login = () => {
 
     try {
       const { data } = await api.post("/auth/login", form);
-      console.log("✅ Giriş başarılı:", data);
       localStorage.setItem("accessToken", data.accessToken);
       setIsLoggedIn(true);
       setSuccess(true);
       setForm({ email: "", password: "" });
 
-      // 1 saniye bekleyip profile sayfasına yönlendir
       setTimeout(() => navigate("/profile"), 1000);
     } catch (err) {
       setError(err.response?.data?.message || "Giriş başarısız");
@@ -41,55 +40,60 @@ const Login = () => {
   };
 
   return (
-    <div className="max-w-md mx-auto bg-white p-6 rounded-lg shadow-md mt-10">
-      <h2 className="text-2xl font-bold mb-4 text-center">Giriş Yap</h2>
+    <motion.div
+      initial={{ opacity: 0, y: 40 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, x: -40 }}
+      transition={{ duration: 0.5 }}
+      className="space-y-6 text-dark1"
+    >
+      <h2 className="text-3xl font-bold text-center">Giriş Yap</h2>
 
       {success && (
-        <div className="text-green-600 text-center mb-4">
-          Giriş başarılı! Yönlendiriliyorsunuz…
-        </div>
+        <div className="text-green-600 text-center">Başarıyla giriş yaptınız!</div>
       )}
-
       {error && (
-        <div className="text-red-600 text-center mb-4">Hata: {error}</div>
+        <div className="text-red-600 text-center">Hata: {error}</div>
       )}
 
       <form onSubmit={handleSubmit} className="space-y-4">
         <input
           type="email"
           name="email"
-          placeholder="E-posta"
+          placeholder="E-posta adresiniz"
           value={form.email}
           onChange={handleChange}
           required
-          className={`w-full px-4 py-2 border rounded focus:outline-none ${
-            error ? "border-red-500" : "border-gray-300"
-          }`}
+          className="w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:ring focus:ring-blue-200 focus:outline-none"
         />
         <input
           type="password"
           name="password"
-          placeholder="Şifre"
+          placeholder="Şifreniz"
           value={form.password}
           onChange={handleChange}
           required
-          className={`w-full px-4 py-2 border rounded focus:outline-none ${
-            error ? "border-red-500" : "border-gray-300"
-          }`}
+          className="w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:ring focus:ring-blue-200 focus:outline-none"
         />
         <button
           type="submit"
           disabled={loading}
-          className={`w-full py-2 rounded text-white transition ${
-            loading
-              ? "bg-gray-400 cursor-not-allowed"
-              : "bg-blue-600 hover:bg-blue-700"
-          }`}
+          className="w-full py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition disabled:opacity-50"
         >
           {loading ? "Giriş Yapılıyor…" : "Giriş Yap"}
         </button>
       </form>
-    </div>
+
+      <p className="text-center text-sm text-gray-600">
+        Hesabınız yok mu?{" "}
+        <button
+          onClick={onSwitch}
+          className="text-blue-600 font-semibold hover:underline"
+        >
+          Kayıt olun
+        </button>
+      </p>
+    </motion.div>
   );
 };
 

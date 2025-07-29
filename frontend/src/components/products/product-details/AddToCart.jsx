@@ -12,7 +12,7 @@ export default function AddToCart({
 }) {
   const [selectedSize, setSelectedSize] = useState("");
   const [qty, setQty] = useState(1);
-  const { addToCart } = useCart(); // <-- context'ten fonksiyon
+  const { addToCart } = useCart();
 
   const increment = () => setQty((q) => q + 1);
   const decrement = () => setQty((q) => Math.max(1, q - 1));
@@ -28,6 +28,28 @@ export default function AddToCart({
       qty,
     };
     addToCart(item);
+
+    // Yukarı kaydır
+    window.scrollTo({ top: 0, behavior: "smooth" });
+
+    // Sepet iconunu salla (shake)
+    const cartIcon = document.getElementById("cart-icon");
+    if (cartIcon) {
+      cartIcon.classList.add("animate-shake");
+      setTimeout(() => {
+        cartIcon.classList.remove("animate-shake");
+      }, 500);
+    }
+
+    // Toast bildirimi
+    const toast = document.createElement("div");
+    toast.textContent = "🛒 Sepete eklendi!";
+    toast.className =
+      "fixed top-6 left-1/2 -translate-x-1/2 bg-dark1 text-white px-4 py-2 rounded shadow-lg z-50 animate-fadeInOut";
+    document.body.appendChild(toast);
+    setTimeout(() => {
+      toast.remove();
+    }, 2000);
   };
 
   return (
