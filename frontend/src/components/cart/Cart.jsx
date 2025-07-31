@@ -1,34 +1,58 @@
 // src/components/cart/Cart.jsx
-import React from "react";
+import React, { useState } from "react";
 import { useCart } from "../../context/useCart";
+import { useAuth } from "../../context/AuthContext";
+import { useNavigate } from "react-router-dom";
 import CartItem from "./CartItem";
-import { Link } from "react-router-dom";
 import { FaShoppingCart } from "react-icons/fa";
+import AuthRequiredModal from "../auth/AuthRequireModal";
 
 export default function Cart() {
   const { items, clearCart } = useCart();
+  const { isLoggedIn } = useAuth();
+  const navigate = useNavigate();
+  const [showLoginModal, setShowLoginModal] = useState(false);
 
   const totalPrice = items.reduce(
     (total, item) => total + item.price * item.qty,
     0
   );
 
+  /* ─────────── sepet boş ─────────── */
   if (items.length === 0) {
     return (
       <div className="min-h-[70vh] flex flex-col items-center justify-center text-dark1 px-4 text-center">
         <FaShoppingCart size={60} className="mb-4 text-gray-400" />
         <h2 className="text-3xl font-semibold mb-2">Sepetiniz boş</h2>
-        <p className="text-gray-500 mb-6">Alışverişe devam ederek favori ürünleri ekleyebilirsiniz.</p>
-        <Link
-          to="/shop"
+        <p className="text-gray-500 mb-6">
+          Alışverişe devam ederek favori ürünleri ekleyebilirsiniz.
+        </p>
+        <button
+          onClick={() => navigate("/shop")}
           className="bg-dark1 text-white px-8 py-3 rounded-full hover:bg-dark2 transition"
         >
           Alışverişe Başla
-        </Link>
+        </button>
+
+        {/* login modal — muhtemelen tetiklenmez ama güvenli olsun */}
+        {showLoginModal && (
+          <AuthRequiredModal
+            open
+            onClose={() => setShowLoginModal(false)}
+            onLogin={() => navigate("/profile")}
+          />
+        )}
       </div>
     );
   }
 
+  /* ─────────── ödeme butonu ─────────── */
+  const handleCheckout = () => {
+    if (!isLoggedIn) setShowLoginModal(true);
+    else navigate("/checkout");
+  };
+
+  /* ─────────── normal sepet görünümü ─────────── */
   return (
     <div className="container mx-auto px-4 py-10">
       <h2 className="text-4xl font-bold text-dark1 mb-10 flex items-center gap-3">
@@ -57,14 +81,22 @@ export default function Cart() {
           >
             Sepeti Temizle
           </button>
-          <Link
-            to="/checkout"
+          <button
+            onClick={handleCheckout}
             className="bg-dark1 text-white px-8 py-3 rounded-full hover:bg-dark2 transition font-semibold"
           >
             Ödeme Yap
-          </Link>
+          </button>
         </div>
       </div>
+
+      {showLoginModal && (
+        <AuthRequiredModal
+          open
+          onClose={() => setShowLoginModal(false)}
+          onLogin={() => navigate("/profile")}
+        />
+      )}
     </div>
   );
 }

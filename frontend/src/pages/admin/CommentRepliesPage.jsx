@@ -1,54 +1,89 @@
 // src/pages/admin/CommentRepliesPage.jsx
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import api from "../../../api";
 import { Button, IconButton } from "@material-tailwind/react";
 import { TrashIcon, CheckIcon } from "@heroicons/react/24/outline";
+import ToastAlert from "../../components/ui/ToastAlert"; // ← yolu kontrol edin
+
+/* ───────── Silme Onay Modali ───────── */
+const ConfirmModal = ({ open, onClose, onConfirm, message }) => {
+  if (!open) return null;
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
+      <div className="bg-white rounded-xl p-6 shadow max-w-sm w-full">
+        <p className="mb-6">{message}</p>
+        <div className="flex justify-end gap-3">
+          <Button variant="text" onClick={onClose}>
+            Vazgeç
+          </Button>
+          <Button color="red" onClick={onConfirm}>
+            Sil
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 export default function CommentRepliesPage() {
   const [filter, setFilter] = useState("approved"); // approved | pending
   const [replies, setReplies] = useState([]);
   const [loading, setLoading] = useState(false);
 
-  const fetchReplies = async () => {
+  /* toast & sil onay */
+  const [toast, setToast] = useState(null); // { msg, type }
+  const [deleteId, setDeleteId] = useState(null);
+
+  /* ───────── Yanıtları getir ───────── */
+  const fetchReplies = useCallback(async () => {
     setLoading(true);
     try {
       const approved = filter === "approved";
       const { data } = await api.get(`/replies?approved=${approved}`);
       setReplies(data);
-    } catch (err) {
-      console.error("Yanıtlar yüklenemedi:", err);
+    } catch {
+      setToast({ msg: "Yanıtlar yüklenemedi.", type: "error" });
     } finally {
       setLoading(false);
     }
-  };
+  }, [filter]);
 
   useEffect(() => {
     fetchReplies();
-  }, [filter]);
+  }, [fetchReplies]);
 
+  /* ───────── Onayla ───────── */
   const handleApprove = async (id) => {
     try {
       await api.patch(`/replies/${id}/approve`);
+      setToast({ msg: "Yanıt onaylandı.", type: "success" });
       fetchReplies();
-    } catch (err) {
-      console.error("Yanıt onaylanamadı:", err);
+    } catch {
+      setToast({ msg: "Yanıt onaylanamadı.", type: "error" });
     }
   };
 
-  const handleDelete = async (id) => {
-    if (!window.confirm("Silmek istediğinize emin misiniz?")) return;
+  /* ───────── Silme akışı ───────── */
+  const triggerDelete = (id) => setDeleteId(id);
+
+  const handleDeleteConfirmed = async () => {
+    const id = deleteId;
+    setDeleteId(null);
     try {
       await api.delete(`/replies/${id}`);
+      setToast({ msg: "Yanıt silindi.", type: "success" });
       fetchReplies();
-    } catch (err) {
-      console.error("Yanıt silinemedi:", err);
+    } catch {
+      setToast({ msg: "Yanıt silinemedi.", type: "error" });
     }
   };
 
+  /* ───────── Render ───────── */
   return (
     <div>
       <h4 className="text-2xl mb-4">Yorum Yanıtlarını Yönet</h4>
 
+      {/* Filtre butonları */}
       <div className="flex gap-4 mb-6">
         <Button
           size="sm"
@@ -66,6 +101,7 @@ export default function CommentRepliesPage() {
         </Button>
       </div>
 
+      {/* Liste */}
       {loading ? (
         <div>Yükleniyor…</div>
       ) : (
@@ -84,6 +120,7 @@ export default function CommentRepliesPage() {
                   {new Date(r.createdAt).toLocaleString()}
                 </p>
               </div>
+
               <div className="flex gap-2">
                 {filter === "pending" && (
                   <IconButton
@@ -97,7 +134,7 @@ export default function CommentRepliesPage() {
                 <IconButton
                   variant="text"
                   color="red"
-                  onClick={() => handleDelete(r._id)}
+                  onClick={() => triggerDelete(r._id)}
                 >
                   <TrashIcon className="h-5 w-5" />
                 </IconButton>
@@ -105,6 +142,23 @@ export default function CommentRepliesPage() {
             </li>
           ))}
         </ul>
+      )}
+
+      {/* Silme onayı */}
+      <ConfirmModal
+        open={Boolean(deleteId)}
+        onClose={() => setDeleteId(null)}
+        onConfirm={handleDeleteConfirmed}
+        message="Bu yanıtı silmek istediğinize emin misiniz?"
+      />
+
+      {/* Toast */}
+      {toast && (
+        <ToastAlert
+          msg={toast.msg}
+          type={toast.type}
+          onClose={() => setToast(null)}
+        />
       )}
     </div>
   );

@@ -1,54 +1,89 @@
 // src/pages/admin/CommentsPage.jsx
-import React, { useEffect, useState } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import api from "../../../api";
 import { Button, IconButton } from "@material-tailwind/react";
 import { TrashIcon, CheckIcon } from "@heroicons/react/24/outline";
+import ToastAlert from "../../components/ui/ToastAlert"; // yolu kontrol edin
+
+/* ————— Silme Onay Modali ————— */
+const ConfirmModal = ({ open, onClose, onConfirm, message }) => {
+  if (!open) return null;
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
+      <div className="bg-white rounded-xl p-6 shadow max-w-sm w-full">
+        <p className="mb-6">{message}</p>
+        <div className="flex justify-end gap-3">
+          <Button variant="text" onClick={onClose}>
+            Vazgeç
+          </Button>
+          <Button color="red" onClick={onConfirm}>
+            Sil
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 export default function CommentsPage() {
   const [filter, setFilter] = useState("approved"); // approved | pending
   const [comments, setComments] = useState([]);
   const [loading, setLoading] = useState(false);
 
-  const fetchComments = async () => {
+  /* toast & sil onay */
+  const [toast, setToast] = useState(null); // { msg, type }
+  const [deleteId, setDeleteId] = useState(null);
+
+  /* ——— Yorumları getir ——— */
+  const fetchComments = useCallback(async () => {
     setLoading(true);
     try {
       const approved = filter === "approved";
       const { data } = await api.get(`/comments?approved=${approved}`);
       setComments(data);
-    } catch (err) {
-      console.error("Yorumlar yüklenemedi:", err);
+    } catch {
+      setToast({ msg: "Yorumlar yüklenemedi.", type: "error" });
     } finally {
       setLoading(false);
     }
-  };
+  }, [filter]);
 
   useEffect(() => {
     fetchComments();
-  }, [filter]);
+  }, [fetchComments]);
 
+  /* ——— Onayla ——— */
   const handleApprove = async (id) => {
     try {
       await api.patch(`/comments/${id}/approve`);
+      setToast({ msg: "Yorum onaylandı.", type: "success" });
       fetchComments();
-    } catch (err) {
-      console.error("Yorum onaylanamadı:", err);
+    } catch {
+      setToast({ msg: "Yorum onaylanamadı.", type: "error" });
     }
   };
 
-  const handleDelete = async (id) => {
-    if (!window.confirm("Silmek istediğinize emin misiniz?")) return;
+  /* ——— Silme akışı ——— */
+  const triggerDelete = (id) => setDeleteId(id);
+
+  const handleDeleteConfirmed = async () => {
+    const id = deleteId;
+    setDeleteId(null);
     try {
       await api.delete(`/comments/${id}`);
+      setToast({ msg: "Yorum silindi.", type: "success" });
       fetchComments();
-    } catch (err) {
-      console.error("Yorum silinemedi:", err);
+    } catch {
+      setToast({ msg: "Yorum silinemedi.", type: "error" });
     }
   };
 
+  /* ——— Render ——— */
   return (
     <div>
       <h4 className="text-2xl mb-4">Yorum Yönetimi</h4>
 
+      {/* Filtre butonları */}
       <div className="flex gap-4 mb-6">
         <Button
           size="sm"
@@ -84,6 +119,7 @@ export default function CommentsPage() {
                   {new Date(c.createdAt).toLocaleString()}
                 </p>
               </div>
+
               <div className="flex gap-2">
                 {filter === "pending" && (
                   <IconButton
@@ -97,7 +133,7 @@ export default function CommentsPage() {
                 <IconButton
                   variant="text"
                   color="red"
-                  onClick={() => handleDelete(c._id)}
+                  onClick={() => triggerDelete(c._id)}
                 >
                   <TrashIcon className="h-5 w-5" />
                 </IconButton>
@@ -105,6 +141,23 @@ export default function CommentsPage() {
             </li>
           ))}
         </ul>
+      )}
+
+      {/* Silme onayı */}
+      <ConfirmModal
+        open={Boolean(deleteId)}
+        onClose={() => setDeleteId(null)}
+        onConfirm={handleDeleteConfirmed}
+        message="Bu yorumu silmek istediğinize emin misiniz?"
+      />
+
+      {/* Toast */}
+      {toast && (
+        <ToastAlert
+          msg={toast.msg}
+          type={toast.type}
+          onClose={() => setToast(null)}
+        />
       )}
     </div>
   );

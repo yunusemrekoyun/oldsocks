@@ -1,5 +1,5 @@
 // src/pages/admin/InstagramPostsPage.jsx
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import {
   Card,
   CardBody,
@@ -15,6 +15,27 @@ import {
 } from "@material-tailwind/react";
 import { PencilIcon, TrashIcon, PlusIcon } from "@heroicons/react/24/outline";
 import api from "../../../api";
+import ToastAlert from "../../components/ui/ToastAlert";
+
+/* ─────── Silme Onay Modali ─────── */
+const ConfirmModal = ({ open, onClose, onConfirm, message }) => {
+  if (!open) return null;
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
+      <div className="bg-white rounded-xl p-6 shadow max-w-sm w-full">
+        <Typography className="mb-6">{message}</Typography>
+        <div className="flex justify-end gap-3">
+          <Button variant="text" onClick={onClose}>
+            Vazgeç
+          </Button>
+          <Button color="red" onClick={onConfirm}>
+            Sil
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 export default function InstagramPostsPage() {
   const [posts, setPosts] = useState([]);
@@ -26,15 +47,25 @@ export default function InstagramPostsPage() {
     active: true,
   });
 
-  useEffect(() => {
-    fetchPosts();
+  /* toast & sil onay */
+  const [toast, setToast] = useState(null); // { msg, type }
+  const [deleteId, setDeleteId] = useState(null);
+
+  /* ─────── Verileri çek ─────── */
+  const fetchPosts = useCallback(async () => {
+    try {
+      const { data } = await api.get("/instagram-posts");
+      setPosts(data);
+    } catch {
+      setToast({ msg: "Gönderiler alınamadı.", type: "error" });
+    }
   }, []);
 
-  const fetchPosts = async () => {
-    const { data } = await api.get("/instagram-posts");
-    setPosts(data);
-  };
+  useEffect(() => {
+    fetchPosts();
+  }, [fetchPosts]);
 
+  /* ─────── Dialog aç / kapat ─────── */
   const handleOpen = (
     post = { _id: null, embedLink: "", caption: "", active: true }
   ) => {
@@ -47,46 +78,61 @@ export default function InstagramPostsPage() {
     setOpen(false);
   };
 
+  /* ─────── Kaydet ─────── */
   const handleSubmit = async () => {
-    if (!form.embedLink.trim()) return alert("Embed URL boş olamaz");
-    try {
-      const payload = {
-        embedLink: form.embedLink.trim(),
-        caption: form.caption.trim(),
-        active: form.active,
-      };
+    if (!form.embedLink.trim()) {
+      setToast({ msg: "Embed URL boş olamaz.", type: "error" });
+      return;
+    }
 
+    const payload = {
+      embedLink: form.embedLink.trim(),
+      caption: form.caption.trim(),
+      active: form.active,
+    };
+
+    try {
       if (form._id) {
         await api.put(`/instagram-posts/${form._id}`, payload);
+        setToast({ msg: "Gönderi güncellendi.", type: "success" });
       } else {
-        // Yeni ekleme: backend 200 dönerse zaten mevcut; 201 olursa yeni yaratıldı.
         const response = await api.post("/instagram-posts", payload);
         if (response.status === 200 && response.data.message) {
-          alert(response.data.message); // "Bu gönderi zaten mevcut."
+          setToast({ msg: response.data.message, type: "info" });
           fetchPosts();
           handleClose();
           return;
         }
+        setToast({ msg: "Gönderi eklendi.", type: "success" });
       }
-    } catch (err) {
-      console.error("Gönderi eklenirken hata oluştu:", err.response?.data);
-      alert("Gönderi eklenirken hata oluştu: " + err.response?.data?.message);
-      return;
-    }
-
-    fetchPosts();
-    handleClose();
-  };
-
-  const handleDelete = async (id) => {
-    if (window.confirm("Bu gönderiyi silmek istediğinizden emin misiniz?")) {
-      await api.delete(`/instagram-posts/${id}`);
       fetchPosts();
+      handleClose();
+    } catch (err) {
+      const msg =
+        err.response?.data?.message || "Gönderi eklenirken hata oluştu.";
+      setToast({ msg, type: "error" });
     }
   };
 
+  /* ─────── Silme akışı ─────── */
+  const triggerDelete = (id) => setDeleteId(id);
+
+  const handleDeleteConfirmed = async () => {
+    const id = deleteId;
+    setDeleteId(null);
+    try {
+      await api.delete(`/instagram-posts/${id}`);
+      setToast({ msg: "Gönderi silindi.", type: "success" });
+      fetchPosts();
+    } catch {
+      setToast({ msg: "Gönderi silinemedi.", type: "error" });
+    }
+  };
+
+  /* ─────── Render ─────── */
   return (
     <div className="max-w-5xl mx-auto px-4 py-8">
+      {/* Başlık + ekle butonu */}
       <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-4 mb-6">
         <Typography variant="h4">Instagram Gönderileri</Typography>
         <Button
@@ -99,6 +145,7 @@ export default function InstagramPostsPage() {
         </Button>
       </div>
 
+      {/* Liste */}
       <Card>
         <CardBody className="space-y-4">
           {posts.length === 0 ? (
@@ -126,6 +173,7 @@ export default function InstagramPostsPage() {
                     {post.active ? "Aktif" : "Pasif"}
                   </Typography>
                 </div>
+
                 <div className="flex gap-2 self-end md:self-auto">
                   <IconButton
                     variant="text"
@@ -137,7 +185,7 @@ export default function InstagramPostsPage() {
                   <IconButton
                     variant="text"
                     color="red"
-                    onClick={() => handleDelete(post._id)}
+                    onClick={() => triggerDelete(post._id)}
                   >
                     <TrashIcon className="h-5 w-5" />
                   </IconButton>
@@ -192,6 +240,23 @@ export default function InstagramPostsPage() {
           </Button>
         </DialogFooter>
       </Dialog>
+
+      {/* Silme onayı */}
+      <ConfirmModal
+        open={Boolean(deleteId)}
+        onClose={() => setDeleteId(null)}
+        onConfirm={handleDeleteConfirmed}
+        message="Bu gönderiyi silmek istediğinize emin misiniz?"
+      />
+
+      {/* Toast */}
+      {toast && (
+        <ToastAlert
+          msg={toast.msg}
+          type={toast.type}
+          onClose={() => setToast(null)}
+        />
+      )}
     </div>
   );
 }

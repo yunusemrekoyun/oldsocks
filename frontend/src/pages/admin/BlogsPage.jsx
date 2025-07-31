@@ -23,15 +23,37 @@ import {
   TrashIcon,
 } from "@heroicons/react/24/outline";
 import api from "../../../api";
+import ToastAlert from "../../components/ui/ToastAlert";
+
+/* ─────────── Silme onay modali ─────────── */
+const ConfirmModal = ({ open, onClose, onConfirm, message }) => {
+  if (!open) return null;
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
+      <div className="bg-white rounded-xl p-6 shadow max-w-sm w-full">
+        <Typography className="mb-6">{message}</Typography>
+        <div className="flex justify-end gap-3">
+          <Button variant="text" onClick={onClose}>
+            Vazgeç
+          </Button>
+          <Button color="red" onClick={onConfirm}>
+            Sil
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 export default function BlogsPage() {
   const [blogs, setBlogs] = useState([]);
   const [categories, setCategories] = useState([]);
   const [admins, setAdmins] = useState([]);
   const [loading, setLoading] = useState(true);
+
+  /* form dialog */
   const [dialogOpen, setDialogOpen] = useState(false);
   const [dirty, setDirty] = useState(false);
-
   const [form, setForm] = useState({
     _id: null,
     title: "",
@@ -46,6 +68,11 @@ export default function BlogsPage() {
   });
   const [tagInput, setTagInput] = useState("");
 
+  /* toast & onay */
+  const [toast, setToast] = useState(null); // { msg, type }
+  const [deleteId, setDeleteId] = useState(null);
+
+  /* ─────────── Veri çek ─────────── */
   useEffect(() => {
     Promise.all([
       api.get("/blogs"),
@@ -57,9 +84,16 @@ export default function BlogsPage() {
         setCategories(cats);
         setAdmins(users.filter((u) => u.role === "admin"));
       })
+      .catch(() =>
+        setToast({
+          msg: "Veriler alınamadı, lütfen tekrar deneyin.",
+          type: "error",
+        })
+      )
       .finally(() => setLoading(false));
   }, []);
 
+  /* ─────────── Yeni / düzenle ─────────── */
   const openNew = () => {
     setForm({
       _id: null,
@@ -78,7 +112,6 @@ export default function BlogsPage() {
     setDialogOpen(true);
   };
 
-  // ⚠️ Burayı async yapıp tekil blogu çekiyoruz
   const openEdit = async (b) => {
     try {
       const { data } = await api.get(`/blogs/${b._id}`);
@@ -97,12 +130,12 @@ export default function BlogsPage() {
       setTagInput("");
       setDirty(false);
       setDialogOpen(true);
-    } catch (err) {
-      console.error("Blog yüklenemedi:", err);
-      alert("Blog verisi alınırken hata oluştu.");
+    } catch {
+      setToast({ msg: "Blog verisi alınamadı.", type: "error" });
     }
   };
 
+  /* ─────────── Tag işlemleri ─────────── */
   const handleTagKeyDown = (e) => {
     if (e.key === "Enter" && tagInput.trim()) {
       e.preventDefault();
@@ -125,13 +158,14 @@ export default function BlogsPage() {
     setDirty(true);
   };
 
+  /* ─────────── Kaydet ─────────── */
   const handleSave = async () => {
     if (!form.categories.length) {
-      alert("En az bir kategori seçin.");
+      setToast({ msg: "En az bir kategori seçin.", type: "error" });
       return;
     }
     if (!form.author) {
-      alert("Lütfen bir yazar seçin.");
+      setToast({ msg: "Lütfen bir yazar seçin.", type: "error" });
       return;
     }
 
@@ -150,27 +184,37 @@ export default function BlogsPage() {
         await api.put(`/blogs/${form._id}`, fd, {
           headers: { "Content-Type": "multipart/form-data" },
         });
+        setToast({ msg: "Blog güncellendi.", type: "success" });
       } else {
         await api.post("/blogs", fd, {
           headers: { "Content-Type": "multipart/form-data" },
         });
+        setToast({ msg: "Blog oluşturuldu.", type: "success" });
       }
       const { data } = await api.get("/blogs");
       setBlogs(data);
       setDialogOpen(false);
-    } catch (err) {
-      console.error(err);
-      alert("Sunucudan hata döndü, konsolu kontrol edin.");
+    } catch {
+      setToast({ msg: "Kaydetme sırasında hata oluştu.", type: "error" });
     }
   };
 
-  const handleDelete = async (id) => {
-    if (window.confirm("Bu blogu silmek istediğinize emin misiniz?")) {
+  /* ─────────── Silme akışı ─────────── */
+  const triggerDelete = (id) => setDeleteId(id);
+
+  const handleDeleteConfirmed = async () => {
+    const id = deleteId;
+    setDeleteId(null);
+    try {
       await api.delete(`/blogs/${id}`);
       setBlogs((bs) => bs.filter((b) => b._id !== id));
+      setToast({ msg: "Blog silindi.", type: "success" });
+    } catch {
+      setToast({ msg: "Blog silinemedi.", type: "error" });
     }
   };
 
+  /* ─────────── Render ─────────── */
   if (loading) return <div>Yükleniyor…</div>;
 
   const canSave =
@@ -182,6 +226,7 @@ export default function BlogsPage() {
 
   return (
     <div>
+      {/* Üst bar */}
       <div className="flex justify-between items-center mb-6">
         <Typography variant="h4">Bloglar</Typography>
         <Button color="blue" onClick={openNew}>
@@ -189,6 +234,7 @@ export default function BlogsPage() {
         </Button>
       </div>
 
+      {/* Kartlar */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {blogs.map((b) => (
           <Card key={b._id} className="relative">
@@ -207,7 +253,7 @@ export default function BlogsPage() {
                 <MenuItem onClick={() => openEdit(b)}>
                   <PencilIcon className="w-4 h-4 mr-2" /> Güncelle
                 </MenuItem>
-                <MenuItem onClick={() => handleDelete(b._id)}>
+                <MenuItem onClick={() => triggerDelete(b._id)}>
                   <TrashIcon className="w-4 h-4 mr-2" /> Sil
                 </MenuItem>
               </MenuList>
@@ -229,9 +275,11 @@ export default function BlogsPage() {
         ))}
       </div>
 
+      {/* Form dialog */}
       <Dialog open={dialogOpen} size="lg" handler={() => setDialogOpen(false)}>
         <DialogHeader>{form._id ? "Blogu Güncelle" : "Yeni Blog"}</DialogHeader>
         <DialogBody divider className="space-y-4 max-h-[70vh] overflow-y-auto">
+          {/* Başlık */}
           <Input
             label="Başlık"
             value={form.title}
@@ -240,6 +288,7 @@ export default function BlogsPage() {
               setDirty(true);
             }}
           />
+          {/* Alt Başlık */}
           <Input
             label="Alt Başlık"
             value={form.subtitle}
@@ -248,6 +297,7 @@ export default function BlogsPage() {
               setDirty(true);
             }}
           />
+          {/* Kısa Açıklama */}
           <Input
             label="Kısa Açıklama"
             value={form.excerpt}
@@ -257,7 +307,7 @@ export default function BlogsPage() {
             }}
           />
 
-          {/* Çok satırlı içerik */}
+          {/* İçerik */}
           <Textarea
             label="İçerik"
             value={form.content}
@@ -268,7 +318,7 @@ export default function BlogsPage() {
             className="h-40"
           />
 
-          {/* Kategori Seçimi */}
+          {/* Kategoriler */}
           <div>
             <label className="block mb-1 text-sm">Kategoriler</label>
             <select
@@ -291,7 +341,7 @@ export default function BlogsPage() {
             </select>
           </div>
 
-          {/* Yazar Seçimi */}
+          {/* Yazar */}
           <div>
             <label className="block mb-1 text-sm">Yazar</label>
             <select
@@ -304,7 +354,7 @@ export default function BlogsPage() {
             >
               <option value="">-- Yazar Seçiniz --</option>
               {admins.map((u) => (
-                <option key={u._1} value={u._id}>
+                <option key={u._id} value={u._id}>
                   {u.firstName} {u.lastName}
                 </option>
               ))}
@@ -320,7 +370,7 @@ export default function BlogsPage() {
                   key={tag}
                   className="flex items-center bg-blue-100 text-blue-800 rounded-full px-2 py-1 text-sm"
                 >
-                  {tag}{" "}
+                  {tag}
                   <button
                     type="button"
                     onClick={() => removeTag(tag)}
@@ -369,11 +419,7 @@ export default function BlogsPage() {
           </div>
         </DialogBody>
         <DialogFooter>
-          <Button
-            variant="text"
-            onClick={() => setDialogOpen(false)}
-            className="mr-2"
-          >
+          <Button variant="text" onClick={() => setDialogOpen(false)}>
             İptal
           </Button>
           <Button disabled={!canSave} onClick={handleSave} color="blue">
@@ -381,6 +427,23 @@ export default function BlogsPage() {
           </Button>
         </DialogFooter>
       </Dialog>
+
+      {/* Silme onayı */}
+      <ConfirmModal
+        open={Boolean(deleteId)}
+        onClose={() => setDeleteId(null)}
+        onConfirm={handleDeleteConfirmed}
+        message="Bu blogu silmek istediğinize emin misiniz?"
+      />
+
+      {/* Toast */}
+      {toast && (
+        <ToastAlert
+          msg={toast.msg}
+          type={toast.type}
+          onClose={() => setToast(null)}
+        />
+      )}
     </div>
   );
 }
