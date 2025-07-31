@@ -27,7 +27,7 @@ export default function ProductGrid() {
     <section className="bg-light1 py-12">
       <div className="container mx-auto px-4">
         <h2 className="text-center font-playfair text-3xl md:text-4xl text-black uppercase mb-8">
-          New Arrival
+Öne Çıkan Ürünler
         </h2>
 
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-6">
@@ -36,17 +36,12 @@ export default function ProductGrid() {
               key={p._id}
               id={p._id}
               video={p.video}
+              poster={p.poster}
               name={p.name}
               price={p.price}
               rating={5}
             />
           ))}
-        </div>
-
-        <div className="mt-10 text-center">
-          <button className="px-6 py-2 border border-black text-black rounded-full hover:bg-black hover:text-white transition">
-            Browse More
-          </button>
         </div>
       </div>
     </section>

@@ -1,6 +1,43 @@
 // backend/controllers/orderController.js
 const Order = require("../models/Order");
+exports.getAllOrders = async (req, res) => {
+  try {
+    const orders = await Order.find()
+      .sort("-createdAt")
+      .populate("user", "firstName lastName email"); // istersen user bilgisini de getirebilirsin
+    res.json(orders);
+  } catch (err) {
+    console.error("getAllOrders error:", err);
+    res.status(500).json({ message: "Siparişler alınırken hata oluştu." });
+  }
+};
 
+// — Admin: Siparişin durumunu günceller —
+exports.updateOrderStatus = async (req, res) => {
+  try {
+    const { status } = req.body;
+    const allowed = ["pending", "paid", "shipped", "completed", "cancelled"];
+    if (!allowed.includes(status)) {
+      return res.status(400).json({ message: "Geçersiz status değeri." });
+    }
+
+    const order = await Order.findByIdAndUpdate(
+      req.params.id,
+      { status },
+      { new: true }
+    );
+    if (!order) {
+      return res.status(404).json({ message: "Sipariş bulunamadı." });
+    }
+
+    res.json({ message: "Sipariş durumu güncellendi.", order });
+  } catch (err) {
+    console.error("updateOrderStatus error:", err);
+    res
+      .status(500)
+      .json({ message: "Sipariş durumu güncellenirken hata oluştu." });
+  }
+};
 // — Kullanıcının kendi siparişlerini listeler
 exports.getMyOrders = async (req, res) => {
   const userId = req.user.userId;

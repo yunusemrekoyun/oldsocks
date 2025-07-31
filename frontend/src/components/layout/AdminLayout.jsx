@@ -59,6 +59,11 @@ export default function AdminLayout({ children }) {
       icon: <TagIcon className="w-5 h-5" />,
       path: "/admin/minicampaigns",
     },
+    {
+      label: "Siparişler",
+      icon: <ShoppingBagIcon className="w-5 h-5" />,
+      path: "/admin/orders",
+    },
   ];
 
   const isActive = (path) => location.pathname.startsWith(path);

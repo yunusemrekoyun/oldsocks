@@ -4,7 +4,7 @@ import PropTypes from "prop-types";
 import { Link } from "react-router-dom";
 import { FaVolumeMute, FaVolumeUp, FaStar } from "react-icons/fa";
 
-const ProductItem = ({ id, video, poster, name, price, rating }) => {
+const ProductItem = ({ id, video, poster, name, price }) => {
   const videoRef = useRef(null);
   const [isHovered, setIsHovered] = useState(false);
   const [isMuted, setIsMuted] = useState(true);
@@ -53,7 +53,7 @@ const ProductItem = ({ id, video, poster, name, price, rating }) => {
         </button>
       )}
 
-      <div className="bg-light1 h-56 flex items-center justify-center overflow-hidden">
+      <div className="relative h-64 overflow-hidden bg-light1">
         {video ? (
           <video
             ref={videoRef}
@@ -62,7 +62,7 @@ const ProductItem = ({ id, video, poster, name, price, rating }) => {
             muted
             playsInline
             preload="metadata"
-            className="h-full w-full object-contain transition-transform duration-300 group-hover:scale-105"
+            className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
           />
         ) : (
           <img
@@ -77,18 +77,9 @@ const ProductItem = ({ id, video, poster, name, price, rating }) => {
         <h3 className="text-sm font-medium text-dark1 mb-2 text-center">
           {name}
         </h3>
-        <div className="flex justify-center gap-1 mb-2">
-          {Array.from({ length: 5 }).map((_, i) => (
-            <FaStar
-              key={i}
-              className={`h-4 w-4 ${
-                i < rating ? "text-yellow-400" : "text-light2"
-              }`}
-            />
-          ))}
-        </div>
+
         <p className="text-center text-base font-semibold text-dark2">
-          ${price.toFixed(2)}
+          {price.toFixed(2)}₺
         </p>
       </div>
     </Link>

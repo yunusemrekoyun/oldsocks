@@ -10,6 +10,10 @@ export default function SearchModal({ open, onClose }) {
   const containerRef = useRef(null);
   const navigate = useNavigate();
 
+  const [isVisible, setIsVisible] = useState(open);
+  const [isClosing, setIsClosing] = useState(false);
+
+  // Veriler çekilsin
   useEffect(() => {
     if (!open) return;
     api
@@ -19,47 +23,66 @@ export default function SearchModal({ open, onClose }) {
     setQuery("");
   }, [open]);
 
+  // Arama filtrelemesi
   useEffect(() => {
-    if (!query) {
-      setResults([]);
-      return;
-    }
     const q = query.toLowerCase();
+    if (!q) return setResults([]);
     setResults(allProducts.filter((p) => p.name.toLowerCase().includes(q)));
   }, [query, allProducts]);
 
+  // Aç/Kapat kontrolü
   useEffect(() => {
-    function handler(e) {
-      if (containerRef.current && !containerRef.current.contains(e.target)) {
-        onClose();
-      }
-    }
     if (open) {
-      document.addEventListener("mousedown", handler);
+      setIsVisible(true);
       document.body.style.overflow = "hidden";
+    } else {
+      setIsClosing(true);
+      setTimeout(() => {
+        setIsVisible(false);
+        setIsClosing(false);
+        document.body.style.overflow = "";
+      }, 200); // animasyon süresi
     }
-    return () => {
-      document.removeEventListener("mousedown", handler);
-      document.body.style.overflow = "";
-    };
-  }, [open, onClose]);
+  }, [open]);
 
-  if (!open) return null;
+  // Dışa tıklayınca kapansın
+  useEffect(() => {
+    const handler = (e) => {
+      if (containerRef.current && !containerRef.current.contains(e.target)) {
+        handleClose();
+      }
+    };
+    if (isVisible) document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [isVisible]);
 
   const handleSelect = (id) => {
-    onClose();
+    handleClose();
     navigate(`/product-details/${id}`);
   };
 
+  const handleClose = () => {
+    setIsClosing(true);
+    setTimeout(() => {
+      setIsVisible(false);
+      setIsClosing(false);
+      onClose();
+    }, 200);
+  };
+
+  if (!isVisible) return null;
+
   return (
     <div
-      className="fixed inset-0 bg-black bg-opacity-50 backdrop-blur-sm flex items-center justify-center z-50 transition-opacity"
-      style={{ animation: "fadeIn 200ms ease-out" }}
+      className={`fixed inset-0 bg-black bg-opacity-50 backdrop-blur-sm flex items-center justify-center z-50 transition-opacity ${
+        isClosing ? "fade-out" : "fade-in"
+      }`}
     >
       <div
         ref={containerRef}
-        className="bg-white rounded-xl w-full max-w-lg mx-4 p-6 transform transition-all duration-300 scale-100"
-        style={{ animation: "scaleIn 200ms ease-out" }}
+        className={`bg-white rounded-xl w-full max-w-lg mx-4 p-6 transform transition-transform duration-200 ${
+          isClosing ? "scale-out" : "scale-in"
+        }`}
       >
         <div className="flex items-center mb-4 border-b pb-2">
           <FaSearch className="text-gray-500 mr-2" />
@@ -82,7 +105,6 @@ export default function SearchModal({ open, onClose }) {
                   onClick={() => handleSelect(p._id)}
                   className="py-3 px-4 hover:bg-gray-100 cursor-pointer flex items-center justify-between rounded transition group"
                 >
-                  {/* Sol: Görsel */}
                   <div className="flex items-center space-x-4">
                     {p.images?.[0] && (
                       <img
@@ -91,7 +113,6 @@ export default function SearchModal({ open, onClose }) {
                         className="h-12 w-12 object-cover rounded shadow"
                       />
                     )}
-                    {/* Orta: Ad */}
                     <div>
                       <div className="text-dark1 font-medium group-hover:underline">
                         {p.name}
@@ -101,13 +122,10 @@ export default function SearchModal({ open, onClose }) {
                       </div>
                     </div>
                   </div>
-
-                  {/* Sağ: Fiyat + Puan */}
                   <div className="text-right space-y-1 min-w-[80px]">
                     <div className="text-dark1 font-semibold">
                       ₺{p.price.toFixed(2)}
                     </div>
-                    {/* Yıldız simülasyonu (sabit 4 yıldız gibi düşün) */}
                     <div className="text-yellow-400 text-xs">★★★★★</div>
                   </div>
                 </div>
@@ -125,14 +143,36 @@ export default function SearchModal({ open, onClose }) {
         </div>
       </div>
 
+      {/* Animasyonlar */}
       <style>{`
+        .fade-in {
+          animation: fadeIn 0.2s ease-out forwards;
+        }
+        .fade-out {
+          animation: fadeOut 0.2s ease-in forwards;
+        }
+        .scale-in {
+          animation: scaleIn 0.2s ease-out forwards;
+        }
+        .scale-out {
+          animation: scaleOut 0.2s ease-in forwards;
+        }
+
         @keyframes fadeIn {
           from { opacity: 0 }
-          to   { opacity: 1 }
+          to { opacity: 1 }
+        }
+        @keyframes fadeOut {
+          from { opacity: 1 }
+          to { opacity: 0 }
         }
         @keyframes scaleIn {
           from { transform: scale(0.95); opacity: 0 }
-          to   { transform: scale(1); opacity: 1 }
+          to { transform: scale(1); opacity: 1 }
+        }
+        @keyframes scaleOut {
+          from { transform: scale(1); opacity: 1 }
+          to { transform: scale(0.95); opacity: 0 }
         }
       `}</style>
     </div>

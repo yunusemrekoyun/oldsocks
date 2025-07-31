@@ -1,6 +1,14 @@
-// src/components/user/OrdersList.jsx
 import React, { useEffect, useState } from "react";
 import api from "../../../api";
+
+// Durum kodlarını Türkçeye çeviren eşleme
+const STATUS_LABELS = {
+  pending: "Sipariş oluşturuldu",
+  paid: "Ödeme alındı",
+  shipped: "Kargoya verildi",
+  completed: "Sipariş tamamlandı",
+  cancelled: "İptal edildi",
+};
 
 export default function OrdersList() {
   const [orders, setOrders] = useState([]);
@@ -17,7 +25,6 @@ export default function OrdersList() {
 
   if (loading) return <div>Yükleniyor…</div>;
 
-  // hem orderNumber hem de paymentId varsa orada ara
   const filtered = orders.filter(
     (o) =>
       (o.orderNumber || "").includes(search) ||
@@ -50,7 +57,10 @@ export default function OrdersList() {
               Tarih: {new Date(order.createdAt).toLocaleString()}
             </p>
             <p className="text-sm mb-1">
-              Durum: <span className="font-medium">{order.status}</span>
+              Durum:{" "}
+              <span className="font-medium">
+                {STATUS_LABELS[order.status] || order.status}
+              </span>
             </p>
             <p className="text-sm font-medium mb-2">
               Toplam: ₺{order.totalPrice.toFixed(2)}

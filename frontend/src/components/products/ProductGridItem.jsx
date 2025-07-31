@@ -1,24 +1,43 @@
-// src/components/ProductGridItem.jsx
+// src/components/products/ProductGridItem.jsx
 import React, { useRef, useState } from "react";
 import PropTypes from "prop-types";
 import { Link } from "react-router-dom";
-import { FaStar, FaVolumeMute, FaVolumeUp } from "react-icons/fa";
+import { FaVolumeMute, FaVolumeUp, FaStar } from "react-icons/fa";
 
-export default function ProductGridItem({ id, video, name, price, rating }) {
+const ProductGridItem = ({ id, video, poster, name, price }) => {
   const videoRef = useRef(null);
   const [isHovered, setIsHovered] = useState(false);
   const [isMuted, setIsMuted] = useState(true);
 
   const handleMouseEnter = () => {
     setIsHovered(true);
-    videoRef.current?.play();
+
+    if (videoRef.current && video) {
+      const videoEl = videoRef.current;
+
+      const tryPlay = async () => {
+        try {
+          videoEl.muted = isMuted;
+          await videoEl.play();
+        } catch (error) {
+          console.warn("Video oynatılırken hata:", error);
+        }
+      };
+
+      tryPlay();
+    }
   };
 
   const handleMouseLeave = () => {
     setIsHovered(false);
     if (videoRef.current) {
-      videoRef.current.pause();
-      videoRef.current.currentTime = 0;
+      const videoEl = videoRef.current;
+      videoEl.pause();
+      setTimeout(() => {
+        if (videoEl.readyState >= 1) {
+          videoEl.currentTime = 0;
+        }
+      }, 100);
     }
   };
 
@@ -26,9 +45,8 @@ export default function ProductGridItem({ id, video, name, price, rating }) {
     e.preventDefault();
     e.stopPropagation();
     if (videoRef.current) {
-      const newMuted = !videoRef.current.muted;
-      videoRef.current.muted = newMuted;
-      setIsMuted(newMuted);
+      videoRef.current.muted = !videoRef.current.muted;
+      setIsMuted(videoRef.current.muted);
     }
   };
 
@@ -39,54 +57,57 @@ export default function ProductGridItem({ id, video, name, price, rating }) {
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
     >
-      {isHovered && (
+      {isHovered && video && (
         <button
           onClick={toggleMute}
-          className="absolute top-2 right-2 bg-light1 p-1 rounded-full shadow z-10 hover:scale-110 transition"
+          className="absolute top-3 right-3 bg-white border border-gray-200 p-1 rounded-full z-10 shadow-md hover:border-purple-500 transition"
         >
           {isMuted ? (
-            <FaVolumeMute className="text-dark2" />
+            <FaVolumeMute className="text-dark2 text-sm" />
           ) : (
-            <FaVolumeUp className="text-black" />
+            <FaVolumeUp className="text-purple-600 text-sm" />
           )}
         </button>
       )}
 
-      <video
-        ref={videoRef}
-        src={video}
-        muted={isMuted}
-        playsInline
-        preload="metadata"
-        className="w-full h-64 object-contain transition duration-300"
-      />
+      <div className="relative w-full aspect-[3/4] bg-black">
+        <video
+          ref={videoRef}
+          src={video}
+          poster={poster}
+          muted={isMuted}
+          playsInline
+          preload="auto"
+          className="absolute inset-0 w-full h-full object-cover transition duration-300"
+        />
+      </div>
 
-      <div className="p-4 text-center bg-light2">
-        <h3 className="text-sm font-medium text-dark2">{name}</h3>
-        <div className="flex items-center justify-center mt-2 space-x-1">
-          {Array.from({ length: 5 }).map((_, i) => (
-            <FaStar
-              key={i}
-              className={`h-4 w-4 ${
-                i < rating ? "text-yellow-400" : "text-light2"
-              }`}
-            />
-          ))}
-        </div>
-        <p className="mt-2 font-semibold text-black">${price.toFixed(2)}</p>
+      <div className="p-4">
+        <h3 className="text-sm font-medium text-dark1 mb-2 text-center">
+          {name}
+        </h3>
+
+        <p className="text-center text-base font-semibold text-dark2">
+          {price.toFixed(2)}₺
+        </p>
       </div>
     </Link>
   );
-}
+};
 
 ProductGridItem.propTypes = {
   id: PropTypes.oneOfType([PropTypes.string, PropTypes.number]).isRequired,
-  video: PropTypes.string.isRequired,
+  video: PropTypes.string,
+  poster: PropTypes.string,
   name: PropTypes.string.isRequired,
   price: PropTypes.number.isRequired,
   rating: PropTypes.number,
 };
 
 ProductGridItem.defaultProps = {
+  video: null,
+  poster: null,
   rating: 0,
 };
+
+export default ProductGridItem;

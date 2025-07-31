@@ -1,8 +1,8 @@
-// src/components/auth/Login.jsx
 import React, { useState, useContext } from "react";
 import { useNavigate } from "react-router-dom";
-import api from "../../../api";
 import { AuthContext } from "../../context/AuthContext";
+import api from "../../../api";
+// eslint-disable-next-line no-unused-vars
 import { motion } from "framer-motion";
 
 const Login = ({ onSwitch }) => {
@@ -10,8 +10,8 @@ const Login = ({ onSwitch }) => {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
   const [loading, setLoading] = useState(false);
-  const navigate = useNavigate();
   const { setIsLoggedIn } = useContext(AuthContext);
+  const navigate = useNavigate();
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -41,54 +41,72 @@ const Login = ({ onSwitch }) => {
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 40 }}
+      initial={{ opacity: 0, y: 30 }}
       animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, x: -40 }}
-      transition={{ duration: 0.5 }}
-      className="space-y-6 text-dark1"
+      exit={{ opacity: 0, y: -30 }}
+      transition={{ duration: 0.4 }}
+      className="w-full max-w-md mx-auto bg-white border border-light2 rounded-2xl shadow-lg p-8 text-dark1"
     >
-      <h2 className="text-3xl font-bold text-center">Giriş Yap</h2>
+      <h2 className="text-3xl font-bold text-center mb-6">Giriş Yap</h2>
 
       {success && (
-        <div className="text-green-600 text-center">Başarıyla giriş yaptınız!</div>
+        <div className="text-green-600 text-sm text-center mb-4">
+          Başarıyla giriş yaptınız!
+        </div>
       )}
       {error && (
-        <div className="text-red-600 text-center">Hata: {error}</div>
+        <div className="text-red-600 text-sm text-center mb-4">
+          Hata: {error}
+        </div>
       )}
 
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <input
-          type="email"
-          name="email"
-          placeholder="E-posta adresiniz"
-          value={form.email}
-          onChange={handleChange}
-          required
-          className="w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:ring focus:ring-blue-200 focus:outline-none"
-        />
-        <input
-          type="password"
-          name="password"
-          placeholder="Şifreniz"
-          value={form.password}
-          onChange={handleChange}
-          required
-          className="w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:ring focus:ring-blue-200 focus:outline-none"
-        />
+      <form onSubmit={handleSubmit} className="space-y-5">
+        <div>
+          <label htmlFor="email" className="block text-sm mb-1 text-dark2">
+            E-posta adresi
+          </label>
+          <input
+            id="email"
+            type="email"
+            name="email"
+            placeholder="ornek@mail.com"
+            value={form.email}
+            onChange={handleChange}
+            required
+            className="w-full px-4 py-3 rounded-lg border border-light2 bg-light1 text-dark1 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-dark1 transition"
+          />
+        </div>
+
+        <div>
+          <label htmlFor="password" className="block text-sm mb-1 text-dark2">
+            Şifre
+          </label>
+          <input
+            id="password"
+            type="password"
+            name="password"
+            placeholder="••••••••"
+            value={form.password}
+            onChange={handleChange}
+            required
+            className="w-full px-4 py-3 rounded-lg border border-light2 bg-light1 text-dark1 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-dark1 transition"
+          />
+        </div>
+
         <button
           type="submit"
           disabled={loading}
-          className="w-full py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition disabled:opacity-50"
+          className="w-full py-3 rounded-lg bg-dark1 text-white font-semibold hover:bg-dark2 transition disabled:opacity-50"
         >
           {loading ? "Giriş Yapılıyor…" : "Giriş Yap"}
         </button>
       </form>
 
-      <p className="text-center text-sm text-gray-600">
+      <p className="text-sm text-center mt-6 text-dark2">
         Hesabınız yok mu?{" "}
         <button
           onClick={onSwitch}
-          className="text-blue-600 font-semibold hover:underline"
+          className="text-dark1 font-semibold hover:underline"
         >
           Kayıt olun
         </button>

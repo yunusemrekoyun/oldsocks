@@ -27,7 +27,8 @@ export default function Categories() {
   }
 
   return (
-    <section className="bg-light2 py-10">
+    <section className="bg-light2/60 backdrop-blur-sm py-10">
+      {" "}
       <div className="container mx-auto px-4">
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-6">
           {categories.map((c) => (

@@ -1,10 +1,9 @@
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useState } from "react";
 import SocialMediaItem from "./SocialMediaItem";
 import api from "../../../api";
 
 export default function SocialMedia() {
   const [posts, setPosts] = useState([]);
-  const scrollRef = useRef(null);
 
   useEffect(() => {
     api
@@ -22,17 +21,11 @@ export default function SocialMedia() {
       {posts.length === 0 ? (
         <p className="text-center text-gray-500">Henüz gönderi yok.</p>
       ) : (
-        <div
-          ref={scrollRef}
-          className="flex overflow-x-auto gap-4 px-1 sm:px-2 md:px-4 scroll-smooth snap-x snap-mandatory no-scrollbar cursor-grab active:cursor-grabbing"
-          style={{
-            WebkitOverflowScrolling: "touch",
-          }}
-        >
+        <div className="flex gap-4 overflow-x-auto snap-x snap-mandatory no-scrollbar cursor-grab active:cursor-grabbing">
           {posts.map((post) => (
             <div
               key={post._id}
-              className="snap-start flex-shrink-0 w-[280px] sm:w-[320px] md:w-[360px] lg:w-[400px] bg-white rounded-xl shadow-md"
+              className="flex-shrink-0 snap-start w-[320px] sm:w-[360px] md:w-[400px] bg-white rounded-xl shadow-md overflow-hidden"
             >
               <SocialMediaItem
                 embedLink={post.embedLink}

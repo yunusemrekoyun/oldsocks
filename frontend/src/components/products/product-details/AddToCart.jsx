@@ -1,22 +1,27 @@
-// src/components/AddToCart.jsx
 import React, { useState } from "react";
-import { FaPlus, FaMinus } from "react-icons/fa";
+import { FaPlus, FaMinus, FaChevronDown } from "react-icons/fa";
 import { useCart } from "../../../context/useCart";
 
 export default function AddToCart({
   price = 0,
   sizes = [],
+  colors = [],
   productId,
   productName,
   image,
 }) {
-  const [selectedSize, setSelectedSize] = useState("");
+  const [selectedSize, setSelectedSize] = useState(null);
+  const [selectedColor, setSelectedColor] = useState(null);
   const [qty, setQty] = useState(1);
+  const [showAdded, setShowAdded] = useState(false);
   const { addToCart } = useCart();
 
   const increment = () => setQty((q) => q + 1);
   const decrement = () => setQty((q) => Math.max(1, q - 1));
-  const canAdd = sizes.length === 0 || selectedSize !== "";
+
+  const canAdd =
+    (sizes.length === 0 || selectedSize !== null) &&
+    (colors.length === 0 || selectedColor !== null);
 
   const handleAddToCart = () => {
     const item = {
@@ -25,59 +30,84 @@ export default function AddToCart({
       image,
       price,
       size: selectedSize,
+      color: selectedColor,
       qty,
     };
     addToCart(item);
 
-    // Yukarı kaydır
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    // Buton animasyonu için tetikle
+    setShowAdded(true);
+    setTimeout(() => setShowAdded(false), 2000);
 
-    // Sepet iconunu salla (shake)
+    // Sepet iconunu sallama
     const cartIcon = document.getElementById("cart-icon");
     if (cartIcon) {
       cartIcon.classList.add("animate-shake");
-      setTimeout(() => {
-        cartIcon.classList.remove("animate-shake");
-      }, 500);
+      setTimeout(() => cartIcon.classList.remove("animate-shake"), 500);
     }
+  };
 
-    // Toast bildirimi
-    const toast = document.createElement("div");
-    toast.textContent = "🛒 Sepete eklendi!";
-    toast.className =
-      "fixed top-6 left-1/2 -translate-x-1/2 bg-dark1 text-white px-4 py-2 rounded shadow-lg z-50 animate-fadeInOut";
-    document.body.appendChild(toast);
-    setTimeout(() => {
-      toast.remove();
-    }, 2000);
+  const CustomDropdown = ({ label, options, selected, onChange }) => {
+    const [open, setOpen] = useState(false);
+
+    return (
+      <div className="relative">
+        <label className="block text-sm font-medium text-dark2 mb-2">
+          {label}
+        </label>
+        <button
+          type="button"
+          onClick={() => setOpen(!open)}
+          className="w-full flex items-center justify-between px-4 py-2 border border-light2 rounded-lg bg-white text-dark1 focus:outline-none"
+        >
+          <span>{selected || "Seçiniz"}</span>
+          <FaChevronDown className="w-4 h-4 text-dark2" />
+        </button>
+        {open && (
+          <ul className="absolute z-20 mt-1 w-full bg-white border border-light2 rounded-lg shadow-md max-h-60 overflow-auto">
+            {options.map((opt) => (
+              <li
+                key={opt}
+                onClick={() => {
+                  onChange(opt);
+                  setOpen(false);
+                }}
+                className={`px-4 py-2 cursor-pointer hover:bg-light1 ${
+                  selected === opt ? "bg-light2 font-medium" : ""
+                }`}
+              >
+                {opt}
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    );
   };
 
   return (
     <div className="bg-white p-6 rounded-lg shadow-md space-y-6">
       {/* Fiyat */}
-      <div className="text-3xl font-bold text-dark1">₺{price.toFixed(2)}</div>
+      <div className="text-3xl font-bold text-dark1">{price.toFixed(2)}₺</div>
 
-      {/* Beden Seçimi */}
+      {/* Beden */}
       {sizes.length > 0 && (
-        <div>
-          <label className="block text-sm font-medium text-dark2 mb-2">
-            Beden
-          </label>
-          <select
-            value={selectedSize}
-            onChange={(e) => setSelectedSize(e.target.value)}
-            className="w-full border border-light2 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-dark1 text-dark1 bg-white"
-          >
-            <option value="" disabled>
-              Seçiniz
-            </option>
-            {sizes.map((sz) => (
-              <option key={sz} value={sz}>
-                {sz}
-              </option>
-            ))}
-          </select>
-        </div>
+        <CustomDropdown
+          label="Beden"
+          options={sizes}
+          selected={selectedSize}
+          onChange={setSelectedSize}
+        />
+      )}
+
+      {/* Renk */}
+      {colors.length > 0 && (
+        <CustomDropdown
+          label="Renk"
+          options={colors}
+          selected={selectedColor}
+          onChange={setSelectedColor}
+        />
       )}
 
       {/* Adet Kontrolleri */}
@@ -107,18 +137,21 @@ export default function AddToCart({
         </div>
       </div>
 
-      {/* Sepete Ekle */}
       <button
         onClick={handleAddToCart}
         disabled={!canAdd}
-        className={`w-full py-3 text-white font-medium rounded-lg transition 
+        className={`relative w-full py-3 font-medium rounded-lg transition flex items-center justify-center
           ${
             canAdd
-              ? "bg-dark1 hover:bg-dark2"
-              : "bg-light2 cursor-not-allowed text-dark2"
+              ? "bg-dark1 hover:bg-dark2 text-white"
+              : "bg-light2 text-dark2 cursor-not-allowed"
           }`}
       >
-        Sepete Ekle
+        {showAdded ? (
+          <span className="animate-pulse">Sepete Başarıyla Eklendi!</span>
+        ) : (
+          "Sepete Ekle"
+        )}
       </button>
     </div>
   );

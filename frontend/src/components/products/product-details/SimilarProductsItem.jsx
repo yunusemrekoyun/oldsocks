@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import PropTypes from "prop-types";
 import { FaVolumeMute, FaVolumeUp, FaStar } from "react-icons/fa";
 
-export default function SimilarProductItem({ id, video, name, price, rating }) {
+export default function SimilarProductItem({ id, video, name, price }) {
   const videoRef = useRef(null);
   const [hovered, setHovered] = useState(false);
   const [muted, setMuted] = useState(true);
@@ -65,19 +65,8 @@ export default function SimilarProductItem({ id, video, name, price, rating }) {
           {name}
         </h4>
 
-        <div className="flex justify-center gap-1">
-          {Array.from({ length: 5 }).map((_, i) => (
-            <FaStar
-              key={i}
-              className={`h-4 w-4 ${
-                i < rating ? "text-yellow-400" : "text-light2"
-              }`}
-            />
-          ))}
-        </div>
-
         <p className="text-dark1 font-bold text-sm text-center mt-1">
-          ${price.toFixed(2)}
+          {price.toFixed(2)}₺
         </p>
       </div>
     </Link>

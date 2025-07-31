@@ -37,7 +37,7 @@ import BlogCategoriesPage from "./pages/admin/BlogCategoriesPage";
 import CommentsPage from "./pages/admin/CommentsPage";
 import CommentRepliesPage from "./pages/admin/CommentRepliesPage";
 import InstagramPostsPage from "./pages/admin/InstagramPostsPage";
-
+import OrdersPage from "./pages/admin/OrdersPage";
 export default function App() {
   return (
     <BrowserRouter>
@@ -93,7 +93,7 @@ export default function App() {
             <Route path="minicampaigns" element={<MiniCampaignsPage />} />
             <Route path="blogs" element={<BlogsPage />} />
             <Route path="blog-categories" element={<BlogCategoriesPage />} />
-
+            <Route path="orders" element={<OrdersPage />} />
             <Route path="comments" element={<CommentsPage />} />
             <Route path="replies" element={<CommentRepliesPage />} />
             <Route path="instagram-posts" element={<InstagramPostsPage />} />

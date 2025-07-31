@@ -1,3 +1,4 @@
+// backend/models/UserProfilePicture.js
 const mongoose = require("mongoose");
 const { Schema } = mongoose;
 
@@ -9,8 +10,14 @@ const UserProfilePictureSchema = new Schema(
       required: true,
       unique: true,
     },
-    url: { type: String, required: true },
-    publicId: { type: String, required: true }, // cloudinary’den dönen public_id
+    url: {
+      type: String,
+      required: true,
+    },
+    publicId: {
+      type: String,
+      required: true,
+    },
   },
   { timestamps: true }
 );
