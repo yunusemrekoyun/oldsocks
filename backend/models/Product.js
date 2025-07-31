@@ -1,3 +1,4 @@
+///Applications/Works/oldsocks main/oldsocks/backend/models/Product.js
 const mongoose = require("mongoose");
 
 const ProductSchema = new mongoose.Schema(

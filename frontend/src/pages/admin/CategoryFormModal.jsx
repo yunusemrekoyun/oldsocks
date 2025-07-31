@@ -1,14 +1,20 @@
 // src/components/admin/CategoryFormModal.jsx
 import React, { useState, useEffect } from "react";
 import api from "../../../api";
+import { v4 as uuidv4 } from "uuid";
+import { useUploadQueue } from "../../context/UploadQueueContext";
 
 export default function CategoryFormModal({ category, onClose, onSaved }) {
   const isEdit = Boolean(category);
+
+  /* ─── form state ─── */
   const [form, setForm] = useState({ name: "", image: null });
   const [childrenInput, setChildrenInput] = useState("");
-  const [loading, setLoading] = useState(false);
 
-  // Kategori listesini çekmeye artık gerek yok (parent seçimi kalktı)
+  /* upload queue helpers */
+  const { addTask, updateTask, removeTask } = useUploadQueue();
+
+  /* modal açıldığında mevcut veriyi doldur */
   useEffect(() => {
     if (isEdit) {
       setForm({ name: category.name, image: null });
@@ -19,6 +25,7 @@ export default function CategoryFormModal({ category, onClose, onSaved }) {
     }
   }, [category, isEdit]);
 
+  /* form alanlarını yönet */
   const handleChange = (e) => {
     const { name, files, value } = e.target;
     if (name === "image" && files.length) {
@@ -30,35 +37,55 @@ export default function CategoryFormModal({ category, onClose, onSaved }) {
     }
   };
 
+  /* KAYDET */
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setLoading(true);
+
+    /* 0) kuyruğa ekle */
+    const id = uuidv4();
+    addTask({ id, name: form.name || "Kategori", progress: 0 });
+
     const fd = new FormData();
     fd.append("name", form.name);
     if (form.image) fd.append("image", form.image);
     if (childrenInput.trim()) fd.append("children", childrenInput);
 
+    const cfg = {
+      headers: { "Content-Type": "multipart/form-data" },
+      onUploadProgress: (ev) => {
+        const pct = Math.round((ev.loaded * 100) / ev.total);
+        updateTask(id, { progress: pct });
+      },
+    };
+
     try {
       if (isEdit) {
-        await api.put(`/categories/${category._id}`, fd, {
-          headers: { "Content-Type": "multipart/form-data" },
-        });
+        await api.put(`/categories/${category._id}`, fd, cfg);
       } else {
-        await api.post("/categories", fd, {
-          headers: { "Content-Type": "multipart/form-data" },
-        });
+        await api.post("/categories", fd, cfg);
       }
-      onSaved();
+
+      /* başarı */
+      updateTask(id, { progress: 100, status: "success" });
+      setTimeout(() => removeTask(id), 2000);
+      onSaved(); // parent listesini yenile
     } catch (err) {
       console.error("Kategori kaydı hatası:", err);
+      updateTask(id, {
+        progress: 100,
+        status: "error",
+        errorMsg: err.response?.data?.message || "Kategori kaydedilemedi.",
+      });
+      setTimeout(() => removeTask(id), 4000);
     } finally {
-      setLoading(false);
+      onClose(); // modalı kapat
     }
   };
 
+  /* ─── UI ─── */
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
-      {/* 1) Kategori adı */}
+      {/* 1) Ad */}
       <div>
         <label className="block mb-1">Kategori Adı</label>
         <input
@@ -113,12 +140,9 @@ export default function CategoryFormModal({ category, onClose, onSaved }) {
         </button>
         <button
           type="submit"
-          disabled={loading}
-          className={`px-4 py-2 rounded text-white ${
-            loading ? "bg-gray-400" : "bg-blue-600 hover:bg-blue-700"
-          }`}
+          className="px-4 py-2 rounded text-white bg-blue-600 hover:bg-blue-700"
         >
-          {loading ? "Kaydediliyor…" : isEdit ? "Güncelle" : "Ekle"}
+          {isEdit ? "Güncelle" : "Ekle"}
         </button>
       </div>
     </form>

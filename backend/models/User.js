@@ -20,7 +20,6 @@ const UserSchema = new mongoose.Schema(
     email: { type: String, required: true, unique: true, lowercase: true },
     password: { type: String, required: true },
     phone: { type: String },
-    // Eskiden tekil address vardı; şimdi birden fazla adres saklayabiliyoruz
     addresses: { type: [AddressSchema], default: [] },
     avatar: { type: String },
     role: { type: String, enum: ["user", "admin"], default: "user" },

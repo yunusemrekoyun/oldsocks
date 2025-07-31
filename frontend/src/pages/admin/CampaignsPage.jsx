@@ -23,9 +23,11 @@ import {
   CheckIcon,
 } from "@heroicons/react/24/outline";
 import api from "../../../api";
-import ToastAlert from "../../components/ui/ToastAlert"; // ← yolu kontrol edin
+import ToastAlert from "../../components/ui/ToastAlert";
+import { v4 as uuidv4 } from "uuid";
+import { useUploadQueue } from "../../context/UploadQueueContext";
 
-/* ────────── Basit Silme Onay Modali ────────── */
+/* ───── Silme Onayı ───── */
 const ConfirmModal = ({ open, onClose, onConfirm, message }) => {
   if (!open) return null;
   return (
@@ -46,6 +48,7 @@ const ConfirmModal = ({ open, onClose, onConfirm, message }) => {
 };
 
 export default function CampaignsPage() {
+  /* ---------------- state ---------------- */
   const [campaigns, setCampaigns] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -72,10 +75,13 @@ export default function CampaignsPage() {
   });
 
   /* toast & sil onay */
-  const [toast, setToast] = useState(null); // { msg, type }
+  const [toast, setToast] = useState(null);
   const [deleteId, setDeleteId] = useState(null);
 
-  /* ────────── Verileri yükle ────────── */
+  /* upload queue */
+  const { addTask, updateTask, removeTask } = useUploadQueue();
+
+  /* ---------------- data fetch ---------------- */
   useEffect(() => {
     api
       .get("/campaigns")
@@ -96,7 +102,7 @@ export default function CampaignsPage() {
       );
   }, []);
 
-  /* ────────── Yeni / Düzenle ────────── */
+  /* ---------------- dialog helpers ---------------- */
   const openNew = () => {
     setForm({
       _id: null,
@@ -116,7 +122,7 @@ export default function CampaignsPage() {
   const openEdit = (c) => {
     const prodIds = c.products.map((p) => p._id);
     const catIds = c.categories.map((cat) => cat._id);
-    const subIds = options.subcategories.map((sub) => sub._id);
+    const subIds = options.subcategories.map((s) => s._id);
 
     let type = "";
     if (prodIds.length) type = "products";
@@ -138,7 +144,7 @@ export default function CampaignsPage() {
     setDialogOpen(true);
   };
 
-  /* ────────── Kaydet ────────── */
+  /* ---------------- save with queue ---------------- */
   const handleSave = async () => {
     const fd = new FormData();
     fd.append("title", form.title);
@@ -148,27 +154,43 @@ export default function CampaignsPage() {
     fd.append("products", JSON.stringify(form.products));
     fd.append("categories", JSON.stringify(form.categories));
 
+    /* queue task */
+    const id = uuidv4();
+    addTask({ id, name: form.title || "Kampanya", progress: 0 });
+
+    const cfg = {
+      headers: { "Content-Type": "multipart/form-data" },
+      onUploadProgress: (ev) => {
+        const pct = Math.round((ev.loaded * 100) / ev.total);
+        updateTask(id, { progress: pct });
+      },
+    };
+
     try {
       if (form._id) {
-        await api.put(`/campaigns/${form._id}`, fd, {
-          headers: { "Content-Type": "multipart/form-data" },
-        });
-        setToast({ msg: "Kampanya güncellendi.", type: "success" });
+        await api.put(`/campaigns/${form._id}`, fd, cfg);
       } else {
-        await api.post("/campaigns", fd, {
-          headers: { "Content-Type": "multipart/form-data" },
-        });
-        setToast({ msg: "Kampanya oluşturuldu.", type: "success" });
+        await api.post("/campaigns", fd, cfg);
       }
+
+      /* success */
+      updateTask(id, { progress: 100, status: "success" });
+      setTimeout(() => removeTask(id), 2000);
+
       const { data } = await api.get("/campaigns");
       setCampaigns(data);
       setDialogOpen(false);
     } catch {
-      setToast({ msg: "Kaydetme sırasında hata oluştu.", type: "error" });
+      updateTask(id, {
+        progress: 100,
+        status: "error",
+        errorMsg: "Kampanya kaydedilemedi",
+      });
+      setTimeout(() => removeTask(id), 4000);
     }
   };
 
-  /* ────────── Silme akışı ────────── */
+  /* ---------------- delete / activate ---------------- */
   const triggerDelete = (id) => setDeleteId(id);
 
   const handleDeleteConfirmed = async () => {
@@ -183,7 +205,6 @@ export default function CampaignsPage() {
     }
   };
 
-  /* ────────── Aktif et ────────── */
   const handleActivate = async (id) => {
     try {
       await api.patch(`/campaigns/${id}/activate`);
@@ -195,14 +216,14 @@ export default function CampaignsPage() {
     }
   };
 
-  /* ────────── Render ────────── */
+  /* ---------------- render ---------------- */
   if (loading) return <div>Yükleniyor…</div>;
 
   const currentOptions = options[selectionType] || [];
 
   return (
     <div>
-      {/* Üst bar */}
+      {/* üst bar */}
       <div className="flex justify-between items-center mb-6">
         <Typography variant="h4">Kampanyalar</Typography>
         <Button color="blue" onClick={openNew}>
@@ -210,17 +231,13 @@ export default function CampaignsPage() {
         </Button>
       </div>
 
-      {/* Kartlar */}
+      {/* kartlar */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {campaigns.map((c) => (
           <Card key={c._id} className="relative">
             <Menu placement="bottom-end">
               <MenuHandler>
-                <IconButton
-                  variant="text"
-                  className="absolute top-2 right-2"
-                  ripple={false}
-                >
+                <IconButton variant="text" className="absolute top-2 right-2">
                   <EllipsisVerticalIcon className="w-5 h-5" />
                 </IconButton>
               </MenuHandler>
@@ -257,14 +274,14 @@ export default function CampaignsPage() {
         ))}
       </div>
 
-      {/* Form dialog */}
+      {/* form dialog */}
       <Dialog open={dialogOpen} size="lg" handler={() => setDialogOpen(false)}>
         <DialogHeader>
           {form._id ? "Kampanyayı Güncelle" : "Yeni Kampanya"}
         </DialogHeader>
         <DialogBody divider className="overflow-auto max-h-[70vh] pr-4">
           <div className="space-y-4">
-            {/* Başlık */}
+            {/* başlık */}
             <Input
               label="Başlık"
               value={form.title}
@@ -273,7 +290,7 @@ export default function CampaignsPage() {
                 setDirty(true);
               }}
             />
-            {/* Alt Başlık */}
+            {/* alt başlık */}
             <Input
               label="Alt Başlık"
               value={form.subtitle}
@@ -282,7 +299,7 @@ export default function CampaignsPage() {
                 setDirty(true);
               }}
             />
-            {/* Buton Metni */}
+            {/* buton metni */}
             <Input
               label="Buton Metni"
               value={form.buttonText}
@@ -292,7 +309,7 @@ export default function CampaignsPage() {
               }}
             />
 
-            {/* Seçim Türü */}
+            {/* seçim türü */}
             <div>
               <label className="block mb-1">Seçim Türü</label>
               <select
@@ -311,7 +328,7 @@ export default function CampaignsPage() {
               </select>
             </div>
 
-            {/* Çoklu seçim */}
+            {/* çoklu seçim */}
             {selectionType && (
               <div>
                 <label className="block mb-1">
@@ -352,7 +369,7 @@ export default function CampaignsPage() {
               </div>
             )}
 
-            {/* Mevcut resim */}
+            {/* mevcut resim */}
             {form._id && form.imageUrl && !form.imageFile && (
               <div>
                 <Typography
@@ -369,7 +386,7 @@ export default function CampaignsPage() {
               </div>
             )}
 
-            {/* Resim yükle */}
+            {/* resim yükle */}
             <div>
               <label className="block text-sm mb-1">Resim Yükle</label>
               <input
@@ -398,7 +415,7 @@ export default function CampaignsPage() {
         </DialogFooter>
       </Dialog>
 
-      {/* Silme onayı */}
+      {/* silme onayı */}
       <ConfirmModal
         open={Boolean(deleteId)}
         onClose={() => setDeleteId(null)}
@@ -406,7 +423,7 @@ export default function CampaignsPage() {
         message="Bu kampanyayı silmek istediğinize emin misiniz?"
       />
 
-      {/* Toast */}
+      {/* toast */}
       {toast && (
         <ToastAlert
           msg={toast.msg}

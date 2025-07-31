@@ -1,3 +1,4 @@
+///Applications/Works/oldsocks main/oldsocks/backend/models/MiniCampaign.js
 const mongoose = require("mongoose");
 
 const MiniCampaignSchema = new mongoose.Schema(

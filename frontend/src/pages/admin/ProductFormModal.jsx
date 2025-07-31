@@ -1,6 +1,8 @@
 // src/components/admin/ProductFormModal.jsx
 import React, { useState, useEffect } from "react";
 import api from "../../../api";
+import { useUploadQueue } from "../../context/UploadQueueContext";
+import { v4 as uuidv4 } from "uuid";
 
 export default function ProductFormModal({ product, onClose, onSaved }) {
   const isEdit = Boolean(product);
@@ -8,6 +10,7 @@ export default function ProductFormModal({ product, onClose, onSaved }) {
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(false);
 
+  const { addTask, updateTask, removeTask } = useUploadQueue();
   // 1) Kategorileri çek (parent ve children’ları da gelsin)
   useEffect(() => {
     api.get("/categories").then((res) => setCategories(res.data));
@@ -75,43 +78,57 @@ export default function ProductFormModal({ product, onClose, onSaved }) {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+
+    // 0) Kuyruğa task ekle
     setLoading(true);
+    const id = uuidv4();
+    addTask({ id, name: form.name || "Yeni Ürün", progress: 0 });
+
+    const fd = new FormData();
+    fd.append("name", form.name);
+    if (form.video) fd.append("video", form.video);
+    form.images.forEach((img) => fd.append("images", img));
+    [
+      "price",
+      "originalPrice",
+      "discount",
+      "stock",
+      "description",
+      "color",
+    ].forEach((k) => fd.append(k, form[k]));
+    fd.append("sizes", form.sizes);
+    fd.append("category", form.category || form.parent);
+
     try {
-      const fd = new FormData();
-      fd.append("name", form.name);
-      if (form.video) fd.append("video", form.video);
-      form.images.forEach((img) => fd.append("images", img));
-      // Diğer alanlar
-      [
-        "price",
-        "originalPrice",
-        "discount",
-        "stock",
-        "description",
-        "color",
-      ].forEach((k) => fd.append(k, form[k]));
-      fd.append("sizes", form.sizes);
-      // Alt kategori seçilmişse onu yoksa ana kategori id’sini kullan
-      const categoryId = form.category || form.parent;
-      fd.append("category", categoryId);
+      const config = {
+        headers: { "Content-Type": "multipart/form-data" },
+        onUploadProgress: (e) => {
+          const pct = Math.round((e.loaded * 100) / e.total);
+          updateTask(id, { progress: pct });
+        },
+      };
 
       if (isEdit) {
-        await api.put(`/products/${product._id}`, fd, {
-          headers: { "Content-Type": "multipart/form-data" },
-        });
+        await api.put(`/products/${product._id}`, fd, config);
       } else {
-        await api.post("/products", fd, {
-          headers: { "Content-Type": "multipart/form-data" },
-        });
+        await api.post("/products", fd, config);
       }
+
+      updateTask(id, { progress: 100, status: "success" });
+      setTimeout(() => removeTask(id), 2000);
       onSaved();
     } catch (err) {
       console.error("Ürün kaydı hatası:", err);
+      updateTask(id, {
+        progress: 100,
+        status: "error",
+        errorMsg: err.response?.data?.message || "Ürün kaydedilemedi.",
+      });
+      setTimeout(() => removeTask(id), 4000);
     } finally {
       setLoading(false);
     }
   };
-
   if (!form) return null;
 
   // 3) parentCats = ana kategoriler, childCats = seçilen ana kategorinin alt kategorileri

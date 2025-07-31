@@ -1,3 +1,4 @@
+///Applications/Works/oldsocks main/oldsocks/backend/models/Blog.js
 const mongoose = require("mongoose");
 const { Schema } = mongoose;
 

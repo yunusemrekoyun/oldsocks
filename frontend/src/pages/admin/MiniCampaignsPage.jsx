@@ -23,8 +23,10 @@ import {
 } from "@heroicons/react/24/outline";
 import api from "../../../api";
 import ToastAlert from "../../components/ui/ToastAlert";
+import { v4 as uuidv4 } from "uuid";
+import { useUploadQueue } from "../../context/UploadQueueContext";
 
-/* ────────── Silme Onay Modali ────────── */
+/* ───── Silme Onay Modali ───── */
 const ConfirmModal = ({ open, onClose, onConfirm, message }) => {
   if (!open) return null;
   return (
@@ -45,10 +47,10 @@ const ConfirmModal = ({ open, onClose, onConfirm, message }) => {
 };
 
 export default function MiniCampaignsPage() {
+  /* ---------------- state ---------------- */
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  /* form dialog */
   const [dialogOpen, setDialogOpen] = useState(false);
   const [dirty, setDirty] = useState(false);
 
@@ -70,10 +72,13 @@ export default function MiniCampaignsPage() {
   });
 
   /* toast & sil onay */
-  const [toast, setToast] = useState(null); // { msg, type }
+  const [toast, setToast] = useState(null);
   const [deleteId, setDeleteId] = useState(null);
 
-  /* ────────── Verileri yükle ────────── */
+  /* upload queue */
+  const { addTask, updateTask, removeTask } = useUploadQueue();
+
+  /* ---------------- verileri yükle ---------------- */
   useEffect(() => {
     Promise.all([
       api.get("/mini-campaigns"),
@@ -97,7 +102,7 @@ export default function MiniCampaignsPage() {
       .finally(() => setLoading(false));
   }, []);
 
-  /* ────────── Yeni / Düzenle ────────── */
+  /* ---------------- dialog helpers ---------------- */
   const openNew = () => {
     setForm({
       _id: null,
@@ -137,7 +142,7 @@ export default function MiniCampaignsPage() {
     setDialogOpen(true);
   };
 
-  /* ────────── Kaydet ────────── */
+  /* ---------------- kaydet (queue) ---------------- */
   const handleSave = async () => {
     const fd = new FormData();
     fd.append("title", form.title);
@@ -146,27 +151,44 @@ export default function MiniCampaignsPage() {
     fd.append("products", JSON.stringify(form.products));
     fd.append("categories", JSON.stringify(form.categories));
 
+    /* queue task */
+    const id = uuidv4();
+    addTask({ id, name: form.title || "Mini Kampanya", progress: 0 });
+
+    const cfg = {
+      headers: { "Content-Type": "multipart/form-data" },
+      onUploadProgress: (ev) => {
+        const pct = Math.round((ev.loaded * 100) / ev.total);
+        updateTask(id, { progress: pct });
+      },
+    };
+
     try {
       if (form._id) {
-        await api.put(`/mini-campaigns/${form._id}`, fd, {
-          headers: { "Content-Type": "multipart/form-data" },
-        });
-        setToast({ msg: "Mini kampanya güncellendi.", type: "success" });
+        await api.put(`/mini-campaigns/${form._id}`, fd, cfg);
       } else {
-        await api.post("/mini-campaigns", fd, {
-          headers: { "Content-Type": "multipart/form-data" },
-        });
-        setToast({ msg: "Mini kampanya oluşturuldu.", type: "success" });
+        await api.post("/mini-campaigns", fd, cfg);
       }
+
+      updateTask(id, { progress: 100, status: "success" });
+      setTimeout(() => removeTask(id), 2000);
+
       const { data } = await api.get("/mini-campaigns");
       setItems(data);
       setDialogOpen(false);
-    } catch {
-      setToast({ msg: "Kaydetme sırasında hata oluştu.", type: "error" });
+    } catch (err) {
+      console.error("Kampanya kaydetme hatası:", err);
+
+      updateTask(id, {
+        progress: 100,
+        status: "error",
+        errorMsg: "Mini kampanya kaydedilemedi",
+      });
+      setTimeout(() => removeTask(id), 4000);
     }
   };
 
-  /* ────────── Silme akışı ────────── */
+  /* ---------------- silme ---------------- */
   const triggerDelete = (id) => setDeleteId(id);
 
   const handleDeleteConfirmed = async () => {
@@ -181,16 +203,17 @@ export default function MiniCampaignsPage() {
     }
   };
 
-  /* ────────── Render ────────── */
+  /* ---------------- render helpers ---------------- */
   if (loading) return <div>Yükleniyor…</div>;
 
   const slot1Taken = items.some((c) => c.slot === 1 && c._id !== form._id);
   const slot2Taken = items.some((c) => c.slot === 2 && c._id !== form._id);
   const currentOptions = options[selectionType] || [];
 
+  /* ---------------- render ---------------- */
   return (
     <div>
-      {/* Üst bar */}
+      {/* üst bar */}
       <div className="flex justify-between items-center mb-6">
         <Typography variant="h4">Mini Kampanyalar</Typography>
         <Button color="blue" onClick={openNew}>
@@ -198,17 +221,13 @@ export default function MiniCampaignsPage() {
         </Button>
       </div>
 
-      {/* Kartlar */}
+      {/* kartlar */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {items.map((c) => (
           <Card key={c._id} className="relative">
             <Menu placement="bottom-end">
               <MenuHandler>
-                <IconButton
-                  variant="text"
-                  className="absolute top-2 right-2"
-                  ripple={false}
-                >
+                <IconButton variant="text" className="absolute top-2 right-2">
                   <EllipsisVerticalIcon className="w-5 h-5" />
                 </IconButton>
               </MenuHandler>
@@ -243,14 +262,14 @@ export default function MiniCampaignsPage() {
         ))}
       </div>
 
-      {/* Form dialog */}
+      {/* form dialog */}
       <Dialog open={dialogOpen} size="lg" handler={() => setDialogOpen(false)}>
         <DialogHeader>
           {form._id ? "Mini Kampanyayı Güncelle" : "Yeni Mini Kampanya"}
         </DialogHeader>
         <DialogBody divider className="overflow-auto max-h-[70vh] pr-4">
           <div className="space-y-4">
-            {/* Başlık */}
+            {/* başlık */}
             <Input
               label="Başlık"
               value={form.title}
@@ -260,7 +279,7 @@ export default function MiniCampaignsPage() {
               }}
             />
 
-            {/* Slot */}
+            {/* slot */}
             <div>
               <label className="block mb-1">Slot</label>
               <select
@@ -281,7 +300,7 @@ export default function MiniCampaignsPage() {
               </select>
             </div>
 
-            {/* Seçim Türü */}
+            {/* seçim türü */}
             <div>
               <label className="block mb-1">Seçim Türü</label>
               <select
@@ -300,7 +319,7 @@ export default function MiniCampaignsPage() {
               </select>
             </div>
 
-            {/* Çoklu seçim */}
+            {/* çoklu seçim */}
             {selectionType && (
               <div>
                 <label className="block mb-1">
@@ -341,7 +360,7 @@ export default function MiniCampaignsPage() {
               </div>
             )}
 
-            {/* Mevcut resim */}
+            {/* mevcut resim */}
             {form._id && form.imageUrl && !form.imageFile && (
               <div>
                 <Typography variant="small" className="mb-1 text-gray-500">
@@ -355,7 +374,7 @@ export default function MiniCampaignsPage() {
               </div>
             )}
 
-            {/* Resim yükle */}
+            {/* resim yükle */}
             <div>
               <label className="block text-sm mb-1">Resim Yükle</label>
               <input
@@ -384,7 +403,7 @@ export default function MiniCampaignsPage() {
         </DialogFooter>
       </Dialog>
 
-      {/* Silme onayı */}
+      {/* silme onayı */}
       <ConfirmModal
         open={Boolean(deleteId)}
         onClose={() => setDeleteId(null)}
@@ -392,7 +411,7 @@ export default function MiniCampaignsPage() {
         message="Bu mini kampanyayı silmek istediğinize emin misiniz?"
       />
 
-      {/* Toast */}
+      {/* toast */}
       {toast && (
         <ToastAlert
           msg={toast.msg}
