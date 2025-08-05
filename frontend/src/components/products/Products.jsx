@@ -48,6 +48,11 @@ export default function Products({ products: propProducts }) {
           name={p.name}
           price={p.price}
           rating={5}
+          stock={
+            Array.isArray(p.sizes)
+              ? p.sizes.reduce((sum, s) => sum + (s.stock || 0), 0)
+              : 0
+          }
         />
       ))}
     </div>

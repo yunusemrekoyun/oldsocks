@@ -60,6 +60,8 @@ exports.createPaymentRedirect = async (req, res) => {
         name: it.name,
         price: it.price,
         qty: it.qty,
+        size: it.size,
+        color: it.color,
       })),
       totalPrice,
       address: {

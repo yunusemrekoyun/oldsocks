@@ -1,27 +1,47 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { FaPlus, FaMinus, FaChevronDown } from "react-icons/fa";
 import { useCart } from "../../../context/useCart";
+import { useNavigate } from "react-router-dom";
+import api from "../../../../api";
 
 export default function AddToCart({
   price = 0,
   sizes = [],
-  colors = [],
+  color = "",
   productId,
   productName,
   image,
+  parentProductId,
 }) {
   const [selectedSize, setSelectedSize] = useState(null);
-  const [selectedColor, setSelectedColor] = useState(null);
+  const [selectedColor, setSelectedColor] = useState(color || null);
+  const [colorOptions, setColorOptions] = useState([]);
   const [qty, setQty] = useState(1);
   const [showAdded, setShowAdded] = useState(false);
   const { addToCart } = useCart();
+  const navigate = useNavigate();
 
+  useEffect(() => {
+    const fetchColors = async () => {
+      try {
+        const baseId = parentProductId || productId;
+        const res = await api.get(`/products?varyantsOf=${baseId}`);
+        setColorOptions((res.data || []).filter((p) => p.color?.trim()));
+      } catch (err) {
+        console.error("Varyant renkler alınamadı:", err);
+      }
+    };
+    fetchColors();
+  }, [productId, parentProductId]);
+  useEffect(() => {
+    setSelectedColor(color || null);
+  }, [productId, color]);
   const increment = () => setQty((q) => q + 1);
   const decrement = () => setQty((q) => Math.max(1, q - 1));
 
   const canAdd =
     (sizes.length === 0 || selectedSize !== null) &&
-    (colors.length === 0 || selectedColor !== null);
+    (colorOptions.length === 0 || selectedColor !== null);
 
   const handleAddToCart = () => {
     const item = {
@@ -35,11 +55,9 @@ export default function AddToCart({
     };
     addToCart(item);
 
-    // Buton animasyonu için tetikle
     setShowAdded(true);
     setTimeout(() => setShowAdded(false), 2000);
 
-    // Sepet iconunu sallama
     const cartIcon = document.getElementById("cart-icon");
     if (cartIcon) {
       cartIcon.classList.add("animate-shake");
@@ -47,7 +65,14 @@ export default function AddToCart({
     }
   };
 
-  const CustomDropdown = ({ label, options, selected, onChange }) => {
+  const CustomDropdown = ({
+    label,
+    options,
+    selected,
+    onChange,
+    getLabel,
+    isDisabled,
+  }) => {
     const [open, setOpen] = useState(false);
 
     return (
@@ -65,24 +90,44 @@ export default function AddToCart({
         </button>
         {open && (
           <ul className="absolute z-20 mt-1 w-full bg-white border border-light2 rounded-lg shadow-md max-h-60 overflow-auto">
-            {options.map((opt) => (
-              <li
-                key={opt}
-                onClick={() => {
-                  onChange(opt);
-                  setOpen(false);
-                }}
-                className={`px-4 py-2 cursor-pointer hover:bg-light1 ${
-                  selected === opt ? "bg-light2 font-medium" : ""
-                }`}
-              >
-                {opt}
-              </li>
-            ))}
+            {options.map((opt) => {
+              const disabled = isDisabled?.(opt);
+              return (
+                <li
+                  key={getLabel(opt)}
+                  onClick={() => {
+                    if (disabled) return;
+                    onChange(getLabel(opt));
+                    setOpen(false);
+                  }}
+                  className={`px-4 py-2 cursor-pointer ${
+                    disabled
+                      ? "text-gray-400 cursor-not-allowed"
+                      : "hover:bg-light1"
+                  } ${
+                    selected === getLabel(opt) ? "bg-light2 font-medium" : ""
+                  }`}
+                >
+                  {getLabel(opt)}
+                  {disabled && " (Tükendi)"}
+                </li>
+              );
+            })}
           </ul>
         )}
       </div>
     );
+  };
+
+  const handleColorChange = (newColor) => {
+    const found = colorOptions.find((opt) => opt.color === newColor);
+    if (found._id === productId) {
+      // Aynı üründeyiz → sadece seçimi güncelle
+      setSelectedColor(newColor);
+    } else {
+      // Başka varyanta git
+      navigate(`/product-details/${found._id}`, { replace: true });
+    }
   };
 
   return (
@@ -97,16 +142,19 @@ export default function AddToCart({
           options={sizes}
           selected={selectedSize}
           onChange={setSelectedSize}
+          getLabel={(opt) => opt.size}
+          isDisabled={(opt) => opt.stock <= 0}
         />
       )}
 
       {/* Renk */}
-      {colors.length > 0 && (
+      {colorOptions.some((opt) => opt._id !== productId) && (
         <CustomDropdown
           label="Renk"
-          options={colors}
+          options={colorOptions}
           selected={selectedColor}
-          onChange={setSelectedColor}
+          onChange={handleColorChange}
+          getLabel={(opt) => opt.color}
         />
       )}
 
@@ -137,15 +185,15 @@ export default function AddToCart({
         </div>
       </div>
 
+      {/* Sepete Ekle */}
       <button
         onClick={handleAddToCart}
         disabled={!canAdd}
-        className={`relative w-full py-3 font-medium rounded-lg transition flex items-center justify-center
-          ${
-            canAdd
-              ? "bg-dark1 hover:bg-dark2 text-white"
-              : "bg-light2 text-dark2 cursor-not-allowed"
-          }`}
+        className={`relative w-full py-3 font-medium rounded-lg transition flex items-center justify-center ${
+          canAdd
+            ? "bg-dark1 hover:bg-dark2 text-white"
+            : "bg-light2 text-dark2 cursor-not-allowed"
+        }`}
       >
         {showAdded ? (
           <span className="animate-pulse">Sepete Başarıyla Eklendi!</span>

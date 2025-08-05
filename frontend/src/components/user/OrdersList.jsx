@@ -83,9 +83,12 @@ export default function OrdersList() {
             <div>
               <p className="font-medium mb-1">Ürünler:</p>
               <ul className="list-disc list-inside">
-                {order.items.map((it) => (
-                  <li key={it.productId}>
-                    {it.name} — Adet: {it.qty} × ₺{it.price.toFixed(2)}
+                {order.items.map((it, i) => (
+                  <li key={i}>
+                    {it.name}
+                    {it.size && <span> — Beden: {it.size}</span>}
+                    {it.color && <span> — Renk: {it.color}</span>}
+                    {" — "}Adet: {it.qty} × ₺{it.price.toFixed(2)}
                   </li>
                 ))}
               </ul>

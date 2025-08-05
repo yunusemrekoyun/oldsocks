@@ -1,11 +1,10 @@
-// src/components/SimilarProducts.jsx
 import React, { useState, useEffect } from "react";
 import api from "../../../../api";
 import SimilarProductsItem from "../product-details/SimilarProductsItem";
 import { Swiper, SwiperSlide } from "swiper/react";
-import { Navigation, Autoplay } from "swiper/modules";
+import { Autoplay, FreeMode } from "swiper/modules";
 import "swiper/css";
-import "swiper/css/navigation";
+import "swiper/css/free-mode";
 
 export default function SimilarProducts({ categoryId, currentProductId }) {
   const [items, setItems] = useState([]);
@@ -18,22 +17,49 @@ export default function SimilarProducts({ categoryId, currentProductId }) {
       setLoading(false);
       return;
     }
+
     setLoading(true);
+
     api
       .get("/products")
       .then(({ data }) => {
-        const sameCat = data.filter((p) => {
-          if (!p.category) return false;
-          const cid = p.category._id || p.category;
-          const pid = p.category.parent?._id ?? p.category.parent;
-          return cid === categoryId || pid === categoryId;
+        const isInStock = (product) => {
+          const totalStock = Array.isArray(product.sizes)
+            ? product.sizes.reduce((sum, s) => sum + (s.stock || 0), 0)
+            : 0;
+          return totalStock > 0;
+        };
+
+        const filtered = data.filter(
+          (p) => p._id !== currentProductId && isInStock(p)
+        );
+
+        const sameSub = filtered.filter((p) => {
+          const cid = p.category?._id || p.category;
+          return cid === categoryId;
         });
-        const filtered = sameCat.filter((p) => p._id !== currentProductId);
-        for (let i = filtered.length - 1; i > 0; i--) {
-          const j = Math.floor(Math.random() * (i + 1));
-          [filtered[i], filtered[j]] = [filtered[j], filtered[i]];
+
+        const sameParent = filtered.filter((p) => {
+          const pid = p.category?.parent?._id || p.category?.parent;
+          return pid === categoryId;
+        });
+
+        let result = [];
+
+        if (sameSub.length > 0) {
+          result = sameSub;
+        } else if (sameParent.length > 0) {
+          result = sameParent;
+        } else {
+          result = filtered;
         }
-        setItems(filtered.slice(0, 5)); // 5'e çıkardım slidera uygun olsun
+
+        for (let i = result.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [result[i], result[j]] = [result[j], result[i]];
+        }
+
+        setItems(result.slice(0, 5));
         setError("");
       })
       .catch(() => setError("Benzer ürünler yüklenemedi."))
@@ -45,19 +71,21 @@ export default function SimilarProducts({ categoryId, currentProductId }) {
   if (error)
     return <div className="text-center py-4 text-red-600">{error}</div>;
   if (items.length === 0)
-    return <div className="text-center py-4">Benzer ürün bulunamadı.</div>;
+    return (
+      <div className="text-center py-4">Stokta benzer ürün bulunamadı.</div>
+    );
 
   return (
     <div className="space-y-4">
       <h3 className="text-xl font-semibold">Benzer Ürünler</h3>
       <Swiper
-        modules={[Navigation, Autoplay]}
+        modules={[Autoplay, FreeMode]}
         spaceBetween={16}
         slidesPerView={2}
-        navigation
         autoplay={{ delay: 3000 }}
         loop={true}
         grabCursor={true}
+        freeMode={true}
         className="!px-2"
       >
         {items.map((p) => (
@@ -67,7 +95,6 @@ export default function SimilarProducts({ categoryId, currentProductId }) {
               video={p.video}
               name={p.name}
               price={p.price}
-              rating={5}
             />
           </SwiperSlide>
         ))}

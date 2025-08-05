@@ -142,14 +142,18 @@ export default function OrdersPage() {
                 </div>
               </div>
 
-              <div className="text-sm text-gray-700">
-                <p>
-                  <strong>İsim:</strong> {order.user?.firstName}{" "}
-                  {order.user?.lastName}
-                </p>
-                <p>
-                  <strong>Email:</strong> {order.user?.email}
-                </p>
+              <div className="mt-2 text-sm">
+                <p className="font-medium mb-1">Ürünler:</p>
+                <ul className="list-disc list-inside space-y-1">
+                  {order.items.map((item, idx) => (
+                    <li key={idx}>
+                      {item.name}
+                      {item.size && ` — Beden: ${item.size}`}
+                      {item.color && ` — Renk: ${item.color}`}
+                      {` — Adet: ${item.qty} × ₺${item.price.toFixed(2)}`}
+                    </li>
+                  ))}
+                </ul>
               </div>
 
               <div className="flex items-center gap-3">

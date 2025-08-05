@@ -31,8 +31,14 @@ export default function ProductsPage() {
     setActiveProduct(null);
     setIsFormOpen(true);
   };
-
   const openEditForm = async (prod) => {
+    if (prod?.parentProductId && !prod._id) {
+      // Yeni renk oluşturuluyor
+      setActiveProduct(prod); // sadece parentProductId göndereceğiz
+      setIsFormOpen(true);
+      return;
+    }
+
     setLoadingList(true);
     try {
       const { data } = await api.get(`/products/${prod._id}`);

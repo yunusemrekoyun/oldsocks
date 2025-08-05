@@ -1,3 +1,5 @@
+// src/routes/productRoutes.js
+
 const router = require("express").Router();
 const { verifyToken } = require("../middleware/auth");
 const { allowRoles } = require("../middleware/roles");
@@ -36,6 +38,18 @@ router.delete(
   verifyToken,
   allowRoles("admin"),
   productCtrl.deleteProduct
+);
+
+// ✅ Yeni renk ekleme (admin-only)
+router.post(
+  "/new-color/:baseProductId",
+  verifyToken,
+  allowRoles("admin"),
+  uploadProductFiles.fields([
+    { name: "video", maxCount: 1 },
+    { name: "images", maxCount: 4 },
+  ]),
+  productCtrl.createProductWithNewColor
 );
 
 module.exports = router;

@@ -27,7 +27,7 @@ export default function ProductGrid() {
     <section className="bg-light1 py-12">
       <div className="container mx-auto px-4">
         <h2 className="text-center font-playfair text-3xl md:text-4xl text-black uppercase mb-8">
-Öne Çıkan Ürünler
+          Öne Çıkan Ürünler
         </h2>
 
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-6">
@@ -39,6 +39,11 @@ export default function ProductGrid() {
               poster={p.poster}
               name={p.name}
               price={p.price}
+              stock={
+                Array.isArray(p.sizes)
+                  ? p.sizes.reduce((sum, s) => sum + (s.stock || 0), 0)
+                  : 0
+              }
               rating={5}
             />
           ))}

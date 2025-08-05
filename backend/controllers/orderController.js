@@ -1,5 +1,6 @@
 // backend/controllers/orderController.js
 const Order = require("../models/Order");
+
 exports.getAllOrders = async (req, res) => {
   try {
     const orders = await Order.find()
@@ -62,7 +63,6 @@ exports.confirmOrderPayment = async (req, res) => {
   if (!conversationId || !paymentId) {
     return res.status(400).json({ message: "Eksik parametre." });
   }
-
   const order = await Order.findOneAndUpdate(
     { conversationId },
     { paymentId, status: "paid" },

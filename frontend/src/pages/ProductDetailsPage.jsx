@@ -62,9 +62,11 @@ export default function ProductDetailsPage() {
           <AddToCart
             price={product.price}
             sizes={product.sizes}
+            color={product.color}
+            parentProductId={product.parentProductId}
             productId={product._id}
             productName={product.name}
-            image={product.images?.[0]} // veya fallback eklenebilir
+            image={product.images?.[0]}
           />
         </aside>
       </main>

@@ -28,6 +28,9 @@ export default function CartItem({ item }) {
           {item.size && (
             <p className="text-sm text-gray-500">Beden: {item.size}</p>
           )}
+          {item.color && (
+            <p className="text-sm text-gray-500">Renk: {item.color}</p>
+          )}
           <p className="text-sm text-gray-500">Adet: {item.qty}</p>
         </div>
       </div>

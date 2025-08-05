@@ -121,10 +121,10 @@ export default function ShopPage() {
         <section className="lg:col-span-3">
           <header className="mb-6">
             <h1 className="text-4xl font-playfair font-bold text-black">
-              {title || "Shop with us"}
+              {title || ""}
             </h1>
             <p className="text-dark2 text-sm mt-1">
-              Browse from {filtered.length} items
+               {filtered.length} ürün listeleniyor
             </p>
           </header>
 

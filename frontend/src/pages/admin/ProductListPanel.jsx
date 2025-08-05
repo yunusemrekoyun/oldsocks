@@ -1,10 +1,8 @@
-// src/components/admin/ProductListPanel.jsx
 import React, { useState } from "react";
 import { FaEllipsisV } from "react-icons/fa";
 import api from "../../../api";
 import ToastAlert from "../../components/ui/ToastAlert";
 
-/* ───────── Silme Onay Modali ───────── */
 const ConfirmModal = ({ open, onClose, onConfirm, message }) => {
   if (!open) return null;
   return (
@@ -36,11 +34,9 @@ export default function ProductListPanel({
   onDelete,
   isFull,
 }) {
-  /* toast & sil onay */
-  const [toast, setToast] = useState(null); // { msg, type }
+  const [toast, setToast] = useState(null);
   const [deleteId, setDeleteId] = useState(null);
 
-  /* silme akışı */
   const triggerDelete = (id) => setDeleteId(id);
 
   const handleDeleteConfirmed = async () => {
@@ -49,7 +45,7 @@ export default function ProductListPanel({
     try {
       await api.delete(`/products/${id}`);
       setToast({ msg: "Ürün silindi.", type: "success" });
-      onDelete(); // parent sayfaya bildir
+      onDelete();
     } catch {
       setToast({ msg: "Ürün silinemedi.", type: "error" });
     }
@@ -73,22 +69,28 @@ export default function ProductListPanel({
               <p className="text-gray-500">
                 {p.category?.name || "Kategori Yok"}
               </p>
+              <p className="text-xs text-gray-400">
+                Stok:{" "}
+                {p.sizes?.reduce((sum, s) => sum + (s.stock || 0), 0) ?? 0}
+              </p>
             </div>
 
             {/* üç nokta menüsü */}
-            <button
-              className="absolute top-2 right-2 opacity-0 group-hover:opacity-100"
-              onClick={() => onEdit(p)}
-            >
-              <FaEllipsisV />
-            </button>
-            <div className="absolute top-8 right-2 hidden group-hover:block bg-white shadow rounded">
+            <div className="absolute top-8 right-2 hidden group-hover:block bg-white shadow rounded z-10">
               <button
                 onClick={() => onEdit(p)}
                 className="block px-2 py-1 hover:bg-gray-100 w-full text-left"
               >
                 Düzenle
               </button>
+
+              <button
+                onClick={() => onEdit({ _id: p._id, parentProductId: p._id })}
+                className="block px-2 py-1 hover:bg-gray-100 w-full text-left"
+              >
+                Yeni Renk Ekle
+              </button>
+
               <button
                 onClick={() => triggerDelete(p._id)}
                 className="block px-2 py-1 text-red-600 hover:bg-gray-100 w-full text-left"

@@ -38,6 +38,7 @@ import CommentsPage from "./pages/admin/CommentsPage";
 import CommentRepliesPage from "./pages/admin/CommentRepliesPage";
 import InstagramPostsPage from "./pages/admin/InstagramPostsPage";
 import OrdersPage from "./pages/admin/OrdersPage";
+import ProductListPage from "./pages/admin/ProductListPage";
 export default function App() {
   return (
     <BrowserRouter>
@@ -86,7 +87,7 @@ export default function App() {
             }
           >
             <Route index element={<div>Hoş geldin Admin!</div>} />
-            <Route path="products" element={<ProductsPage />} />
+            <Route path="products" element={<ProductListPage />} />
             <Route path="users" element={<AdminUsersPage />} />
             <Route path="categories" element={<CategoriesPage />} />
             <Route path="campaigns" element={<CampaignsPage />} />

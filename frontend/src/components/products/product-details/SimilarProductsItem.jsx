@@ -1,7 +1,7 @@
 import React, { useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import PropTypes from "prop-types";
-import { FaVolumeMute, FaVolumeUp, FaStar } from "react-icons/fa";
+import { FaVolumeMute, FaVolumeUp } from "react-icons/fa";
 
 export default function SimilarProductItem({ id, video, name, price }) {
   const videoRef = useRef(null);
@@ -12,6 +12,7 @@ export default function SimilarProductItem({ id, video, name, price }) {
     setHovered(true);
     videoRef.current?.play();
   };
+
   const onLeave = () => {
     setHovered(false);
     if (videoRef.current) {
@@ -19,6 +20,7 @@ export default function SimilarProductItem({ id, video, name, price }) {
       videoRef.current.currentTime = 0;
     }
   };
+
   const toggleMute = (e) => {
     e.preventDefault();
     e.stopPropagation();
@@ -31,7 +33,9 @@ export default function SimilarProductItem({ id, video, name, price }) {
   return (
     <Link
       to={`/product-details/${id}`}
-      className="group relative rounded-2xl overflow-hidden bg-white shadow-md hover:shadow-xl border border-light2 transition-all duration-300 flex flex-col h-full"
+      draggable={false}
+      onDragStart={(e) => e.preventDefault()}
+      className="group relative rounded-2xl overflow-hidden bg-white shadow-md hover:shadow-xl border border-light2 transition-all duration-300 flex flex-col h-full select-none"
       onMouseEnter={onEnter}
       onMouseLeave={onLeave}
     >
@@ -44,6 +48,8 @@ export default function SimilarProductItem({ id, video, name, price }) {
           playsInline
           preload="metadata"
           className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+          draggable={false}
+          onDragStart={(e) => e.preventDefault()}
         />
         {hovered && (
           <button
@@ -64,7 +70,6 @@ export default function SimilarProductItem({ id, video, name, price }) {
         <h4 className="text-dark1 text-sm font-semibold leading-snug line-clamp-2 text-center">
           {name}
         </h4>
-
         <p className="text-dark1 font-bold text-sm text-center mt-1">
           {price.toFixed(2)}₺
         </p>
@@ -78,9 +83,4 @@ SimilarProductItem.propTypes = {
   video: PropTypes.string.isRequired,
   name: PropTypes.string.isRequired,
   price: PropTypes.number.isRequired,
-  rating: PropTypes.number,
-};
-
-SimilarProductItem.defaultProps = {
-  rating: 0,
 };

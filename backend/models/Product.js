@@ -1,56 +1,34 @@
-///Applications/Works/oldsocks main/oldsocks/backend/models/Product.js
 const mongoose = require("mongoose");
+
+const SizeSchema = new mongoose.Schema({
+  /** Beden opsiyonel; boş string = “bedensiz” */
+  size: { type: String, default: "" },
+  stock: { type: Number, required: true, default: 0 },
+});
 
 const ProductSchema = new mongoose.Schema(
   {
-    name: {
-      type: String,
-      required: true,
-      trim: true,
-    },
-    video: {
-      type: String,
-      required: true, // hover video URL
-    },
-    images: [
-      {
-        type: String,
-        required: true, // 1–4 image URLs
-      },
-    ],
-    price: {
-      type: Number,
-      required: true, // indirimli fiyat
-    },
-    originalPrice: {
-      type: Number,
-      required: true, // normal fiyat
-    },
-    discount: {
-      type: Number,
-      default: 0, // yüzde indirim
-    },
+    name: { type: String, required: true, trim: true },
+    video: { type: String, required: true },
+    images: [{ type: String, required: true }],
+    price: { type: Number, required: true },
+    originalPrice: { type: Number, required: true },
+    discount: { type: Number, default: 0 },
     category: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Category",
-      required: true, // alt veya üst kategori ID’si
+      required: true,
     },
-    stock: {
-      type: Number,
-      default: 0,
-    },
-    sizes: [
-      {
-        type: String,
-      },
-    ],
-    description: {
-      type: String,
-      default: "",
-    },
-    color: {
-      type: String,
-      default: "",
+    /** 🔑 Renk artık opsiyonel */
+    color: { type: String, default: "" },
+    sizes: [SizeSchema], // bedenler (boş da olabilir)
+    description: { type: String, default: "" },
+    /** Varyant ilişkisi */
+    parentProductId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Product",
+      default: null,
+      index: true,
     },
   },
   { timestamps: true }
