@@ -1,6 +1,6 @@
 // backend/controllers/orderController.js
 const Order = require("../models/Order");
-
+const { applyStockChanges } = require("../utils/updateStock");
 exports.getAllOrders = async (req, res) => {
   try {
     const orders = await Order.find()
@@ -64,15 +64,21 @@ exports.confirmOrderPayment = async (req, res) => {
     return res.status(400).json({ message: "Eksik parametre." });
   }
   const order = await Order.findOneAndUpdate(
-    { conversationId },
-    { paymentId, status: "paid" },
+    { conversationId, stockUpdated: false },
+    { paymentId, status: "paid", stockUpdated: true },
     { new: true }
   );
 
-  if (!order) {
-    return res.status(404).json({ message: "Sipariş bulunamadı." });
+  if (order) {
+    await applyStockChanges(order);
+    return res.json({ orderNumber: order.orderNumber });
   }
 
-  // artık sadece sipariş numarasını dönüyoruz
-  res.json({ orderNumber: order.orderNumber });
+  const existing = await Order.findOne({ conversationId }).select(
+    "orderNumber"
+  );
+  if (!existing)
+    return res.status(404).json({ message: "Sipariş bulunamadı." });
+
+  res.json({ orderNumber: existing.orderNumber });
 };

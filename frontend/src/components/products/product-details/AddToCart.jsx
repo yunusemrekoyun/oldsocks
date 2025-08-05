@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from "react";
+// src/components/products/product-details/AddToCart.jsx
+import React, { useState, useEffect, useRef } from "react";
 import { FaPlus, FaMinus, FaChevronDown } from "react-icons/fa";
 import { useCart } from "../../../context/useCart";
 import { useNavigate } from "react-router-dom";
@@ -13,38 +14,84 @@ export default function AddToCart({
   image,
   parentProductId,
 }) {
+  /* ---------------- State ---------------- */
   const [selectedSize, setSelectedSize] = useState(null);
   const [selectedColor, setSelectedColor] = useState(color || null);
   const [colorOptions, setColorOptions] = useState([]);
   const [qty, setQty] = useState(1);
+  const [available, setAvailable] = useState(Infinity); // seçilen beden stok
+  const [warn, setWarn] = useState("");
   const [showAdded, setShowAdded] = useState(false);
+
   const { addToCart } = useCart();
   const navigate = useNavigate();
+  const sentWarnRef = useRef(false); // aynı uyarıyı arka arkaya göstermesin
 
+  /* ------------- Varyant renkleri ------------- */
   useEffect(() => {
-    const fetchColors = async () => {
+    (async () => {
       try {
         const baseId = parentProductId || productId;
-        const res = await api.get(`/products?varyantsOf=${baseId}`);
-        setColorOptions((res.data || []).filter((p) => p.color?.trim()));
+        const { data } = await api.get(`/products?varyantsOf=${baseId}`);
+        setColorOptions((data || []).filter((p) => p.color?.trim()));
       } catch (err) {
         console.error("Varyant renkler alınamadı:", err);
       }
-    };
-    fetchColors();
+    })();
   }, [productId, parentProductId]);
+
+  /* ------------- Ürün değişince rengi resetle ------------- */
   useEffect(() => {
     setSelectedColor(color || null);
   }, [productId, color]);
-  const increment = () => setQty((q) => q + 1);
+
+  /* ------------- Seçilen bedene göre stok güncelle ------------- */
+  useEffect(() => {
+    if (sizes.length === 0) {
+      setAvailable(Infinity);
+      return;
+    }
+    const row = sizes.find((s) => s.size === selectedSize);
+    const stock = row ? row.stock : 0;
+    setAvailable(stock);
+    setQty((q) => Math.min(q, stock || 1));
+  }, [selectedSize, sizes]);
+
+  /* ---------------- Qty Kontrolleri ---------------- */
+  const increment = () => {
+    setQty((q) => {
+      if (q + 1 > available) {
+        showWarn(`Bu bedende en fazla ${available} adet ekleyebilirsiniz.`);
+        return q;
+      }
+      return q + 1;
+    });
+  };
+
   const decrement = () => setQty((q) => Math.max(1, q - 1));
 
+  const showWarn = (msg) => {
+    if (sentWarnRef.current) return;
+    setWarn(msg);
+    sentWarnRef.current = true;
+    setTimeout(() => {
+      setWarn("");
+      sentWarnRef.current = false;
+    }, 2000);
+  };
+
+  /* ---------------- Sepete ekle ---------------- */
   const canAdd =
     (sizes.length === 0 || selectedSize !== null) &&
     (colorOptions.length === 0 || selectedColor !== null);
 
   const handleAddToCart = () => {
-    const item = {
+    if (qty > available) {
+      showWarn(`Bu bedende en fazla ${available} adet ekleyebilirsiniz.`);
+      return;
+    }
+
+    addToCart({
       id: productId,
       name: productName,
       image,
@@ -52,8 +99,7 @@ export default function AddToCart({
       size: selectedSize,
       color: selectedColor,
       qty,
-    };
-    addToCart(item);
+    });
 
     setShowAdded(true);
     setTimeout(() => setShowAdded(false), 2000);
@@ -65,6 +111,7 @@ export default function AddToCart({
     }
   };
 
+  /* ---------------- Dropdown component ---------------- */
   const CustomDropdown = ({
     label,
     options,
@@ -74,7 +121,6 @@ export default function AddToCart({
     isDisabled,
   }) => {
     const [open, setOpen] = useState(false);
-
     return (
       <div className="relative">
         <label className="block text-sm font-medium text-dark2 mb-2">
@@ -119,17 +165,18 @@ export default function AddToCart({
     );
   };
 
+  /* ---------------- Renk değiştir ---------------- */
   const handleColorChange = (newColor) => {
     const found = colorOptions.find((opt) => opt.color === newColor);
+    if (!found) return;
     if (found._id === productId) {
-      // Aynı üründeyiz → sadece seçimi güncelle
       setSelectedColor(newColor);
     } else {
-      // Başka varyanta git
       navigate(`/product-details/${found._id}`, { replace: true });
     }
   };
 
+  /* ---------------- JSX ---------------- */
   return (
     <div className="bg-white p-6 rounded-lg shadow-md space-y-6">
       {/* Fiyat */}
@@ -158,7 +205,7 @@ export default function AddToCart({
         />
       )}
 
-      {/* Adet Kontrolleri */}
+      {/* Adet */}
       <div>
         <label className="block text-sm font-medium text-dark2 mb-2">
           Adet
@@ -183,6 +230,9 @@ export default function AddToCart({
             <FaPlus className="text-dark2" />
           </button>
         </div>
+        {warn && (
+          <p className="text-xs text-red-600 mt-2 text-center">{warn}</p>
+        )}
       </div>
 
       {/* Sepete Ekle */}
