@@ -1,5 +1,6 @@
-// src/components/BreadCrumb.jsx
+// src/components/breadCrumb/BreadCrumb.jsx
 import React from "react";
+import PropTypes from "prop-types";
 import { Link, useLocation } from "react-router-dom";
 
 const PATH_TRANSLATE = {
@@ -15,44 +16,42 @@ const PATH_TRANSLATE = {
   "payment-result": "Ödeme Sonucu",
   auth: "Giriş / Kayıt",
   profile: "Profil",
-  admin: "Yönetim Paneli",
-  products: "Ürünler",
-  users: "Kullanıcılar",
-  categories: "Kategoriler",
-  campaigns: "Kampanyalar",
-  minicampaigns: "Mini Kampanyalar",
-  blogs: "Bloglar",
-  "blog-categories": "Blog Kategorileri",
-  orders: "Siparişler",
-  comments: "Yorumlar",
-  replies: "Yanıtlar",
-  "instagram-posts": "Instagram Gönderileri",
-  create: "Oluştur",
-  edit: "Düzenle",
+  // … diğer admin segmentler
 };
 
-const BreadCrumb = () => {
+const BreadCrumb = ({ name: lastName }) => {
   const location = useLocation();
-  const pathnames = location.pathname.split("/").filter((x) => x);
+  const segments = location.pathname.split("/").filter(Boolean);
 
   return (
     <div className="bg-gray-100 py-3">
-      <div className="container mx-auto px-4 text-sm text-gray-600">
+      <div className="container mx-auto px-4 text-sm text-gray-600 flex flex-wrap items-center">
         <Link to="/" className="hover:underline">
           Ana Sayfa
         </Link>
-        {pathnames.map((name, index) => {
-          const routeTo = "/" + pathnames.slice(0, index + 1).join("/");
-          const isLast = index === pathnames.length - 1;
-          const label = PATH_TRANSLATE[name] || decodeURIComponent(name);
+        {segments.map((seg, idx) => {
+          const isLast = idx === segments.length - 1;
+          // ID segmenti: ürün detay sayfasındaki son segment
+          const label =
+            isLast && lastName
+              ? lastName
+              : PATH_TRANSLATE[seg] || decodeURIComponent(seg);
+
+          // routeTo: product-details segmenti shop'a, diğerleri kendi path'ine
+          let to;
+          if (seg === "product-details") {
+            to = "/shop";
+          } else {
+            to = "/" + segments.slice(0, idx + 1).join("/");
+          }
 
           return (
-            <span key={index} className="ml-2">
+            <span key={idx} className="flex items-center ml-2">
               <span className="mx-1">/</span>
               {isLast ? (
                 <span className="font-medium text-gray-800">{label}</span>
               ) : (
-                <Link to={routeTo} className="hover:underline">
+                <Link to={to} className="hover:underline">
                   {label}
                 </Link>
               )}
@@ -62,6 +61,15 @@ const BreadCrumb = () => {
       </div>
     </div>
   );
+};
+
+BreadCrumb.propTypes = {
+  // Son segment için geçilecek isim
+  name: PropTypes.string,
+};
+
+BreadCrumb.defaultProps = {
+  name: null,
 };
 
 export default BreadCrumb;

@@ -2,7 +2,8 @@
 import React, { useEffect, useState } from "react";
 import api from "../../../api";
 import ToastAlert from "../../components/ui/ToastAlert";
-import { v4 as uuid } from "uuid"; // satır key'i için
+import { v4 as uuid } from "uuid"; // satır key’i + task id
+import { useUploadQueue } from "../../context/UploadQueueContext"; // ☆ queue
 
 export default function AddNewColorForm({ product, onClose, onSaved }) {
   /* ------------------------------- State ------------------------------ */
@@ -22,7 +23,10 @@ export default function AddNewColorForm({ product, onClose, onSaved }) {
   const [existingImages, setExistI] = useState([]);
   const [toast, setToast] = useState(null);
   const [submitting, setSubmitting] = useState(false);
-  const [isSizeLess, setIsSizeLess] = useState(false); // bedensiz toggle
+  const [isSizeLess, setIsSizeLess] = useState(false);
+
+  /* ------------ Upload queue helpers ------------ */
+  const { addTask, updateTask, removeTask } = useUploadQueue(); // ☆
 
   /* -------------------------- Ürün detayını çek ----------------------- */
   useEffect(() => {
@@ -30,12 +34,12 @@ export default function AddNewColorForm({ product, onClose, onSaved }) {
       try {
         const { data } = await api.get(`/products/${product._id}`);
         setFormData({
-          name: data.name || "",
-          price: data.price || "",
-          originalPrice: data.originalPrice || "",
-          discount: data.discount || "",
-          description: data.description || "",
-          category: data.category?._id || "",
+          name: data.name ?? "",
+          price: data.price ?? "",
+          originalPrice: data.originalPrice ?? "",
+          discount: data.discount ?? "",
+          description: data.description ?? "",
+          category: data.category?._id ?? "",
           color: "",
           sizes: data.sizes.length ? data.sizes : [],
         });
@@ -48,18 +52,15 @@ export default function AddNewColorForm({ product, onClose, onSaved }) {
   }, [product]);
 
   /* --------------------------- Handler'lar ---------------------------- */
-  const handleInput = (e) => {
-    const { name, value } = e.target;
-    setFormData((p) => ({ ...p, [name]: value }));
-  };
+  const handleInput = (e) =>
+    setFormData((p) => ({ ...p, [e.target.name]: e.target.value }));
 
-  const handleSizeChange = (i, key, value) => {
+  const handleSizeChange = (i, key, value) =>
     setFormData((p) => {
       const list = [...p.sizes];
       list[i][key] = key === "stock" ? Number(value) : value;
       return { ...p, sizes: list };
     });
-  };
 
   const addSizeRow = () =>
     setFormData((p) => ({
@@ -74,17 +75,17 @@ export default function AddNewColorForm({ product, onClose, onSaved }) {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    if (!formData.color.trim()) {
+    /* basit doğrulamalar */
+    if (!formData.color.trim())
       return setToast({ msg: "Renk alanı zorunludur.", type: "error" });
-    }
 
-    if (!isSizeLess && formData.sizes.length === 0) {
+    if (!isSizeLess && formData.sizes.length === 0)
       return setToast({
         msg: "En az bir beden satırı ekleyin.",
         type: "error",
       });
-    }
 
+    /* form-data hazırlığı */
     const fd = new FormData();
     ["name", "price", "originalPrice", "discount", "description"].forEach((f) =>
       fd.append(f, formData[f])
@@ -98,16 +99,41 @@ export default function AddNewColorForm({ product, onClose, onSaved }) {
           : formData.sizes
       )
     );
-
     if (video) fd.append("video", video);
     images.forEach((img) => fd.append("images", img));
 
+    /* ---------- queue entegrasyonu ---------- */
+    const taskId = uuid();
+    addTask({
+      id: taskId,
+      name: `Renk ekleniyor: ${formData.color || "Yeni renk"}`,
+      progress: 0,
+    });
+
     try {
       setSubmitting(true);
-      await api.post(`/products/new-color/${product._id}`, fd);
+      await api.post(`/products/new-color/${product._id}`, fd, {
+        headers: { "Content-Type": "multipart/form-data" },
+        onUploadProgress: (ev) =>
+          updateTask(taskId, {
+            progress: Math.round((ev.loaded * 100) / ev.total),
+          }),
+      });
+
+      updateTask(taskId, { progress: 100, status: "success" });
+      setTimeout(() => removeTask(taskId), 1800);
+
       setToast({ msg: "Yeni renk eklendi.", type: "success" });
       onSaved();
     } catch (err) {
+      updateTask(taskId, {
+        progress: 100,
+        status: "error",
+        errorMsg:
+          err?.response?.data?.message || "Yeni renk eklenirken hata oluştu.",
+      });
+      setTimeout(() => removeTask(taskId), 4000);
+
       setToast({
         msg:
           err?.response?.data?.message || "Yeni renk eklenirken hata oluştu.",
@@ -197,7 +223,7 @@ export default function AddNewColorForm({ product, onClose, onSaved }) {
         </div>
       )}
 
-      {/* --- Mevcut Medya (ops) --- */}
+      {/* --- Mevcut Medya (opsiyonel gösterim) --- */}
       {existingVideo && !video && (
         <section>
           <label className="block mb-1 font-medium">Mevcut Video</label>
@@ -262,7 +288,9 @@ export default function AddNewColorForm({ product, onClose, onSaved }) {
           type="submit"
           disabled={submitting}
           className={`px-4 py-2 rounded-lg text-white ${
-            submitting ? "bg-gray-400" : "bg-green-600 hover:bg-green-700"
+            submitting
+              ? "bg-gray-400 cursor-not-allowed"
+              : "bg-green-600 hover:bg-green-700"
           }`}
         >
           Kaydet
