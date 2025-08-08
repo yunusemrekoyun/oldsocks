@@ -3,6 +3,7 @@ import React, { useState } from "react";
 import { FaEllipsisV } from "react-icons/fa";
 import api from "../../../api";
 import ToastAlert from "../../components/ui/ToastAlert";
+import { FaEdit, FaTrashAlt } from "react-icons/fa";
 
 /* ───────── Silme Onay Modali ───────── */
 const ConfirmModal = ({ open, onClose, onConfirm, message }) => {
@@ -57,45 +58,50 @@ export default function CategoryListPanel({
 
   /* ───────── renderItem ───────── */
   const renderItem = (c) => (
-    <div key={c._id} className="border rounded p-4 relative group bg-white">
-      <img
-        src={c.image}
-        alt={c.name}
-        className="w-full h-32 object-cover rounded"
-      />
+    <div
+      key={c._id}
+      onClick={() => onEdit(c)}
+      className="bg-white shadow-md rounded-xl overflow-hidden group hover:shadow-xl transition-all relative cursor-pointer"
+    >
+      {/* Görsel Kısım */}
+      <div className="relative w-full h-40">
+        <img
+          src={c.image}
+          alt={c.name}
+          className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+        />
 
-      <div className="mt-2">
-        <p className="font-medium">{c.name}</p>
-        {c.parent && (
-          <p className="text-gray-500 text-xs">Üst: {c.parent.name}</p>
-        )}
-        {c.children?.length > 0 && (
-          <p className="text-gray-500 text-xs mt-1">
-            Alt Kategori: {c.children.map((ch) => ch.name).join(", ")}
-          </p>
-        )}
+        {/* Hover Layer */}
+        <div className="absolute inset-0 bg-white/70 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+          <FaEdit className="text-dark1 text-xl" />
+        </div>
+
+        {/* Sağ üst çöp simgesi */}
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            triggerDelete(c._id);
+          }}
+          className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity text-red-600 hover:text-red-800 z-10"
+        >
+          <FaTrashAlt />
+        </button>
       </div>
 
-      {/* 3 nokta menü */}
-      <button
-        className="absolute top-2 right-2 opacity-0 group-hover:opacity-100"
-        onClick={() => onEdit(c)}
-      >
-        <FaEllipsisV />
-      </button>
-      <div className="absolute top-8 right-2 hidden group-hover:block bg-white shadow rounded">
-        <button
-          onClick={() => onEdit(c)}
-          className="block px-2 py-1 hover:bg-gray-100 w-full text-left"
-        >
-          Düzenle
-        </button>
-        <button
-          onClick={() => triggerDelete(c._id)}
-          className="block px-2 py-1 hover:bg-gray-100 w-full text-left text-red-600"
-        >
-          Sil
-        </button>
+      {/* Bilgiler */}
+      <div className="p-4">
+        <h3 className="text-lg font-semibold text-dark1">{c.name}</h3>
+        {c.parent && (
+          <p className="text-sm text-gray-500">Üst Kategori: {c.parent.name}</p>
+        )}
+        {c.children?.length > 0 && (
+          <p className="text-sm text-gray-500 mt-1">
+            Alt Kategoriler:{" "}
+            <span className="text-gray-700">
+              {c.children.map((ch) => ch.name).join(", ")}
+            </span>
+          </p>
+        )}
       </div>
     </div>
   );

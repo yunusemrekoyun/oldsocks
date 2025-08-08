@@ -67,15 +67,22 @@ const Header = () => {
           {/* Sağ ikonlar */}
           <div className="flex items-center space-x-4">
             <div className="hidden md:flex space-x-3">
-              {[FaInstagram, FaFacebookF].map((Icon, i) => (
-                <a
-                  key={i}
-                  href="#"
-                  className="w-10 h-10 flex items-center justify-center border border-light3 rounded-full hover:border-brand transition"
-                >
-                  <Icon className="text-dark2 hover:text-brand text-sm" />
-                </a>
-              ))}
+              <a
+                href="https://www.instagram.com/oldscks/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-10 h-10 flex items-center justify-center border border-light3 rounded-full hover:border-brand transition"
+              >
+                <FaInstagram className="text-dark2 hover:text-brand text-sm" />
+              </a>
+              <a
+                href="https://www.facebook.com/Oldsockscollection/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-10 h-10 flex items-center justify-center border border-light3 rounded-full hover:border-brand transition"
+              >
+                <FaFacebookF className="text-dark2 hover:text-brand text-sm" />
+              </a>
             </div>
 
             <div

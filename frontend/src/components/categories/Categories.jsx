@@ -12,7 +12,11 @@ export default function Categories() {
       .get("/categories")
       .then((res) => {
         const roots = res.data.filter((c) => c.parent === null);
-        setCategories(roots);
+
+        // Karıştır ve ilk 4 tanesini seç
+        const randomFour = roots.sort(() => Math.random() - 0.5).slice(0, 4);
+
+        setCategories(randomFour);
       })
       .catch((err) => console.error("Kategoriler getirilirken hata:", err))
       .finally(() => setLoading(false));
@@ -28,7 +32,6 @@ export default function Categories() {
 
   return (
     <section className="bg-light2/60 backdrop-blur-sm py-10">
-      {" "}
       <div className="container mx-auto px-4">
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-6">
           {categories.map((c) => (

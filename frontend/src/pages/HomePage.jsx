@@ -10,12 +10,10 @@ const HomePage = () => (
   <>
     <Hero />
     <Categories />
-
     <ProductGrid />
     <SecondHero />
     <Campaigns />
     <Services />
-    {/* Buraya alt bölümler (New Arrival, Collection vs.) gelecek */}
   </>
 );
 

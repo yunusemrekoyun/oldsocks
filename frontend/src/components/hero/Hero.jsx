@@ -1,7 +1,7 @@
-// src/components/Hero.jsx
 import React, { useRef, useState, useEffect, useCallback } from "react";
 import { Swiper, SwiperSlide } from "swiper/react";
 import "swiper/css";
+import { Link } from "react-router-dom"; // <-- eklendi
 
 import hero1 from "../../assets/hero/hero1.mp4";
 import hero2 from "../../assets/hero/hero2.mp4";
@@ -29,7 +29,6 @@ export default function Hero() {
     return () => swiper.off("slideChange", onSlideChange);
   }, [onSlideChange]);
 
-  // Aktif video slide'ında autoplay'yi garantiye almak için
   useEffect(() => {
     const videos = document.querySelectorAll("video");
     videos.forEach((video, idx) => {
@@ -68,9 +67,12 @@ export default function Hero() {
                 <h1 className="text-4xl md:text-6xl lg:text-7xl font-serif font-bold text-white uppercase leading-tight">
                   Fashion <br /> Changing <br /> Always
                 </h1>
-                <button className="mt-8 px-8 py-3 bg-dark1 hover:bg-dark2 text-light1 font-medium rounded-full transition">
+                <Link
+                  to="/shop"
+                  className="mt-8 px-8 py-3 bg-dark1 hover:bg-dark2 text-light1 font-medium rounded-full transition"
+                >
                   Shop Now
-                </button>
+                </Link>
               </div>
             </div>
           </SwiperSlide>

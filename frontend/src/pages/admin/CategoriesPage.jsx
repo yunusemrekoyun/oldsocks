@@ -1,14 +1,13 @@
 // src/pages/admin/CategoriesPage.jsx
 import React, { useState, useEffect } from "react";
-import Window from "../../components/ui/Window";
 import CategoryListPanel from "./CategoryListPanel";
 import CategoryFormModal from "./CategoryFormModal";
 import api from "../../../api";
+import Window from "../../components/ui/Window";
 
 export default function CategoriesPage() {
   const [cats, setCats] = useState([]);
   const [activeCat, setActiveCat] = useState(null);
-  const [showList, setShowList] = useState(false);
   const [showForm, setShowForm] = useState(false);
 
   const fetchCats = async () => {
@@ -24,39 +23,34 @@ export default function CategoriesPage() {
     setActiveCat(null);
     setShowForm(true);
   };
+
   const openEdit = (c) => {
     setActiveCat(c);
     setShowForm(true);
   };
 
   return (
-    <div className="p-6 space-y-4">
-      <div className="flex gap-4">
+    <div className="p-6">
+      {/* Header */}
+      <div className="flex justify-between items-center mb-8">
+        <h1 className="text-3xl font-bold text-dark1">Kategoriler</h1>
         <button
           onClick={openNew}
-          className="px-4 py-2 bg-blue-100 rounded hover:bg-blue-200"
+          className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg shadow"
         >
-          Kategori Ekle
-        </button>
-        <button
-          onClick={() => setShowList((f) => !f)}
-          className="px-4 py-2 bg-green-100 rounded hover:bg-green-200"
-        >
-          {showList ? "Listeyi Gizle" : "Kategori Listesi"}
+          + Yeni Kategori
         </button>
       </div>
 
-      {showList && (
-        <Window title="Kategori Listesi" onClose={() => setShowList(false)}>
-          <CategoryListPanel
-            categories={cats}
-            onEdit={openEdit}
-            onDelete={fetchCats}
-            isFull
-          />
-        </Window>
-      )}
+      {/* Kategori Kartları */}
+      <CategoryListPanel
+        categories={cats}
+        onEdit={openEdit}
+        onDelete={fetchCats}
+        isFull
+      />
 
+      {/* Form Modal */}
       {showForm && (
         <Window
           title={activeCat ? "Kategori Düzenle" : "Yeni Kategori"}

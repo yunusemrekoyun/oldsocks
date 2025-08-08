@@ -32,7 +32,7 @@ export default function AdminLayout({ children }) {
     {
       label: "Ana Sayfa",
       icon: <HomeIcon className="w-5 h-5" />,
-      path: "/admin",
+      path: "/",
     },
     {
       label: "Kategoriler",
@@ -66,8 +66,10 @@ export default function AdminLayout({ children }) {
     },
   ];
 
-  const isActive = (path) => location.pathname.startsWith(path);
-
+  const isActive = (path) => {
+    if (path === "/") return location.pathname === "/";
+    return location.pathname.startsWith(path);
+  };
   const SidebarContent = (
     <Card className="h-full w-full p-4 shadow-xl">
       <Typography variant="h5" color="blue-gray" className="mb-6">
