@@ -9,7 +9,7 @@ import {
 } from "react-router-dom";
 
 import Layout from "./components/layout/Layout";
-import AdminLayout from "./components/layout/AdminLayout";
+import AdminLayout from "./admin/layout/AdminLayout";
 import RequireAdmin from "./components/auth/RequireAdmin";
 import RequireAuth from "./components/auth/RequireAuth";
 
@@ -27,18 +27,19 @@ import PaymentResultPage from "./pages/PaymentResultPage";
 import NotFoundPage from "./pages/NotFoundPage";
 
 // Admin sayfaları
-import ProductsPage from "./pages/admin/ProductsPage";
-import AdminUsersPage from "./pages/admin/UsersPage";
-import CategoriesPage from "./pages/admin/CategoriesPage";
-import CampaignsPage from "./pages/admin/CampaignsPage";
-import MiniCampaignsPage from "./pages/admin/MiniCampaignsPage";
-import BlogsPage from "./pages/admin/BlogsPage";
-import BlogCategoriesPage from "./pages/admin/BlogCategoriesPage";
-import CommentsPage from "./pages/admin/CommentsPage";
-import CommentRepliesPage from "./pages/admin/CommentRepliesPage";
-import InstagramPostsPage from "./pages/admin/InstagramPostsPage";
-import OrdersPage from "./pages/admin/OrdersPage";
-import ProductListPage from "./pages/admin/ProductListPage";
+import ProductsPage from "./admin/pages/ProductsPage";
+import UsersPage from "./admin/pages/UsersPage";
+import CategoriesPage from "./admin/pages/CategoriesPage";
+import CampaignsPage from "./admin/pages/CampaignsPage";
+import MiniCampaignsPage from "./admin/pages/MiniCampaignsPage";
+import BlogsPage from "./admin/pages/BlogsPage";
+import BlogCategoriesPage from "./admin/pages/BlogCategoriesPage";
+import CommentsPage from "./admin/pages/CommentsPage";
+import CommentRepliesPage from "./admin/pages/CommentRepliesPage";
+import InstagramPostsPage from "./admin/pages/InstagramPostsPage";
+import OrdersPage from "./admin/pages/OrdersPage";
+import ProductListPage from "./admin/pages/ProductListPage";
+import AdminUsersPage from "./admin/pages/UsersPage";
 export default function App() {
   return (
     <BrowserRouter>

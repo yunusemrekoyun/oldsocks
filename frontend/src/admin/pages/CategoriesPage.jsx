@@ -1,7 +1,7 @@
 // src/pages/admin/CategoriesPage.jsx
 import React, { useState, useEffect } from "react";
-import CategoryListPanel from "./CategoryListPanel";
-import CategoryFormModal from "./CategoryFormModal";
+import CategoryListPanel from "../panels/CategoryListPanel";
+import CategoryFormModal from "../modals/CategoryFormModal";
 import api from "../../../api";
 import Window from "../../components/ui/Window";
 

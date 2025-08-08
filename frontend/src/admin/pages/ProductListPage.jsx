@@ -3,10 +3,10 @@ import React, { useState, useEffect } from "react";
 import { FaEllipsisV } from "react-icons/fa";
 import api from "../../../api";
 import ToastAlert from "../../components/ui/ToastAlert";
-import ProductFormModal from "./ProductFormModal";
+import ProductFormModal from "../modals/ProductFormModal";
 import Window from "../../components/ui/Window";
-import EditProductForm from "./EditProductForm";
-import AddNewColorForm from "./AddNewColorForm";
+import EditProductForm from "../forms/EditProductForm";
+import AddNewColorForm from "../forms/AddNewColorForm";
 
 export default function ProductListPage() {
   const [products, setProducts] = useState([]);

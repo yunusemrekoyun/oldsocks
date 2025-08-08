@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import AdminLayout from "../../components/layout/AdminLayout";
+import AdminLayout from "../layout/AdminLayout";
 import api from "../../../api";
 import { Listbox } from "@headlessui/react";
 

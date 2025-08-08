@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
-import ProductFormModal from "./ProductFormModal";
-import ProductListPanel from "./ProductListPanel";
+import ProductFormModal from "../modals/ProductFormModal";
+import ProductListPanel from "../panels/ProductListPanel";
 import Window from "../../components/ui/Window";
 import api from "../../../api";
 
