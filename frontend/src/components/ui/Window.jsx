@@ -1,48 +1,90 @@
+// src/components/ui/Window.jsx
 import React, { useState, useRef, useEffect } from "react";
 
-export default function Window({ title, children, onClose }) {
+export default function Window({ title, children, onClose, footer }) {
   const [isFull, setIsFull] = useState(false);
-  const ref = useRef();
+  const ref = useRef(null);
 
-  // Dışarı tıklayınca kapatma
+  // Dışarı tıklayınca kapat
   useEffect(() => {
-    function handleClickOutside(e) {
+    const handleClickOutside = (e) => {
       if (ref.current && !ref.current.contains(e.target)) {
         onClose?.();
       }
-    }
+    };
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [onClose]);
 
+  // ESC ile kapat
+  useEffect(() => {
+    const onKey = (e) => e.key === "Escape" && onClose?.();
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+    <div className="fixed inset-0 z-[999] flex items-center justify-center p-2 sm:p-4">
+      {/* Backdrop */}
+      <div
+        className="absolute inset-0 bg-black/50"
+        onClick={onClose}
+        aria-hidden
+      />
+
+      {/* Panel */}
       <div
         ref={ref}
-        className={`
-          bg-white rounded-xl shadow-xl border 
-          flex flex-col transition-all duration-300
-          ${isFull ? "w-full h-full p-6" : "w-full max-w-3xl max-h-[90vh] p-6"}
-        `}
+        role="dialog"
+        aria-modal="true"
+        className={[
+          "relative bg-white shadow-xl border flex flex-col transition-all duration-300",
+          // boyutlandırma
+          isFull
+            ? "w-full h-full rounded-none sm:rounded-2xl"
+            : "w-full max-w-[100%] sm:max-w-4xl md:max-w-5xl max-h-[95vh] sm:max-h-[90vh] rounded-xl",
+        ].join(" ")}
       >
-        {/* Başlık alanı */}
-        <div
-          className="flex justify-between items-center mb-4 cursor-move"
-          onClick={() => setIsFull((f) => !f)}
-        >
-          <h2 className="text-lg font-semibold">{title}</h2>
-          {onClose && (
+        {/* Header (sticky) */}
+        <div className="sticky top-0 z-10 bg-white border-b px-3 sm:px-6 py-3 sm:py-4 flex items-center justify-between">
+          <h2
+            className="text-base sm:text-lg font-semibold truncate"
+            title={typeof title === "string" ? title : undefined}
+          >
+            {title}
+          </h2>
+
+          <div className="flex items-center gap-2">
             <button
-              onClick={onClose}
-              className="text-gray-600 hover:text-gray-900 text-xl"
+              type="button"
+              onClick={() => setIsFull((f) => !f)}
+              className="px-3 py-1.5 rounded-lg border text-sm hover:bg-gray-50"
+              title={isFull ? "Pencereyi küçült" : "Tam ekran yap"}
             >
-              ✕
+              {isFull ? "⇲" : "⇱"}
             </button>
-          )}
+            {onClose && (
+              <button
+                type="button"
+                onClick={onClose}
+                className="px-3 py-1.5 rounded-lg border text-sm hover:bg-gray-50"
+                title="Kapat"
+              >
+                ✕
+              </button>
+            )}
+          </div>
         </div>
 
-        {/* İçerik */}
-        <div className="flex-1 overflow-auto">{children}</div>
+        {/* Body (scrollable) */}
+        <div className="px-3 sm:px-6 py-4 overflow-auto">{children}</div>
+
+        {/* Footer (opsiyonel, sticky) */}
+        {footer && (
+          <div className="sticky bottom-0 z-10 bg-white border-t px-3 sm:px-6 py-3">
+            {footer}
+          </div>
+        )}
       </div>
     </div>
   );

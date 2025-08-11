@@ -1,4 +1,5 @@
-import React, { useEffect, useState } from "react";
+// src/pages/admin/BlogCategoriesPage.jsx
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   Card,
   CardBody,
@@ -9,21 +10,17 @@ import {
   DialogBody,
   DialogFooter,
   Input,
-  Menu,
-  MenuHandler,
-  MenuList,
-  MenuItem,
-  IconButton,
 } from "@material-tailwind/react";
 import {
-  EllipsisVerticalIcon,
+  MagnifyingGlassIcon,
   PencilIcon,
   TrashIcon,
+  ArrowPathIcon,
 } from "@heroicons/react/24/outline";
 import api from "../../../api";
 import ToastAlert from "../../components/ui/ToastAlert";
 
-/* ────────── Basit Silme Onay Modali ────────── */
+/* ────────── Silme Onay Modali ────────── */
 const ConfirmModal = ({ open, onClose, onConfirm, message }) => {
   if (!open) return null;
   return (
@@ -43,9 +40,54 @@ const ConfirmModal = ({ open, onClose, onConfirm, message }) => {
   );
 };
 
+/* ────────── Badge & Skeleton ────────── */
+const Badge = ({ children, color = "gray" }) => {
+  const map = {
+    blue: "bg-blue-100 text-blue-800",
+    green: "bg-green-100 text-green-800",
+    gray: "bg-gray-100 text-gray-700",
+    amber: "bg-amber-100 text-amber-800",
+    red: "bg-red-100 text-red-800",
+  };
+  return (
+    <span
+      className={`inline-flex items-center px-2 py-0.5 rounded text-xs ${map[color]}`}
+    >
+      {children}
+    </span>
+  );
+};
+
+const CardSkeleton = () => (
+  <div className="animate-pulse rounded-xl border border-gray-100 overflow-hidden">
+    <div className="h-24 bg-gray-200" />
+    <div className="p-4 space-y-2">
+      <div className="h-4 bg-gray-200 rounded w-2/3" />
+      <div className="h-3 bg-gray-200 rounded w-1/2" />
+      <div className="h-7 bg-gray-200 rounded w-24 mt-2" />
+    </div>
+  </div>
+);
+
+/* ────────── utils ────────── */
+const slugify = (s) =>
+  s
+    .toLowerCase()
+    .trim()
+    .replace(/\s+/g, "-")
+    .replace(/[^\w-ğüşöçıİĞÜŞÖÇ]/g, "")
+    .replace(/-+/g, "-");
+
 export default function BlogCategoriesPage() {
+  /* ---------------- state ---------------- */
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
+
+  // filtre/arama/sıralama
+  const [query, setQuery] = useState("");
+  const [debouncedQuery, setDebouncedQuery] = useState("");
+  const [sortBy, setSortBy] = useState("newest"); // newest | oldest | az | za
+  const searchRef = useRef(null);
 
   /* form dialog */
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -61,11 +103,7 @@ export default function BlogCategoriesPage() {
   const [toast, setToast] = useState(null); // { msg, type }
   const [deleteId, setDeleteId] = useState(null); // silinecek kategori id
 
-  /* ────────── Verileri yükle ────────── */
-  useEffect(() => {
-    fetchCategories();
-  }, []);
-
+  /* ---------------- fetch ---------------- */
   const fetchCategories = async () => {
     setLoading(true);
     try {
@@ -79,7 +117,20 @@ export default function BlogCategoriesPage() {
     }
   };
 
-  /* ────────── Yeni / düzenle ────────── */
+  useEffect(() => {
+    fetchCategories();
+  }, []);
+
+  /* debounce */
+  useEffect(() => {
+    const t = setTimeout(
+      () => setDebouncedQuery(query.trim().toLowerCase()),
+      250
+    );
+    return () => clearTimeout(t);
+  }, [query]);
+
+  /* ---------------- Yeni / Düzenle ---------------- */
   const openNew = () => {
     setForm({ _id: null, name: "", slug: "", description: "" });
     setDirty(false);
@@ -122,7 +173,7 @@ export default function BlogCategoriesPage() {
     }
   };
 
-  /* ────────── Silme akışı ────────── */
+  /* ---------------- Silme akışı ---------------- */
   const triggerDelete = (id) => setDeleteId(id);
 
   const handleDeleteConfirmed = async () => {
@@ -138,58 +189,180 @@ export default function BlogCategoriesPage() {
     }
   };
 
-  /* ────────── Render ────────── */
-  if (loading) return <div>Yükleniyor…</div>;
+  /* ---------------- türetilmiş liste ---------------- */
+  const filtered = useMemo(() => {
+    let list = [...categories];
+
+    if (debouncedQuery) {
+      list = list.filter((c) => {
+        const blob = `${c.name} ${c.slug} ${c.description || ""}`.toLowerCase();
+        return blob.includes(debouncedQuery);
+      });
+    }
+
+    list.sort((a, b) => {
+      if (sortBy === "az") return a.name.localeCompare(b.name, "tr");
+      if (sortBy === "za") return b.name.localeCompare(a.name, "tr");
+      const A = a.createdAt || a._id;
+      const B = b.createdAt || b._id;
+      return sortBy === "newest" ? (A < B ? 1 : -1) : A > B ? 1 : -1;
+    });
+
+    return list;
+  }, [categories, debouncedQuery, sortBy]);
+
+  /* ---------------- render ---------------- */
+  if (loading) {
+    return (
+      <div className="p-6 space-y-6">
+        <div className="flex justify-between items-center">
+          <div>
+            <Typography variant="h4">Blog Kategorileri</Typography>
+            <Typography variant="small" className="text-gray-600">
+              Arayın, sıralayın, yönetin.
+            </Typography>
+          </div>
+          <Button color="blue" onClick={openNew}>
+            + Yeni Kategori
+          </Button>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <CardSkeleton key={i} />
+          ))}
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div>
+    <div className="p-6 space-y-6">
       {/* Üst bar */}
-      <div className="flex justify-between items-center mb-6">
-        <Typography variant="h4">Blog Kategorileri</Typography>
-        <Button color="blue" onClick={openNew}>
-          + Yeni Kategori
-        </Button>
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <Typography variant="h4">Blog Kategorileri</Typography>
+          <Badge color="blue">{categories.length}</Badge>
+        </div>
+
+        <div className="flex flex-col md:flex-row gap-3 md:items-center">
+          {/* search */}
+          <div className="relative">
+            <Input
+              inputRef={searchRef}
+              icon={<MagnifyingGlassIcon className="h-5 w-5" />}
+              label="Ara (ad, slug, açıklama)"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              crossOrigin=""
+            />
+          </div>
+
+          {/* sort */}
+          <select
+            className="border rounded-lg p-2 text-sm"
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value)}
+          >
+            <option value="newest">En Yeni</option>
+            <option value="oldest">En Eski</option>
+            <option value="az">Ad (A→Z)</option>
+            <option value="za">Ad (Z→A)</option>
+          </select>
+
+          <Button color="blue" onClick={openNew}>
+            + Yeni Kategori
+          </Button>
+        </div>
       </div>
 
-      {/* Kartlar */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {categories.map((cat) => (
-          <Card key={cat._id} className="relative">
-            <Menu placement="bottom-end">
-              <MenuHandler>
-                <IconButton
+      {/* Boş durum */}
+      {filtered.length === 0 ? (
+        <div className="rounded-xl border border-dashed p-12 text-center">
+          <Typography variant="h6" className="mb-2">
+            Kayıt bulunamadı
+          </Typography>
+          <Typography className="text-gray-600 mb-4">
+            Filtreleri temizleyin veya yeni bir kategori ekleyin.
+          </Typography>
+          <Button color="blue" onClick={openNew}>
+            Kategori Oluştur
+          </Button>
+        </div>
+      ) : (
+        /* Kartlar */
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {filtered.map((cat) => (
+            <Card
+              key={cat._id}
+              className="relative overflow-hidden group border border-gray-100 hover:shadow-xl transition-shadow"
+            >
+              {/* hover aksiyon şeridi */}
+              <div className="absolute inset-x-0 top-0 h-0 group-hover:h-12 bg-white/80 backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-all flex items-center justify-end px-3 gap-2 z-10">
+                <Button
                   variant="text"
-                  className="absolute top-2 right-2"
-                  ripple={false}
+                  size="sm"
+                  className="flex items-center gap-1"
+                  onClick={() => openEdit(cat)}
                 >
-                  <EllipsisVerticalIcon className="w-5 h-5" />
-                </IconButton>
-              </MenuHandler>
-              <MenuList>
-                <MenuItem onClick={() => openEdit(cat)}>
-                  <PencilIcon className="w-4 h-4 mr-2" /> Güncelle
-                </MenuItem>
-                <MenuItem onClick={() => triggerDelete(cat._id)}>
-                  <TrashIcon className="w-4 h-4 mr-2" /> Sil
-                </MenuItem>
-              </MenuList>
-            </Menu>
-            <CardBody>
-              <Typography variant="h6" className="mb-2">
-                {cat.name}
-              </Typography>
-              <Typography className="text-gray-600 text-sm">
-                {cat.slug}
-              </Typography>
-              {cat.description && (
-                <Typography className="text-gray-500 text-xs mt-1">
-                  {cat.description}
-                </Typography>
-              )}
-            </CardBody>
-          </Card>
-        ))}
-      </div>
+                  <PencilIcon className="w-4 h-4" />
+                  Düzenle
+                </Button>
+                <Button
+                  variant="text"
+                  size="sm"
+                  className="flex items-center gap-1 text-red-600"
+                  onClick={() => triggerDelete(cat._id)}
+                >
+                  <TrashIcon className="w-4 h-4" />
+                  Sil
+                </Button>
+              </div>
+
+              <CardBody>
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <Typography variant="h6" className="line-clamp-1">
+                      {cat.name}
+                    </Typography>
+                    <Typography className="text-gray-600 text-sm break-all">
+                      {cat.slug}
+                    </Typography>
+                  </div>
+
+                  {/* mobil görünür aksiyonlar */}
+                  <div className="flex md:hidden items-center gap-1">
+                    <button
+                      onClick={() => openEdit(cat)}
+                      className="inline-flex items-center gap-1 px-2 py-1 rounded border text-xs hover:bg-gray-50"
+                      title="Düzenle"
+                    >
+                      <PencilIcon className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={() => triggerDelete(cat._id)}
+                      className="inline-flex items-center gap-1 px-2 py-1 rounded border border-red-200 text-red-600 text-xs hover:bg-red-50"
+                      title="Sil"
+                    >
+                      <TrashIcon className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+
+                {cat.description ? (
+                  <Typography className="text-gray-500 text-sm mt-2 line-clamp-2">
+                    {cat.description}
+                  </Typography>
+                ) : (
+                  <Typography className="text-gray-400 text-sm mt-2">
+                    Açıklama eklenmemiş
+                  </Typography>
+                )}
+              </CardBody>
+            </Card>
+          ))}
+        </div>
+      )}
 
       {/* Form dialog */}
       <Dialog open={dialogOpen} size="md" handler={() => setDialogOpen(false)}>
@@ -197,22 +370,48 @@ export default function BlogCategoriesPage() {
           {form._id ? "Kategori Güncelle" : "Yeni Kategori"}
         </DialogHeader>
         <DialogBody divider className="space-y-4">
+          {/* Ad */}
           <Input
-            label="Ad"
+            label="Ad *"
             value={form.name}
             onChange={(e) => {
-              setForm((f) => ({ ...f, name: e.target.value }));
+              const val = e.target.value;
+              setForm((f) => ({
+                ...f,
+                name: val,
+                // slug boşsa adı slug'a öner
+                slug: f.slug ? f.slug : slugify(val),
+              }));
               setDirty(true);
             }}
           />
-          <Input
-            label="Slug"
-            value={form.slug}
-            onChange={(e) => {
-              setForm((f) => ({ ...f, slug: e.target.value }));
-              setDirty(true);
-            }}
-          />
+
+          {/* Slug + buton */}
+          <div className="flex items-end gap-2">
+            <div className="flex-1">
+              <Input
+                label="Slug *"
+                value={form.slug}
+                onChange={(e) => {
+                  setForm((f) => ({ ...f, slug: slugify(e.target.value) }));
+                  setDirty(true);
+                }}
+              />
+            </div>
+            <Button
+              variant="outlined"
+              className="shrink-0"
+              onClick={() =>
+                setForm((f) => ({ ...f, slug: slugify(f.name || f.slug) }))
+              }
+              title="Addan slug üret"
+            >
+              <ArrowPathIcon className="w-4 h-4 mr-1 inline-block" />
+              Slug üret
+            </Button>
+          </div>
+
+          {/* Açıklama */}
           <Input
             label="Açıklama"
             value={form.description}
@@ -221,6 +420,13 @@ export default function BlogCategoriesPage() {
               setDirty(true);
             }}
           />
+
+          {/* küçük uyarı */}
+          {!(form.name.trim() && form.slug.trim()) && (
+            <Typography variant="small" className="text-red-600">
+              Ad ve slug zorunludur.
+            </Typography>
+          )}
         </DialogBody>
         <DialogFooter>
           <Button
@@ -230,7 +436,11 @@ export default function BlogCategoriesPage() {
           >
             İptal
           </Button>
-          <Button disabled={!dirty} onClick={handleSave} color="blue">
+          <Button
+            disabled={!dirty || !(form.name.trim() && form.slug.trim())}
+            onClick={handleSave}
+            color="blue"
+          >
             Kaydet
           </Button>
         </DialogFooter>

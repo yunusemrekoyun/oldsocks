@@ -1,5 +1,5 @@
-// --- Updated src/components/layout/AdminLayout.jsx ---
-import React, { useState } from "react";
+// src/components/layout/AdminLayout.jsx
+import React, { useEffect, useMemo, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import {
   Card,
@@ -8,6 +8,7 @@ import {
   ListItemPrefix,
   Drawer,
   IconButton,
+  Input,
 } from "@material-tailwind/react";
 import {
   TagIcon,
@@ -19,214 +20,340 @@ import {
   PencilIcon as BlogIcon,
   ChatBubbleLeftEllipsisIcon,
   CameraIcon,
+  ChevronDownIcon,
+  ChevronRightIcon,
 } from "@heroicons/react/24/solid";
 
+/* --------- Küçük yardımcılar --------- */
+const cx = (...cls) => cls.filter(Boolean).join(" ");
+
+const NavBadge = ({ children }) => (
+  <span className="ml-auto text-[10px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-600">
+    {children}
+  </span>
+);
+
+/* --------- Ana Layout --------- */
 export default function AdminLayout({ children }) {
-  const [open, setOpen] = useState(false);
+  const location = useLocation();
+
+  const [open, setOpen] = useState(false); // mobile drawer
   const [blogMenuOpen, setBlogMenuOpen] = useState(false);
   const [commentsMenuOpen, setCommentsMenuOpen] = useState(false);
   const [instagramMenuOpen, setInstagramMenuOpen] = useState(false);
-  const location = useLocation();
 
-  const navItems = [
-    {
-      label: "Ana Sayfa",
-      icon: <HomeIcon className="w-5 h-5" />,
-      path: "/",
-    },
-    {
-      label: "Kategoriler",
-      icon: <TagIcon className="w-5 h-5" />,
-      path: "/admin/categories",
-    },
-    {
-      label: "Ürünler",
-      icon: <ShoppingBagIcon className="w-5 h-5" />,
-      path: "/admin/products",
-    },
-    {
-      label: "Kullanıcılar",
-      icon: <UserCircleIcon className="w-5 h-5" />,
-      path: "/admin/users",
-    },
-    {
-      label: "Kampanyalar",
-      icon: <TagIcon className="w-5 h-5" />,
-      path: "/admin/campaigns",
-    },
-    {
-      label: "Mini Kampanyalar",
-      icon: <TagIcon className="w-5 h-5" />,
-      path: "/admin/minicampaigns",
-    },
-    {
-      label: "Siparişler",
-      icon: <ShoppingBagIcon className="w-5 h-5" />,
-      path: "/admin/orders",
-    },
-  ];
-
+  // Aktif rota kontrolü
   const isActive = (path) => {
     if (path === "/") return location.pathname === "/";
     return location.pathname.startsWith(path);
   };
-  const SidebarContent = (
-    <Card className="h-full w-full p-4 shadow-xl">
-      <Typography variant="h5" color="blue-gray" className="mb-6">
-        Admin Panel
-      </Typography>
-      <List className="space-y-1">
-        {navItems.map(({ label, icon, path }) => (
-          <Link
-            key={path}
-            to={path}
-            onClick={() => {
-              setOpen(false);
-              setBlogMenuOpen(false);
-              setCommentsMenuOpen(false);
-              setInstagramMenuOpen(false);
-            }}
-            className={`flex items-center gap-3 rounded px-3 py-2 text-sm font-medium transition
-              ${
-                isActive(path)
-                  ? "bg-blue-100 text-blue-700"
-                  : "hover:bg-gray-100 text-gray-800"
-              }`}
-          >
-            <ListItemPrefix>{icon}</ListItemPrefix>
-            {label}
-          </Link>
-        ))}
 
-        {/* Bloglar menüsü */}
-        <button
-          onClick={() => setBlogMenuOpen((o) => !o)}
-          className={`w-full text-left flex items-center gap-3 rounded px-3 py-2 text-sm font-medium transition
-            ${
+  // İlk yüklemede ilgili alt menüyü açık getir
+  useEffect(() => {
+    setBlogMenuOpen(
+      isActive("/admin/blogs") || isActive("/admin/blog-categories")
+    );
+    setCommentsMenuOpen(
+      isActive("/admin/comments") || isActive("/admin/replies")
+    );
+    setInstagramMenuOpen(isActive("/admin/instagram-posts"));
+  }, []); // eslint-disable-line
+
+  const navItems = useMemo(
+    () => [
+      { label: "Ana Sayfa", icon: <HomeIcon className="w-5 h-5" />, path: "/" },
+      {
+        label: "Kategoriler",
+        icon: <TagIcon className="w-5 h-5" />,
+        path: "/admin/categories",
+      },
+      {
+        label: "Ürünler",
+        icon: <ShoppingBagIcon className="w-5 h-5" />,
+        path: "/admin/products",
+      },
+      {
+        label: "Kullanıcılar",
+        icon: <UserCircleIcon className="w-5 h-5" />,
+        path: "/admin/users",
+      },
+      {
+        label: "Kampanyalar",
+        icon: <TagIcon className="w-5 h-5" />,
+        path: "/admin/campaigns",
+      },
+      {
+        label: "Mini Kampanyalar",
+        icon: <TagIcon className="w-5 h-5" />,
+        path: "/admin/minicampaigns",
+      },
+      {
+        label: "Siparişler",
+        icon: <ShoppingBagIcon className="w-5 h-5" />,
+        path: "/admin/orders",
+      },
+    ],
+    []
+  );
+
+  /* --------- Sidebar Bileşeni --------- */
+  const SidebarContent = (
+    <Card className="h-full w-full p-4 shadow-xl rounded-none">
+      {/* Logo / Başlık */}
+      <div className="flex items-center justify-between mb-4">
+        <Typography variant="h5" color="blue-gray">
+          Admin Panel
+        </Typography>
+      </div>
+
+      {/* Küçük arama */}
+      <div className="mb-3">
+        <Input label="Menüde ara" crossOrigin="" />
+      </div>
+
+      {/* Scroll alanı */}
+      <div
+        className="overflow-y-auto pr-1 custom-scrollbar"
+        style={{ maxHeight: "calc(100vh - 140px)" }}
+      >
+        <List className="space-y-1">
+          {/* Düz linkler */}
+          {navItems.map(({ label, icon, path }) => {
+            const active = isActive(path);
+            return (
+              <Link
+                key={path}
+                to={path}
+                onClick={() => setOpen(false)}
+                className={cx(
+                  "relative flex items-center gap-3 rounded px-3 py-2 text-sm font-medium transition",
+                  active
+                    ? "bg-blue-50 text-blue-700"
+                    : "hover:bg-gray-100 text-gray-800"
+                )}
+              >
+                {/* Aktif sol şerit */}
+                <span
+                  className={cx(
+                    "absolute left-0 top-0 h-full w-1 rounded-r",
+                    active ? "bg-blue-600" : "bg-transparent"
+                  )}
+                />
+                <ListItemPrefix>{icon}</ListItemPrefix>
+                <span className="truncate">{label}</span>
+              </Link>
+            );
+          })}
+
+          {/* Bloglar menüsü */}
+          <button
+            onClick={() => setBlogMenuOpen((o) => !o)}
+            className={cx(
+              "w-full text-left relative flex items-center gap-3 rounded px-3 py-2 text-sm font-medium transition",
               isActive("/admin/blogs") || isActive("/admin/blog-categories")
-                ? "bg-blue-100 text-blue-700"
+                ? "bg-blue-50 text-blue-700"
                 : "hover:bg-gray-100 text-gray-800"
-            }`}
-        >
-          <ListItemPrefix>
-            <BlogIcon className="w-5 h-5" />
-          </ListItemPrefix>
-          Bloglar
-        </button>
-        {blogMenuOpen && (
-          <div className="pl-10 space-y-1">
+            )}
+          >
+            <span
+              className={cx(
+                "absolute left-0 top-0 h-full w-1 rounded-r",
+                isActive("/admin/blogs") || isActive("/admin/blog-categories")
+                  ? "bg-blue-600"
+                  : "bg-transparent"
+              )}
+            />
+            <ListItemPrefix>
+              <BlogIcon className="w-5 h-5" />
+            </ListItemPrefix>
+            <span className="truncate">Bloglar</span>
+            <span className="ml-auto">
+              {blogMenuOpen ? (
+                <ChevronDownIcon className="w-4 h-4" />
+              ) : (
+                <ChevronRightIcon className="w-4 h-4" />
+              )}
+            </span>
+          </button>
+          <div
+            className={cx(
+              "pl-10 space-y-1 overflow-hidden transition-[max-height] duration-300",
+              blogMenuOpen ? "max-h-40" : "max-h-0"
+            )}
+          >
             <Link
               to="/admin/blogs"
               onClick={() => setOpen(false)}
-              className={`block rounded px-3 py-1 text-sm transition
-                ${
-                  isActive("/admin/blogs")
-                    ? "bg-blue-50 text-blue-700 font-semibold"
-                    : "hover:bg-gray-100 text-gray-800"
-                }`}
+              className={cx(
+                "block rounded px-3 py-1 text-sm transition",
+                isActive("/admin/blogs")
+                  ? "bg-blue-50 text-blue-700 font-semibold"
+                  : "hover:bg-gray-100 text-gray-800"
+              )}
             >
               Bloglar
             </Link>
             <Link
               to="/admin/blog-categories"
               onClick={() => setOpen(false)}
-              className={`block rounded px-3 py-1 text-sm transition
-                ${
-                  isActive("/admin/blog-categories")
-                    ? "bg-blue-50 text-blue-700 font-semibold"
-                    : "hover:bg-gray-100 text-gray-800"
-                }`}
+              className={cx(
+                "block rounded px-3 py-1 text-sm transition",
+                isActive("/admin/blog-categories")
+                  ? "bg-blue-50 text-blue-700 font-semibold"
+                  : "hover:bg-gray-100 text-gray-800"
+              )}
             >
               Blog Kategorileri
             </Link>
           </div>
-        )}
 
-        {/* Yorumlar menüsü */}
-        <button
-          onClick={() => setCommentsMenuOpen((o) => !o)}
-          className={`w-full text-left flex items-center gap-3 rounded px-3 py-2 text-sm font-medium transition
-            ${
+          {/* Yorumlar menüsü */}
+          <button
+            onClick={() => setCommentsMenuOpen((o) => !o)}
+            className={cx(
+              "w-full text-left relative flex items-center gap-3 rounded px-3 py-2 text-sm font-medium transition",
               isActive("/admin/comments") || isActive("/admin/replies")
-                ? "bg-blue-100 text-blue-700"
+                ? "bg-blue-50 text-blue-700"
                 : "hover:bg-gray-100 text-gray-800"
-            }`}
-        >
-          <ListItemPrefix>
-            <ChatBubbleLeftEllipsisIcon className="w-5 h-5" />
-          </ListItemPrefix>
-          Yorumlar
-        </button>
-        {commentsMenuOpen && (
-          <div className="pl-10 space-y-1">
+            )}
+          >
+            <span
+              className={cx(
+                "absolute left-0 top-0 h-full w-1 rounded-r",
+                isActive("/admin/comments") || isActive("/admin/replies")
+                  ? "bg-blue-600"
+                  : "bg-transparent"
+              )}
+            />
+            <ListItemPrefix>
+              <ChatBubbleLeftEllipsisIcon className="w-5 h-5" />
+            </ListItemPrefix>
+            <span className="truncate">Yorumlar</span>
+            <NavBadge>2</NavBadge>
+            <span className="ml-1">
+              {commentsMenuOpen ? (
+                <ChevronDownIcon className="w-4 h-4" />
+              ) : (
+                <ChevronRightIcon className="w-4 h-4" />
+              )}
+            </span>
+          </button>
+          <div
+            className={cx(
+              "pl-10 space-y-1 overflow-hidden transition-[max-height] duration-300",
+              commentsMenuOpen ? "max-h-40" : "max-h-0"
+            )}
+          >
             <Link
               to="/admin/comments"
               onClick={() => setOpen(false)}
-              className={`block rounded px-3 py-1 text-sm transition
-                ${
-                  isActive("/admin/comments")
-                    ? "bg-blue-50 text-blue-700 font-semibold"
-                    : "hover:bg-gray-100 text-gray-800"
-                }`}
+              className={cx(
+                "block rounded px-3 py-1 text-sm transition",
+                isActive("/admin/comments")
+                  ? "bg-blue-50 text-blue-700 font-semibold"
+                  : "hover:bg-gray-100 text-gray-800"
+              )}
             >
               Yorumlar
             </Link>
             <Link
               to="/admin/replies"
               onClick={() => setOpen(false)}
-              className={`block rounded px-3 py-1 text-sm transition
-                ${
-                  isActive("/admin/replies")
-                    ? "bg-blue-50 text-blue-700 font-semibold"
-                    : "hover:bg-gray-100 text-gray-800"
-                }`}
+              className={cx(
+                "block rounded px-3 py-1 text-sm transition",
+                isActive("/admin/replies")
+                  ? "bg-blue-50 text-blue-700 font-semibold"
+                  : "hover:bg-gray-100 text-gray-800"
+              )}
             >
               Yanıtlar
             </Link>
           </div>
-        )}
 
-        {/* Instagram menüsü */}
-        <button
-          onClick={() => setInstagramMenuOpen((o) => !o)}
-          className={`w-full text-left flex items-center gap-3 rounded px-3 py-2 text-sm font-medium transition
-            ${
+          {/* Instagram menüsü */}
+          <button
+            onClick={() => setInstagramMenuOpen((o) => !o)}
+            className={cx(
+              "w-full text-left relative flex items-center gap-3 rounded px-3 py-2 text-sm font-medium transition",
               isActive("/admin/instagram-posts")
-                ? "bg-blue-100 text-blue-700"
+                ? "bg-blue-50 text-blue-700"
                 : "hover:bg-gray-100 text-gray-800"
-            }`}
-        >
-          <ListItemPrefix>
-            <CameraIcon className="w-5 h-5" />
-          </ListItemPrefix>
-          Instagram
-        </button>
-        {instagramMenuOpen && (
-          <div className="pl-10 space-y-1">
+            )}
+          >
+            <span
+              className={cx(
+                "absolute left-0 top-0 h-full w-1 rounded-r",
+                isActive("/admin/instagram-posts")
+                  ? "bg-blue-600"
+                  : "bg-transparent"
+              )}
+            />
+            <ListItemPrefix>
+              <CameraIcon className="w-5 h-5" />
+            </ListItemPrefix>
+            <span className="truncate">Instagram</span>
+            <span className="ml-auto">
+              {instagramMenuOpen ? (
+                <ChevronDownIcon className="w-4 h-4" />
+              ) : (
+                <ChevronRightIcon className="w-4 h-4" />
+              )}
+            </span>
+          </button>
+          <div
+            className={cx(
+              "pl-10 space-y-1 overflow-hidden transition-[max-height] duration-300",
+              instagramMenuOpen ? "max-h-24" : "max-h-0"
+            )}
+          >
             <Link
               to="/admin/instagram-posts"
               onClick={() => setOpen(false)}
-              className={`block rounded px-3 py-1 text-sm transition
-                ${
-                  isActive("/admin/instagram-posts")
-                    ? "bg-blue-50 text-blue-700 font-semibold"
-                    : "hover:bg-gray-100 text-gray-800"
-                }`}
+              className={cx(
+                "block rounded px-3 py-1 text-sm transition",
+                isActive("/admin/instagram-posts")
+                  ? "bg-blue-50 text-blue-700 font-semibold"
+                  : "hover:bg-gray-100 text-gray-800"
+              )}
             >
               Gönderiler
             </Link>
           </div>
-        )}
-      </List>
+        </List>
+      </div>
     </Card>
   );
 
+  /* --------- Breadcrumb / Topbar --------- */
+  const crumbs = useMemo(() => {
+    const parts = location.pathname.split("/").filter(Boolean);
+    const map = {
+      admin: "Admin",
+      categories: "Kategoriler",
+      products: "Ürünler",
+      users: "Kullanıcılar",
+      campaigns: "Kampanyalar",
+      minicampaigns: "Mini Kampanyalar",
+      orders: "Siparişler",
+      blogs: "Bloglar",
+      "blog-categories": "Blog Kategorileri",
+      comments: "Yorumlar",
+      replies: "Yanıtlar",
+      "instagram-posts": "Instagram",
+    };
+    return parts.map((p) => map[p] || p);
+  }, [location.pathname]);
+
   return (
     <div className="min-h-screen flex bg-gray-50">
-      <div className="hidden md:block w-64 sticky top-0">{SidebarContent}</div>
+      {/* Desktop Sidebar */}
+      <aside className="hidden md:block w-64 sticky top-0 h-screen">
+        {SidebarContent}
+      </aside>
 
+      {/* Mobile Drawer */}
       <Drawer open={open} onClose={() => setOpen(false)} className="md:hidden">
-        <div className="p-4 flex justify-between items-center">
+        <div className="p-4 flex justify-between items-center border-b">
           <Typography variant="h6">Menü</Typography>
           <IconButton variant="text" onClick={() => setOpen(false)}>
             <XMarkIcon className="h-5 w-5 text-gray-700" />
@@ -235,13 +362,58 @@ export default function AdminLayout({ children }) {
         {SidebarContent}
       </Drawer>
 
+      {/* Floating burger on mobile */}
       <div className="md:hidden fixed top-4 left-4 z-[999]">
-        <IconButton variant="text" onClick={() => setOpen(true)}>
+        <IconButton
+          variant="text"
+          onClick={() => setOpen(true)}
+          aria-label="Menüyü aç"
+        >
           <Bars3Icon className="h-6 w-6 text-gray-800" />
         </IconButton>
       </div>
 
-      <main className="flex-1 p-6 pt-16 md:pt-6">{children}</main>
+      {/* Content area */}
+      <div className="flex-1 flex flex-col min-w-0">
+        {/* Top App Bar */}
+        <header className="sticky top-0 z-[50] bg-gray-50/80 backdrop-blur supports-[backdrop-filter]:bg-gray-50/60 border-b">
+          <div className="flex items-center justify-between px-4 md:px-6 h-14">
+            {/* Breadcrumb & Title */}
+            <div className="min-w-0">
+              <div className="text-xs text-gray-500 truncate">
+                {crumbs.length ? crumbs.join(" / ") : "Ana Sayfa"}
+              </div>
+              <h2 className="text-lg font-semibold text-gray-800 truncate">
+                {crumbs[crumbs.length - 1] || "Ana Sayfa"}
+              </h2>
+            </div>
+
+            {/* Right actions (placeholder) */}
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center text-[10px] text-gray-600">
+                ADM
+              </div>
+            </div>
+          </div>
+        </header>
+
+        {/* Page body */}
+        <main className="flex-1 p-4 md:p-6">{children}</main>
+
+        {/* Footer (opsiyonel) */}
+        <footer className="px-6 py-4 text-xs text-gray-500">
+          © {new Date().getFullYear()} Admin Panel • Tüm hakları saklıdır.
+        </footer>
+      </div>
     </div>
   );
 }
+
+/* ---- opsiyonel: ince scrollbar (Tailwind global css’inize ekleyebilirsiniz) ----
+.custom-scrollbar::-webkit-scrollbar { width: 8px; }
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background-color: rgba(0,0,0,.12);
+  border-radius: 9999px;
+}
+.custom-scrollbar:hover::-webkit-scrollbar-thumb { background-color: rgba(0,0,0,.2); }
+*/

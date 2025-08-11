@@ -18,27 +18,27 @@ const ContactPage = () => (
         {/* Left: Form */}
         <div>
           <h2 className="text-3xl font-playfair font-bold text-dark1 mb-6">
-            Get in Touch
+            Bizimle İletişime Geçin
           </h2>
           <form className="space-y-6">
             {/* Message */}
-            <ContactInput multiline placeholder="Enter Message" />
+            <ContactInput multiline placeholder=" Mesajınızı Girin" />
 
             {/* Name & Email */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <ContactInput placeholder="Enter your name" />
-              <ContactInput placeholder="Email" />
+              <ContactInput placeholder="Adınızı Girin" />
+              <ContactInput placeholder="E-mail" />
             </div>
 
             {/* Subject */}
-            <ContactInput placeholder="Enter Subject" />
+            <ContactInput placeholder="Başlık" />
 
             {/* Send Button */}
             <button
               type="submit"
               className="px-8 py-3 border border-dark1 text-dark1 rounded-lg hover:bg-dark1 hover:text-white transition"
             >
-              Send
+              Gönder
             </button>
           </form>
         </div>
@@ -47,18 +47,18 @@ const ContactPage = () => (
         <aside className="space-y-6">
           <ContactInfo
             Icon={FaHome}
-            title="Buttonwood, California"
-            subtitle="Rosemead, CA 91770"
+            title="Kütahya, Merkez"
+            subtitle="Adres Bilgisi"
           />
           <ContactInfo
             Icon={FaPhoneAlt}
             title="+1 253 565 2365"
-            subtitle="Mon to Fri 9am to 6pm"
+            subtitle="Pazartesi-Cumartesi 09:00-20:00"
           />
           <ContactInfo
             Icon={FaEnvelope}
-            title="support@colorlib.com"
-            subtitle="Send us your query anytime!"
+            title="support@oldsocks.com"
+            subtitle="Dilediğiniz zaman bize ulaşabilirsiniz"
           />
         </aside>
       </section>

@@ -25,9 +25,10 @@ import CartPage from "./pages/CartPage";
 import CheckoutPage from "./pages/CheckoutPage";
 import PaymentResultPage from "./pages/PaymentResultPage";
 import NotFoundPage from "./pages/NotFoundPage";
+import PaymentPage from "./pages/PaymentPage";
 
 // Admin sayfaları
-import ProductsPage from "./admin/pages/ProductsPage";
+// import ProductsPage from "./admin/pages/ProductsPage";
 import UsersPage from "./admin/pages/UsersPage";
 import CategoriesPage from "./admin/pages/CategoriesPage";
 import CampaignsPage from "./admin/pages/CampaignsPage";
@@ -60,6 +61,16 @@ export default function App() {
           <Route path="/blog/:slug" element={<BlogDetailsPage />} />
           <Route path="/product-details/:id" element={<ProductDetailsPage />} />
           <Route path="/cart" element={<CartPage />} />
+
+          {/* Payment, önce oturum kontrolü */}
+          <Route
+            path="/payment"
+            element={
+              <RequireAuth>
+                <PaymentPage />
+              </RequireAuth>
+            }
+          />
 
           {/* Checkout, önce oturum kontrolü */}
           <Route

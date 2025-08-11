@@ -1,5 +1,5 @@
 // src/pages/admin/BlogsPage.jsx
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   Card,
   CardBody,
@@ -11,27 +11,22 @@ import {
   DialogFooter,
   Input,
   Textarea,
-  Menu,
-  MenuHandler,
-  MenuList,
-  MenuItem,
-  IconButton,
 } from "@material-tailwind/react";
 import {
-  EllipsisVerticalIcon,
   PencilIcon,
   TrashIcon,
+  MagnifyingGlassIcon,
 } from "@heroicons/react/24/outline";
 import api from "../../../api";
 import ToastAlert from "../../components/ui/ToastAlert";
 import { v4 as uuidv4 } from "uuid";
 import { useUploadQueue } from "../../context/UploadQueueContext";
 
-/* ───── Silme Onay Modali ───── */
+/* ───── Silme Onayı ───── */
 const ConfirmModal = ({ open, onClose, onConfirm, message }) => {
   if (!open) return null;
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 px-4">
       <div className="bg-white rounded-xl p-6 shadow max-w-sm w-full">
         <Typography className="mb-6">{message}</Typography>
         <div className="flex justify-end gap-3">
@@ -47,6 +42,35 @@ const ConfirmModal = ({ open, onClose, onConfirm, message }) => {
   );
 };
 
+/* ───── Badge & Skeleton ───── */
+const Badge = ({ children, color = "gray" }) => {
+  const map = {
+    blue: "bg-blue-100 text-blue-800",
+    green: "bg-green-100 text-green-800",
+    gray: "bg-gray-100 text-gray-700",
+    amber: "bg-amber-100 text-amber-800",
+    red: "bg-red-100 text-red-800",
+  };
+  return (
+    <span
+      className={`inline-flex items-center px-2 py-0.5 rounded text-xs ${map[color]}`}
+    >
+      {children}
+    </span>
+  );
+};
+
+const CardSkeleton = () => (
+  <div className="animate-pulse rounded-xl border border-gray-100 overflow-hidden">
+    <div className="h-48 bg-gray-200" />
+    <div className="p-4 space-y-2">
+      <div className="h-4 bg-gray-200 rounded w-2/3" />
+      <div className="h-3 bg-gray-200 rounded w-1/2" />
+      <div className="h-7 bg-gray-200 rounded w-20 mt-2" />
+    </div>
+  </div>
+);
+
 export default function BlogsPage() {
   /* ---------------- state ---------------- */
   const [blogs, setBlogs] = useState([]);
@@ -54,6 +78,15 @@ export default function BlogsPage() {
   const [admins, setAdmins] = useState([]);
   const [loading, setLoading] = useState(true);
 
+  // üst bar filtre/arama/sıralama
+  const [query, setQuery] = useState("");
+  const [debouncedQuery, setDebouncedQuery] = useState("");
+  const [catFilter, setCatFilter] = useState("all");
+  const [authorFilter, setAuthorFilter] = useState("all");
+  const [sortBy, setSortBy] = useState("newest"); // newest | oldest | title
+  const searchRef = useRef(null);
+
+  // form
   const [dialogOpen, setDialogOpen] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [form, setForm] = useState({
@@ -70,6 +103,7 @@ export default function BlogsPage() {
   });
   const [tagInput, setTagInput] = useState("");
 
+  // toast & sil onay
   const [toast, setToast] = useState(null);
   const [deleteId, setDeleteId] = useState(null);
 
@@ -77,25 +111,36 @@ export default function BlogsPage() {
   const { addTask, updateTask, removeTask } = useUploadQueue();
 
   /* ---------------- veri çek ---------------- */
+  const fetchAll = async () => {
+    setLoading(true);
+    try {
+      const [{ data: bs }, { data: cats }, { data: users }] = await Promise.all(
+        [api.get("/blogs"), api.get("/blog-categories"), api.get("/users")]
+      );
+      setBlogs(bs);
+      setCategories(cats);
+      setAdmins(users.filter((u) => u.role === "admin"));
+    } catch {
+      setToast({
+        msg: "Veriler alınamadı, lütfen tekrar deneyin.",
+        type: "error",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
   useEffect(() => {
-    Promise.all([
-      api.get("/blogs"),
-      api.get("/blog-categories"),
-      api.get("/users"),
-    ])
-      .then(([{ data: bs }, { data: cats }, { data: users }]) => {
-        setBlogs(bs);
-        setCategories(cats);
-        setAdmins(users.filter((u) => u.role === "admin"));
-      })
-      .catch(() =>
-        setToast({
-          msg: "Veriler alınamadı, lütfen tekrar deneyin.",
-          type: "error",
-        })
-      )
-      .finally(() => setLoading(false));
+    fetchAll();
   }, []);
+
+  /* query debounce */
+  useEffect(() => {
+    const t = setTimeout(
+      () => setDebouncedQuery(query.trim().toLowerCase()),
+      250
+    );
+    return () => clearTimeout(t);
+  }, [query]);
 
   /* ---------------- dialog helpers ---------------- */
   const openNew = () => {
@@ -141,23 +186,22 @@ export default function BlogsPage() {
 
   /* ---------------- tag işlemleri ---------------- */
   const handleTagKeyDown = (e) => {
-    if (e.key === "Enter" && tagInput.trim()) {
+    if ((e.key === "Enter" || e.key === ",") && tagInput.trim()) {
       e.preventDefault();
-      if (!form.tagsArray.includes(tagInput.trim())) {
-        setForm((f) => ({
-          ...f,
-          tagsArray: [...f.tagsArray, tagInput.trim()],
-        }));
+      const val = tagInput.trim();
+      if (!form.tagsArray.includes(val)) {
+        setForm((f) => ({ ...f, tagsArray: [...f.tagsArray, val] }));
         setDirty(true);
       }
       setTagInput("");
     }
+    if (e.key === "Backspace" && !tagInput && form.tagsArray.length) {
+      setForm((f) => ({ ...f, tagsArray: f.tagsArray.slice(0, -1) }));
+      setDirty(true);
+    }
   };
   const removeTag = (tag) => {
-    setForm((f) => ({
-      ...f,
-      tagsArray: f.tagsArray.filter((t) => t !== tag),
-    }));
+    setForm((f) => ({ ...f, tagsArray: f.tagsArray.filter((t) => t !== tag) }));
     setDirty(true);
   };
 
@@ -182,13 +226,13 @@ export default function BlogsPage() {
     fd.append("tags", JSON.stringify(form.tagsArray));
     if (form.coverImage) fd.append("coverImage", form.coverImage);
 
-    /* queue task */
     const id = uuidv4();
     addTask({ id, name: form.title || "Blog", progress: 0 });
 
     const cfg = {
       headers: { "Content-Type": "multipart/form-data" },
       onUploadProgress: (ev) => {
+        if (!ev.total) return;
         const pct = Math.round((ev.loaded * 100) / ev.total);
         updateTask(id, { progress: pct });
       },
@@ -219,7 +263,6 @@ export default function BlogsPage() {
 
   /* ---------------- silme ---------------- */
   const triggerDelete = (id) => setDeleteId(id);
-
   const handleDeleteConfirmed = async () => {
     const id = deleteId;
     setDeleteId(null);
@@ -232,9 +275,40 @@ export default function BlogsPage() {
     }
   };
 
-  /* ---------------- render helpers ---------------- */
-  if (loading) return <div>Yükleniyor…</div>;
+  /* ---------------- türetilmiş liste ---------------- */
+  const filtered = useMemo(() => {
+    let list = [...blogs];
 
+    if (debouncedQuery) {
+      list = list.filter((b) => {
+        const blob = `${b.title} ${b.subtitle} ${b.excerpt} ${(
+          b.tags || []
+        ).join(" ")}`.toLowerCase();
+        return blob.includes(debouncedQuery);
+      });
+    }
+
+    if (catFilter !== "all") {
+      list = list.filter((b) =>
+        b.categories.some((c) => (c._id || c) === catFilter)
+      );
+    }
+
+    if (authorFilter !== "all") {
+      list = list.filter((b) => (b.author?._id || b.author) === authorFilter);
+    }
+
+    list.sort((a, b) => {
+      if (sortBy === "title") return a.title.localeCompare(b.title, "tr");
+      const A = a.createdAt || a._id;
+      const B = b.createdAt || b._id;
+      return sortBy === "newest" ? (A < B ? 1 : -1) : A > B ? 1 : -1;
+    });
+
+    return list;
+  }, [blogs, debouncedQuery, catFilter, authorFilter, sortBy]);
+
+  /* ---------------- computed ---------------- */
   const canSave =
     dirty &&
     form.categories.length > 0 &&
@@ -244,192 +318,421 @@ export default function BlogsPage() {
 
   /* ---------------- render ---------------- */
   return (
-    <div>
+    <div className="p-6 space-y-6">
       {/* üst bar */}
-      <div className="flex justify-between items-center mb-6">
-        <Typography variant="h4">Bloglar</Typography>
-        <Button color="blue" onClick={openNew}>
-          + Yeni Blog
-        </Button>
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+        <div>
+          <Typography variant="h4">Bloglar</Typography>
+          <Typography variant="small" className="text-gray-600">
+            Arayın, filtreleyin ve oluşturun.
+          </Typography>
+        </div>
+
+        <div className="flex flex-col md:flex-row gap-3 md:items-center">
+          {/* search */}
+          <div className="relative">
+            <Input
+              inputRef={searchRef}
+              icon={<MagnifyingGlassIcon className="h-5 w-5" />}
+              label="Ara (başlık, özet, tag)"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              crossOrigin=""
+            />
+          </div>
+
+          {/* kategori filtresi */}
+          <select
+            className="border rounded-lg p-2 text-sm"
+            value={catFilter}
+            onChange={(e) => setCatFilter(e.target.value)}
+          >
+            <option value="all">Tüm Kategoriler</option>
+            {categories.map((c) => (
+              <option key={c._id} value={c._id}>
+                {c.name}
+              </option>
+            ))}
+          </select>
+
+          {/* yazar filtresi */}
+          <select
+            className="border rounded-lg p-2 text-sm"
+            value={authorFilter}
+            onChange={(e) => setAuthorFilter(e.target.value)}
+          >
+            <option value="all">Tüm Yazarlar</option>
+            {admins.map((u) => (
+              <option key={u._id} value={u._id}>
+                {u.firstName} {u.lastName}
+              </option>
+            ))}
+          </select>
+
+          {/* sıralama */}
+          <select
+            className="border rounded-lg p-2 text-sm"
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value)}
+          >
+            <option value="newest">En Yeni</option>
+            <option value="oldest">En Eski</option>
+            <option value="title">Başlık (A→Z)</option>
+          </select>
+
+          <Button color="blue" onClick={openNew}>
+            + Yeni Blog
+          </Button>
+        </div>
       </div>
 
-      {/* kartlar */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {blogs.map((b) => (
-          <Card key={b._id} className="relative">
-            <Menu placement="bottom-end">
-              <MenuHandler>
-                <IconButton variant="text" className="absolute top-2 right-2">
-                  <EllipsisVerticalIcon className="w-5 h-5" />
-                </IconButton>
-              </MenuHandler>
-              <MenuList>
-                <MenuItem onClick={() => openEdit(b)}>
-                  <PencilIcon className="w-4 h-4 mr-2" /> Güncelle
-                </MenuItem>
-                <MenuItem onClick={() => triggerDelete(b._id)}>
-                  <TrashIcon className="w-4 h-4 mr-2" /> Sil
-                </MenuItem>
-              </MenuList>
-            </Menu>
-            <CardBody>
-              {b.coverImageUrl && (
-                <img
-                  src={b.coverImageUrl}
-                  alt={b.title}
-                  className="mb-4 rounded object-cover w-full h-48"
-                />
-              )}
-              <Typography variant="h6">{b.title}</Typography>
-              <Typography className="text-gray-600 text-sm">
-                {b.excerpt}
-              </Typography>
-            </CardBody>
-          </Card>
-        ))}
-      </div>
+      {/* liste */}
+      {loading ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <CardSkeleton key={i} />
+          ))}
+        </div>
+      ) : filtered.length === 0 ? (
+        <div className="rounded-xl border border-dashed p-12 text-center">
+          <Typography variant="h6" className="mb-2">
+            Kayıt bulunamadı
+          </Typography>
+          <Typography className="text-gray-600 mb-4">
+            Filtreleri temizleyin veya yeni bir blog ekleyin.
+          </Typography>
+          <Button color="blue" onClick={openNew}>
+            Blog Oluştur
+          </Button>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {filtered.map((b) => (
+            <Card
+              key={b._id}
+              className="relative overflow-hidden group border border-gray-100 hover:shadow-xl transition-shadow"
+            >
+              {/* Görsel alanı */}
+              <div className="relative h-48">
+                {b.coverImageUrl ? (
+                  <img
+                    src={b.coverImageUrl}
+                    alt={b.title}
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <div className="w-full h-full bg-gray-100 flex items-center justify-center text-gray-400">
+                    Kapak yok
+                  </div>
+                )}
+
+                {/* gradient */}
+                <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-black/15 to-transparent pointer-events-none" />
+
+                {/* kategori rozetleri */}
+                <div className="absolute top-2 left-2 flex gap-2 flex-wrap z-10">
+                  {Array.isArray(b.categories) &&
+                    b.categories.slice(0, 3).map((c) => (
+                      <Badge key={(c._id || c) + "_cat"} color="amber">
+                        {c.name || c}
+                      </Badge>
+                    ))}
+                  {Array.isArray(b.categories) && b.categories.length > 3 && (
+                    <Badge>+{b.categories.length - 3}</Badge>
+                  )}
+                </div>
+
+                {/* HOVER EDIT OVERLAY */}
+                <button
+                  onClick={() => openEdit(b)}
+                  className="absolute inset-0 flex items-center justify-center bg-white/60 opacity-0 group-hover:opacity-100 transition-opacity z-20"
+                  title="Düzenle"
+                >
+                  <span className="inline-flex items-center gap-2 px-3 py-2 rounded-full bg-white shadow">
+                    <PencilIcon className="w-5 h-5" />
+                    <span className="text-sm font-medium">Düzenle</span>
+                  </span>
+                </button>
+              </div>
+
+              <CardBody>
+                <Typography variant="h6" className="line-clamp-1">
+                  {b.title}
+                </Typography>
+                <Typography className="text-gray-600 line-clamp-2 text-sm">
+                  {b.excerpt || b.subtitle}
+                </Typography>
+
+                <div className="mt-3 flex items-center justify-between">
+                  {b.author && (
+                    <div className="flex items-center gap-2">
+                      <div className="w-6 h-6 rounded-full bg-gray-200 flex items-center justify-center text-[10px]">
+                        {`${b.author.firstName?.[0] || ""}${
+                          b.author.lastName?.[0] || ""
+                        }`}
+                      </div>
+                      <span className="text-xs text-gray-600">
+                        {b.author.firstName} {b.author.lastName}
+                      </span>
+                    </div>
+                  )}
+
+                  {/* SİL BUTONU */}
+                  <button
+                    onClick={() => triggerDelete(b._id)}
+                    className="inline-flex items-center gap-1 px-2 py-1 rounded border border-red-200 text-red-600 hover:bg-red-50 text-xs"
+                  >
+                    <TrashIcon className="w-4 h-4" />
+                    Sil
+                  </button>
+                </div>
+              </CardBody>
+            </Card>
+          ))}
+        </div>
+      )}
 
       {/* form dialog */}
-      <Dialog open={dialogOpen} size="lg" handler={() => setDialogOpen(false)}>
+      <Dialog open={dialogOpen} size="xl" handler={() => setDialogOpen(false)}>
         <DialogHeader>{form._id ? "Blogu Güncelle" : "Yeni Blog"}</DialogHeader>
-        <DialogBody divider className="space-y-4 max-h-[70vh] overflow-y-auto">
-          {/* başlık */}
-          <Input
-            label="Başlık"
-            value={form.title}
-            onChange={(e) => {
-              setForm((f) => ({ ...f, title: e.target.value }));
-              setDirty(true);
-            }}
-          />
-          {/* alt başlık */}
-          <Input
-            label="Alt Başlık"
-            value={form.subtitle}
-            onChange={(e) => {
-              setForm((f) => ({ ...f, subtitle: e.target.value }));
-              setDirty(true);
-            }}
-          />
-          {/* kısa açıklama */}
-          <Input
-            label="Kısa Açıklama"
-            value={form.excerpt}
-            onChange={(e) => {
-              setForm((f) => ({ ...f, excerpt: e.target.value }));
-              setDirty(true);
-            }}
-          />
+        <DialogBody divider className="overflow-auto max-h-[75vh] pr-2">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* SOL: FORM */}
+            <div className="space-y-4">
+              <Input
+                label="Başlık *"
+                value={form.title}
+                onChange={(e) => {
+                  setForm((f) => ({ ...f, title: e.target.value }));
+                  setDirty(true);
+                }}
+                crossOrigin=""
+              />
+              <Input
+                label="Alt Başlık"
+                value={form.subtitle}
+                onChange={(e) => {
+                  setForm((f) => ({ ...f, subtitle: e.target.value }));
+                  setDirty(true);
+                }}
+                crossOrigin=""
+              />
+              <Input
+                label="Kısa Açıklama"
+                value={form.excerpt}
+                onChange={(e) => {
+                  setForm((f) => ({ ...f, excerpt: e.target.value }));
+                  setDirty(true);
+                }}
+                crossOrigin=""
+              />
 
-          {/* içerik */}
-          <Textarea
-            label="İçerik"
-            value={form.content}
-            onChange={(e) => {
-              setForm((f) => ({ ...f, content: e.target.value }));
-              setDirty(true);
-            }}
-            className="h-40"
-          />
+              <div>
+                <label className="block mb-1 text-sm font-medium">
+                  İçerik *
+                </label>
+                <Textarea
+                  value={form.content}
+                  onChange={(e) => {
+                    setForm((f) => ({ ...f, content: e.target.value }));
+                    setDirty(true);
+                  }}
+                  className="h-40"
+                />
+              </div>
 
-          {/* kategoriler */}
-          <div>
-            <label className="block mb-1 text-sm">Kategoriler</label>
-            <select
-              multiple
-              className="w-full border rounded p-2 h-32"
-              value={form.categories}
-              onChange={(e) => {
-                const vals = Array.from(e.target.selectedOptions).map(
-                  (o) => o.value
-                );
-                setForm((f) => ({ ...f, categories: vals }));
-                setDirty(true);
-              }}
-            >
-              {categories.map((c) => (
-                <option key={c._id} value={c._id}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* yazar */}
-          <div>
-            <label className="block mb-1 text-sm">Yazar</label>
-            <select
-              className="w-full border rounded p-2"
-              value={form.author}
-              onChange={(e) => {
-                setForm((f) => ({ ...f, author: e.target.value }));
-                setDirty(true);
-              }}
-            >
-              <option value="">-- Yazar Seçiniz --</option>
-              {admins.map((u) => (
-                <option key={u._id} value={u._id}>
-                  {u.firstName} {u.lastName}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* tags */}
-          <div>
-            <label className="block mb-1 text-sm">Tags</label>
-            <div className="flex flex-wrap gap-2 border rounded p-2">
-              {form.tagsArray.map((tag) => (
-                <span
-                  key={tag}
-                  className="flex items-center bg-blue-100 text-blue-800 rounded-full px-2 py-1 text-sm"
+              {/* kategoriler */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="block text-sm font-medium">
+                    Kategoriler *
+                  </label>
+                  <Badge color={form.categories.length ? "blue" : "gray"}>
+                    {form.categories.length} seçili
+                  </Badge>
+                </div>
+                <select
+                  multiple
+                  className="w-full border rounded p-2 h-32"
+                  value={form.categories}
+                  onChange={(e) => {
+                    const vals = Array.from(e.target.selectedOptions).map(
+                      (o) => o.value
+                    );
+                    setForm((f) => ({ ...f, categories: vals }));
+                    setDirty(true);
+                  }}
                 >
-                  {tag}
-                  <button
-                    type="button"
-                    onClick={() => removeTag(tag)}
-                    className="ml-1 text-xs font-bold"
-                  >
-                    ×
-                  </button>
-                </span>
-              ))}
-              <input
-                type="text"
-                value={tagInput}
-                onChange={(e) => setTagInput(e.target.value)}
-                onKeyDown={handleTagKeyDown}
-                placeholder="Yeni tag eklemek için Enter"
-                className="flex-1 min-w-[8rem] outline-none"
-              />
-            </div>
-          </div>
+                  {categories.map((c) => (
+                    <option key={c._id} value={c._id}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+                {form.categories.length > 0 && (
+                  <div className="flex flex-wrap gap-2">
+                    {form.categories
+                      .map((id) => categories.find((c) => c._id === id)?.name)
+                      .filter(Boolean)
+                      .map((name) => (
+                        <span
+                          key={name}
+                          className="px-2 py-0.5 rounded-full text-xs bg-gray-100"
+                        >
+                          {name}
+                        </span>
+                      ))}
+                  </div>
+                )}
+              </div>
 
-          {/* kapak resmi */}
-          <div>
-            <Typography variant="small" className="block mb-1">
-              Kapak Resmi
-            </Typography>
-            {form.coverPreview && (
-              <img
-                src={form.coverPreview}
-                alt="Preview"
-                className="w-32 h-32 object-cover rounded mb-2"
-              />
-            )}
-            <input
-              type="file"
-              accept="image/*"
-              onChange={(e) => {
-                const file = e.target.files[0];
-                setForm((f) => ({
-                  ...f,
-                  coverImage: file,
-                  coverPreview: URL.createObjectURL(file),
-                }));
-                setDirty(true);
-              }}
-            />
+              {/* yazar */}
+              <div>
+                <label className="block mb-1 text-sm font-medium">
+                  Yazar *
+                </label>
+                <select
+                  className="w-full border rounded p-2"
+                  value={form.author}
+                  onChange={(e) => {
+                    setForm((f) => ({ ...f, author: e.target.value }));
+                    setDirty(true);
+                  }}
+                >
+                  <option value="">-- Yazar Seçiniz --</option>
+                  {admins.map((u) => (
+                    <option key={u._id} value={u._id}>
+                      {u.firstName} {u.lastName}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* tags */}
+              <div>
+                <label className="block mb-1 text-sm font-medium">
+                  Etiketler
+                </label>
+                <div className="flex flex-wrap gap-2 border rounded p-2">
+                  {form.tagsArray.map((tag) => (
+                    <span
+                      key={tag}
+                      className="flex items-center bg-blue-100 text-blue-800 rounded-full px-2 py-1 text-xs"
+                    >
+                      {tag}
+                      <button
+                        type="button"
+                        onClick={() => removeTag(tag)}
+                        className="ml-1 text-[10px] font-bold"
+                        aria-label={`${tag} etiketini kaldır`}
+                      >
+                        ×
+                      </button>
+                    </span>
+                  ))}
+                  <input
+                    type="text"
+                    value={tagInput}
+                    onChange={(e) => setTagInput(e.target.value)}
+                    onKeyDown={handleTagKeyDown}
+                    placeholder="Enter veya , ile ekle"
+                    className="flex-1 min-w-[8rem] outline-none text-sm"
+                  />
+                </div>
+              </div>
+
+              {/* kapak resmi */}
+              <div>
+                <label className="block text-sm font-medium mb-1">
+                  Kapak Görseli
+                </label>
+                <label className="border-2 border-dashed rounded-xl p-4 flex items-center justify-center gap-2 cursor-pointer hover:bg-gray-50">
+                  <span className="text-sm">
+                    {form.coverImage ? form.coverImage.name : "Dosya seçin"}
+                  </span>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      setForm((f) => ({
+                        ...f,
+                        coverImage: file,
+                        coverPreview: URL.createObjectURL(file),
+                      }));
+                      setDirty(true);
+                    }}
+                  />
+                </label>
+                <Typography variant="small" className="text-gray-500 mt-1">
+                  1200×600 önerilir. JPG/PNG.
+                </Typography>
+              </div>
+
+              {/* validation uyarısı */}
+              {!(form.title.trim() && form.content.trim()) && (
+                <Typography variant="small" className="text-red-600">
+                  Başlık ve içerik zorunludur.
+                </Typography>
+              )}
+            </div>
+
+            {/* SAĞ: ÖNİZLEME */}
+            <div>
+              <Typography variant="small" className="text-gray-600 mb-2">
+                Canlı Önizleme
+              </Typography>
+              <div className="rounded-xl border overflow-hidden">
+                <div className="relative h-48">
+                  {form.coverPreview ? (
+                    <img
+                      src={form.coverPreview}
+                      alt="Kapak Önizleme"
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <div className="w-full h-full bg-gray-100 flex items-center justify-center text-gray-400">
+                      Kapak seçilmedi
+                    </div>
+                  )}
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-black/15 to-transparent" />
+                  <div className="absolute top-2 left-2 flex gap-2 flex-wrap">
+                    {form.categories
+                      .map((id) => categories.find((c) => c._id === id)?.name)
+                      .filter(Boolean)
+                      .slice(0, 3)
+                      .map((name) => (
+                        <Badge key={name} color="amber">
+                          {name}
+                        </Badge>
+                      ))}
+                    {form.categories.length > 3 && (
+                      <Badge>+{form.categories.length - 3}</Badge>
+                    )}
+                  </div>
+                </div>
+                <div className="p-4">
+                  <Typography variant="h6" className="line-clamp-1">
+                    {form.title || "Blog Başlığı"}
+                  </Typography>
+                  <Typography className="text-gray-600 line-clamp-2 text-sm">
+                    {form.excerpt ||
+                      form.subtitle ||
+                      "Kısa açıklama buraya gelecek…"}
+                  </Typography>
+                  {form.tagsArray.length > 0 && (
+                    <div className="mt-2 text-[11px] text-gray-500">
+                      #{form.tagsArray.slice(0, 3).join(" #")}
+                      {form.tagsArray.length > 3
+                        ? " +" + (form.tagsArray.length - 3)
+                        : ""}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
           </div>
         </DialogBody>
         <DialogFooter>

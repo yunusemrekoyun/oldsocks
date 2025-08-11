@@ -10,7 +10,10 @@ export default function ProductGrid() {
   useEffect(() => {
     api
       .get("/products")
-      .then((res) => setProducts(res.data))
+      .then((res) => {
+        // sadece ilk 4 ürün
+        setProducts(res.data.slice(0, 4));
+      })
       .catch((err) => console.error("Ürünler getirilirken hata:", err))
       .finally(() => setLoading(false));
   }, []);

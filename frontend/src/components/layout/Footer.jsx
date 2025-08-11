@@ -1,6 +1,11 @@
 // src/components/Footer.jsx
 import { Link } from "react-router-dom";
-import { FaFacebookF, FaTwitter, FaPinterestP } from "react-icons/fa";
+import {
+  FaFacebookF,
+  FaTwitter,
+  FaPinterestP,
+  FaInstagram,
+} from "react-icons/fa";
 
 const Footer = () => (
   <footer className="bg-dark1 text-gray-300 pt-12">
@@ -38,9 +43,20 @@ const Footer = () => (
       <div>
         <h4 className="text-white font-semibold mb-3">Bizi Takip Edin</h4>
         <div className="flex space-x-4">
-          <FaFacebookF className="hover:text-purple-500 cursor-pointer" />
-          <FaTwitter className="hover:text-purple-500 cursor-pointer" />
-          <FaPinterestP className="hover:text-purple-500 cursor-pointer" />
+          <a
+            href="https://www.facebook.com/Oldsockscollection/"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            <FaFacebookF className="hover:text-purple-500 cursor-pointer" />
+          </a>
+          <a
+            href="https://www.instagram.com/oldscks/"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            <FaInstagram className="hover:text-purple-500 cursor-pointer" />
+          </a>
         </div>
       </div>
 

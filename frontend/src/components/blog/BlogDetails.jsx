@@ -44,9 +44,11 @@ export default function BlogDetails({
         </span>
       </div>
 
-      <div className="prose prose-lg text-[#444] mt-6">
+      <div className="text-lg max-w-full break-words text-[#444] mt-6 leading-relaxed">
         {paragraphs.map((p, i) => (
-          <p key={i}>{p}</p>
+          <p key={i} className="mb-4">
+            {p}
+          </p>
         ))}
       </div>
 

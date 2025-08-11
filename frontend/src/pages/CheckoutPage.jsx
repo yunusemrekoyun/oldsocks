@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, useRef } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { Navigate, useNavigate } from "react-router-dom";
 import { useCart } from "../context/useCart";
 import { useAuth } from "../context/AuthContext";
@@ -12,8 +12,6 @@ export default function CheckoutPage() {
   const navigate = useNavigate();
 
   const [loading, setLoading] = useState(false);
-  const [htmlContent, setHtmlContent] = useState(null);
-  const containerRef = useRef(null);
 
   const [addresses, setAddresses] = useState([]);
   const [addrLoading, setAddrLoading] = useState(true);
@@ -39,19 +37,6 @@ export default function CheckoutPage() {
       .finally(() => setAddrLoading(false));
   }, []);
 
-  // 2) İyzico’nun döndürdüğü formu DOM’a yerleştir
-  useEffect(() => {
-    if (!htmlContent) return;
-    const c = containerRef.current;
-    c.innerHTML = htmlContent;
-
-    Array.from(c.querySelectorAll("script")).forEach((old) => {
-      const s = document.createElement("script");
-      old.src ? (s.src = old.src) : (s.textContent = old.innerHTML);
-      document.head.appendChild(s);
-    });
-  }, [htmlContent]);
-
   /* ─────────── Erken dönüş kontrolleri ─────────── */
   if (authLoading) return <div className="p-4">Yükleniyor…</div>;
 
@@ -67,7 +52,7 @@ export default function CheckoutPage() {
   }
 
   // Sepet boşsa
-  if (!htmlContent && items.length === 0) {
+  if (items.length === 0) {
     return <Navigate to="/cart" replace />;
   }
 
@@ -110,28 +95,19 @@ export default function CheckoutPage() {
         { responseType: "text" }
       );
 
-      // 206 → eksik bilgi fallback
+      // Eksik bilgi varsa otomatik fallback
       if (response.status === 206) {
-        const { missing } = JSON.parse(response.data);
-        if (
-          window.confirm(
-            `Aşağıdaki müşteri bilgileri eksik: ${missing.join(
-              ", "
-            )}. Fallback verileri kullanılsın mı?`
-          )
-        ) {
-          return attemptPayment(true);
-        } else {
-          alert("Lütfen profilinizden eksik bilgileri tamamlayın.");
-          return;
-        }
+        console.warn(
+          "Eksik müşteri bilgisi bulundu, fallback ile tekrar deneniyor…"
+        );
+        return attemptPayment(true);
       }
 
-      // 200 → form HTML’i
-      setHtmlContent(response.data);
+      // 200 → form HTML’i geldi → PaymentPage'e state ile gönder
+      const html = response.data;
+      navigate("/payment", { state: { html } });
     } catch (err) {
       console.error("Ödeme başlatılamadı:", err);
-      // Token süresi dolduysa
       if (err.response?.status === 401) {
         setShowLoginModal(true);
       } else {
@@ -141,19 +117,6 @@ export default function CheckoutPage() {
       setLoading(false);
     }
   };
-
-  /* ─────────── Form embed edildiyse ─────────── */
-  if (htmlContent) {
-    return (
-      <div className="min-h-screen bg-light1 text-dark1 py-10 px-4">
-        <div
-          ref={containerRef}
-          className="max-w-3xl mx-auto bg-white rounded-xl shadow-md p-6"
-        />
-      </div>
-    );
-  }
-
   /* ─────────── Normal ödeme sayfası ─────────── */
   return (
     <div className="min-h-screen bg-light1 text-dark1 py-10 px-4">
