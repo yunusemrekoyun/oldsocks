@@ -40,7 +40,7 @@ export default function BlogDetails({
           <FaFolderOpen className="mr-1" /> {category}
         </span>
         <span className="flex items-center">
-          <FaComments className="mr-1" /> {comments} Comments
+          <FaComments className="mr-1" /> {comments} Yorumlar
         </span>
       </div>
 

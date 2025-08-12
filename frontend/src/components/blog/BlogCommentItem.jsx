@@ -66,13 +66,13 @@ export default function BlogCommentItem({ comment }) {
               onClick={() => setShowReplies((v) => !v)}
               className="text-blue-600 hover:underline"
             >
-              {showReplies ? "Hide Replies" : "View Replies"}
+              {showReplies ? "Yanıtları Gizle" : "Yanıtları Göster"}
             </button>
             <button
               onClick={() => setShowForm((v) => !v)}
               className="text-green-600 hover:underline"
             >
-              {showForm ? "Cancel" : "Reply"}
+              {showForm ? "İptal" : "Yanıtla"}
             </button>
           </div>
 

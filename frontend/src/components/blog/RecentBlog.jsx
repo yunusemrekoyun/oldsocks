@@ -24,7 +24,7 @@ export default function RecentBlog() {
 
   return (
     <div className="mb-8">
-      <h4 className="text-lg font-semibold mb-3 text-[#0b0b0d]">Recent Post</h4>
+      <h4 className="text-lg font-semibold mb-3 text-[#0b0b0d]">Diğer Gönderiler</h4>
       {posts.map((p) => (
         <RecentBlogItem key={p._id} post={p} />
       ))}

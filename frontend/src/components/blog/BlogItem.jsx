@@ -45,7 +45,7 @@ const BlogItem = ({
         </span>
         <span className="flex items-center gap-1">
           <FaComments className="text-xs" />
-          {comments} Comments
+          {comments} Yorumlar
         </span>
       </div>
     </div>

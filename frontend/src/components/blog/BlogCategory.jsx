@@ -32,7 +32,7 @@ export default function BlogCategory() {
 
   return (
     <div className="mb-8">
-      <h4 className="text-lg font-semibold mb-3 text-[#0b0b0d]">Category</h4>
+      <h4 className="text-lg font-semibold mb-3 text-[#0b0b0d]">Kategori</h4>
       <ul>
         {list.map(({ _id, name, slug, count }) => (
           <BlogCategoryItem

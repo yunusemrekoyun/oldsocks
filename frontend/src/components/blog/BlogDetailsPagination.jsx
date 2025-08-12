@@ -16,7 +16,7 @@ const BlogDetailsPagination = () => (
         className="w-16 h-16 object-cover rounded"
       />
       <div>
-        <p className="text-sm text-gray-500">Prev Post</p>
+        <p className="text-sm text-gray-500">Önceki Gönderi</p>
         <h4 className="font-medium">Space The Final Frontier</h4>
       </div>
     </Link>
@@ -26,7 +26,7 @@ const BlogDetailsPagination = () => (
       className="flex items-center space-x-4 hover:text-[#03588C] transition"
     >
       <div className="text-right">
-        <p className="text-sm text-gray-500">Next Post</p>
+        <p className="text-sm text-gray-500">Sonraki Gönderi</p>
         <h4 className="font-medium">Telescopes 101</h4>
       </div>
       <img

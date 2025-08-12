@@ -28,12 +28,12 @@ export default function BlogCommentInput({ blogId, onCommentPosted }) {
   return (
     <div className="mt-12">
       <h4 className="text-lg font-semibold text-[#0b0b0d] mb-6">
-        Leave a Reply
+        Yanıt Bırakın
       </h4>
       <form onSubmit={handleSubmit} className="space-y-6">
         <TextareaAutosize
           minRows={4}
-          placeholder="Write Comment"
+          placeholder="Yorumunuzu buraya yazın..."
           value={text}
           onChange={(e) => setText(e.target.value)}
           className="w-full border px-3 py-2 rounded resize-none"
@@ -47,7 +47,7 @@ export default function BlogCommentInput({ blogId, onCommentPosted }) {
               : "border-[#03588C] text-[#03588C] hover:bg-[#03588C] hover:text-white"
           } transition-colors duration-200`}
         >
-          {submitting ? "Posting…" : "Post Comment"}
+          {submitting ? "Gönderiliyor..." : "Yorumu Gönder"}
         </button>
       </form>
     </div>

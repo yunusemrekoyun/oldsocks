@@ -1,4 +1,3 @@
-// src/pages/ShopPage.jsx
 import React, { useState, useEffect, useRef } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import BreadCrumb from "../components/breadCrumb/BreadCrumb";
@@ -11,10 +10,9 @@ export default function ShopPage() {
   const { state } = useLocation();
   const navigate = useNavigate();
 
-  // Normal campaign
+  // Campaign (normal)
   const campaignItems = state?.campaignItems;
   const campaignTitle = state?.campaignTitle;
-
   // Mini campaign
   const miniItems = state?.miniCampaignItems;
   const miniTitle = state?.miniCampaignTitle;
@@ -23,11 +21,21 @@ export default function ShopPage() {
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // Gösterilecek ürün sayısı
+  // Gösterilecek ürün sayısı (lazy load)
   const [visibleCount, setVisibleCount] = useState(20);
   const browseRef = useRef(null);
 
-  // 1) Kategorileri her durumda çek
+  // Varsayılan filtreler
+  const defaultFilters = {
+    category: [],
+    subCategory: [],
+    sizes: [],
+    colors: [],
+    priceRange: [0, Infinity],
+  };
+  const [filters, setFilters] = useState(defaultFilters);
+
+  // 1) Kategorileri çek
   useEffect(() => {
     api
       .get("/categories")
@@ -35,7 +43,7 @@ export default function ShopPage() {
       .catch(console.error);
   }, []);
 
-  // 2) Ürünleri kampanya yoksa çek, varsa atla
+  // 2) Ürünleri (kampanya yoksa) çek
   useEffect(() => {
     if (campaignItems || miniItems) {
       setLoading(false);
@@ -48,21 +56,25 @@ export default function ShopPage() {
       .finally(() => setLoading(false));
   }, [campaignItems, miniItems]);
 
-  // 3) Varsayılan filtreler
-  const defaultFilters = {
-    category: [],
-    subCategory: [],
-    sizes: [],
-    colors: [],
-    priceRange: [0, Infinity],
-  };
-  const [filters, setFilters] = useState(defaultFilters);
+  // 3) Header’dan preset geldiyse filtrelere uygula
+  useEffect(() => {
+    if (state?.preset) {
+      const { category = [], subCategory = [] } = state.preset || {};
+      setFilters((f) => ({
+        ...f,
+        category: Array.isArray(category) ? category : [],
+        subCategory: Array.isArray(subCategory) ? subCategory : [],
+      }));
+      setVisibleCount(20);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state?.preset]);
 
-  // 4) Hangi listeyle çalışacağız?
+  // 4) Hangi liste?
   const baseList = miniItems || campaignItems || allProducts;
-  const title = miniTitle || campaignTitle;
+  const title = miniTitle || campaignTitle || "";
 
-  // 5) Kampanya varsa otomatik priceRange ayarla
+  // 5) Kampanya varsa priceRange ayarla
   useEffect(() => {
     const prices = baseList.map((p) => p.price);
     const min = prices.length ? Math.min(...prices) : 0;
@@ -72,7 +84,7 @@ export default function ShopPage() {
     }
   }, [baseList, campaignItems, miniItems]);
 
-  // 6) Listeyi filtrele
+  // 6) Filtrele
   const filtered = baseList.filter((p) => {
     const cat = typeof p.category === "object" ? p.category._id : p.category;
     const parent =
@@ -86,12 +98,13 @@ export default function ShopPage() {
       if (!filters.category.includes(cat) && !filters.category.includes(parent))
         return false;
     }
-    if (filters.sizes.length && !p.sizes.some((s) => filters.sizes.includes(s)))
+    if (filters.sizes.length && !p.sizes?.some((s) => filters.sizes.includes(s)))
       return false;
-    if (filters.colors.length && !filters.colors.includes(p.color))
-      return false;
+    if (filters.colors.length && !filters.colors.includes(p.color)) return false;
+
     const [low, high] = filters.priceRange;
     if (p.price < low || p.price > high) return false;
+
     return true;
   });
 
@@ -99,6 +112,7 @@ export default function ShopPage() {
   const clearCampaign = () => {
     navigate("/shop", { replace: true, state: {} });
     setFilters(defaultFilters);
+    setVisibleCount(20);
   };
 
   if (loading) return <div className="py-10 text-center">Yükleniyor…</div>;
@@ -106,32 +120,40 @@ export default function ShopPage() {
   return (
     <div className="bg-white text-dark1">
       <BreadCrumb />
+
       <main className="container mx-auto px-4 py-14 grid grid-cols-1 lg:grid-cols-4 gap-10">
-        <aside className="lg:col-span-1 bg-transparent rounded-xl p-6 shadow-sm">
+        {/* SOL: Filtre */}
+        <aside className="lg:col-span-1 bg-transparent rounded-xl p-0 lg:p-0">
           <CategoryFilter
             products={filtered}
             categories={categories}
             filters={filters}
-            onFilterChange={setFilters}
+            onFilterChange={(next) => {
+              setFilters(next);
+              setVisibleCount(20); // filtre değişince başa al
+            }}
             campaignTitle={title}
             onClearCampaign={clearCampaign}
           />
         </aside>
 
+        {/* SAĞ: Ürünler */}
         <section className="lg:col-span-3">
           <header className="mb-6">
-            <h1 className="text-4xl font-playfair font-bold text-black">
-              {title || ""}
-            </h1>
+            {!!title && (
+              <h1 className="text-4xl font-playfair font-bold text-black">
+                {title}
+              </h1>
+            )}
             <p className="text-dark2 text-sm mt-1">
-               {filtered.length} ürün listeleniyor
+              {filtered.length} ürün listeleniyor
             </p>
           </header>
 
-          {/* Ürünler */}
+          {/* Ürünler (20’lik dilimler) */}
           <Products products={filtered.slice(0, visibleCount)} />
 
-          {/* Browse More butonu */}
+          {/* Browse More */}
           {visibleCount < filtered.length && !title && (
             <div ref={browseRef} className="mt-10 text-center">
               <button

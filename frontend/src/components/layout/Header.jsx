@@ -1,5 +1,6 @@
-import React, { useContext, useState } from "react";
-import { Link } from "react-router-dom";
+// src/components/layout/Header.jsx
+import React, { useContext, useState, useEffect, useRef } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import {
   FaInstagram,
   FaFacebookF,
@@ -13,6 +14,7 @@ import Logout from "../auth/Logout";
 import { AuthContext } from "../../context/AuthContext";
 import { useCart } from "../../context/useCart";
 import SearchModal from "../search/SearchModal";
+import api from "../../../api";
 
 const Header = () => {
   const { isLoggedIn } = useContext(AuthContext);
@@ -20,13 +22,52 @@ const Header = () => {
   const [showSearch, setShowSearch] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
+  // Mağaza dropdown state
+  const [cats, setCats] = useState([]);
+  const [shopOpen, setShopOpen] = useState(false);
+  const [hoverParent, setHoverParent] = useState(null);
+  const closeTimer = useRef(null);
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    api.get("/categories").then(({ data }) => setCats(data)).catch(console.error);
+  }, []);
+
+  const parents = cats.filter((c) => !c.parent);
+  const childrenOf = (parentId) =>
+    cats.filter((c) => String(c.parent) === String(parentId));
+
+  // Menü aç/kapa (flicker önleme)
+  const openMenu = () => {
+    if (closeTimer.current) clearTimeout(closeTimer.current);
+    setShopOpen(true);
+    setHoverParent(null); // açıldığında sağ panel kapalı başlasın
+  };
+  const scheduleClose = () => {
+    closeTimer.current = setTimeout(() => {
+      setShopOpen(false);
+      setHoverParent(null);
+    }, 250);
+  };
+
+  // Shop’a preset ile git
+  const goShopWith = (preset) => {
+    setShopOpen(false);
+    setHoverParent(null);
+    setMobileMenuOpen(false);
+    navigate("/shop", { state: { preset } });
+  };
+
   const menuItems = [
     { label: "Ana Sayfa", path: "/" },
-    { label: "Mağaza", path: "/shop" },
     { label: "Hakkımızda", path: "/about" },
     { label: "Blog", path: "/blog" },
     { label: "İletişim", path: "/contact" },
   ];
+
+  // Mevcut parent için children listesi ve varlık kontrolü
+  const currentChildren = hoverParent ? childrenOf(hoverParent) : [];
+  const hasChildren = currentChildren.length > 0;
 
   return (
     <header className="bg-light1 border-b border-light2 relative z-50">
@@ -51,8 +92,96 @@ const Header = () => {
             </Link>
 
             {/* Menü - Desktop */}
-            <nav className="hidden lg:flex gap-8 text-base font-normal text-dark2">
-              {menuItems.map(({ label, path }) => (
+            <nav className="hidden lg:flex gap-8 text-base font-normal text-dark2 relative">
+              {/* 1) Ana Sayfa */}
+              <Link to="/" className="hover:text-brand transition-colors">
+                Ana Sayfa
+              </Link>
+
+              {/* 2) Mağaza (tıkla → /shop, hover → dropdown) */}
+              <div
+                className="relative"
+                onMouseEnter={openMenu}
+                onMouseLeave={scheduleClose}
+              >
+                <Link
+                  to="/shop"
+                  className="hover:text-brand transition-colors"
+                  onClick={() => {
+                    setShopOpen(false);
+                    setHoverParent(null);
+                  }}
+                >
+                  Mağaza
+                </Link>
+
+                {shopOpen && (
+                  <div
+                    className={
+                      // Sağ panel ancak alt kategori varsa açılacak, yoksa dar panel
+                      `absolute left-0 top-full mt-3 bg-white border border-light2 rounded-xl shadow-xl p-4 z-50 ` +
+                      (hasChildren ? "w-[680px] grid grid-cols-2 gap-4" : "w-[360px]")
+                    }
+                    onMouseEnter={openMenu}
+                    onMouseLeave={scheduleClose}
+                  >
+                    {/* Sol kolon: Parent kategoriler (tek kolonken border yok) */}
+                    <div className={hasChildren ? "border-r border-light2 pr-4" : ""}>
+                      <div className="text-xs uppercase text-dark2 mb-2">
+                        Kategoriler
+                      </div>
+                      <ul className="space-y-1">
+                        {parents.map((p) => (
+                          <li key={p._id}>
+                            <button
+                              onMouseEnter={() => setHoverParent(p._id)} // ← hover edince sağ panel değerlendirilecek
+                              onClick={() =>
+                                goShopWith({ category: [p._id], subCategory: [] })
+                              }
+                              className={`w-full text-left px-3 py-2 rounded-lg transition ${
+                                hoverParent === p._id
+                                  ? "bg-light1 text-dark1"
+                                  : "hover:bg-light1"
+                              }`}
+                            >
+                              {p.name}
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+
+                    {/* Sağ kolon: SADECE alt kategori varsa görünür */}
+                    {hasChildren && (
+                      <div className="pl-2">
+                        <div className="text-xs uppercase text-dark2 mb-2">
+                          Alt Kategoriler
+                        </div>
+                        <ul className="grid grid-cols-2 gap-2">
+                          {currentChildren.map((sc) => (
+                            <li key={sc._id}>
+                              <button
+                                onClick={() =>
+                                  goShopWith({
+                                    category: [],
+                                    subCategory: [sc._id],
+                                  })
+                                }
+                                className="w-full text-left px-3 py-2 rounded-lg hover:bg-light1 transition"
+                              >
+                                {sc.name}
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* 3) Diğer menü öğeleri */}
+              {menuItems.slice(1).map(({ label, path }) => (
                 <Link
                   key={path}
                   to={path}
@@ -85,6 +214,7 @@ const Header = () => {
               </a>
             </div>
 
+            {/* Arama */}
             <div
               className="flex w-10 h-10 items-center justify-center border border-light3 rounded-full hover:border-brand transition cursor-pointer"
               onClick={() => setShowSearch(true)}
@@ -92,6 +222,7 @@ const Header = () => {
               <FaSearch className="text-dark2 hover:text-brand text-sm" />
             </div>
 
+            {/* Sepet */}
             <Link
               to="/cart"
               id="cart-icon"
@@ -105,6 +236,7 @@ const Header = () => {
               )}
             </Link>
 
+            {/* Profil */}
             <Link
               to="/profile"
               className="w-12 h-12 flex items-center justify-center border border-light3 rounded-full hover:border-brand transition"
@@ -117,11 +249,27 @@ const Header = () => {
         </div>
       </div>
 
-      {/* Mobil Menü Açılır */}
+      {/* Mobil Menü */}
       {mobileMenuOpen && (
         <div className="lg:hidden bg-light1 border-t border-light2 absolute top-full left-0 w-full shadow-md z-40">
           <nav className="flex flex-col py-4 px-6 space-y-4 text-dark2 font-medium">
-            {menuItems.map(({ label, path }) => (
+            <Link
+              to="/"
+              className="hover:text-brand"
+              onClick={() => setMobileMenuOpen(false)}
+            >
+              Ana Sayfa
+            </Link>
+            <button
+              onClick={() => {
+                setMobileMenuOpen(false);
+                navigate("/shop");
+              }}
+              className="text-left hover:text-brand"
+            >
+              Mağaza
+            </button>
+            {menuItems.slice(1).map(({ label, path }) => (
               <Link
                 key={path}
                 to={path}

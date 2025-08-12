@@ -338,15 +338,7 @@ export default function ProductListPage() {
                   </div>
 
                   {/* Aksiyon Çubuğu */}
-                  <div className="mt-4 flex items-center justify-between gap-2">
-                    <button
-                      onClick={() => openEditForm(p)}
-                      className="text-sm inline-flex items-center gap-2 px-2 py-1 rounded hover:bg-gray-50"
-                      title="Düzenle"
-                    >
-                      <FaPen className="opacity-70" /> Düzenle
-                    </button>
-
+                  <div className="mt-4 flex items-center justify-end gap-2">
                     <div className="flex items-center gap-2">
                       {!p.parentProductId && (
                         <button

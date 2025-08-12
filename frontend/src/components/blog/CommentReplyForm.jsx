@@ -31,7 +31,7 @@ export default function CommentReplyForm({ commentId, onReplyPosted }) {
       <form onSubmit={handleSubmit} className="mt-2 space-y-2">
         <textarea
           rows={3}
-          placeholder="Write a reply..."
+          placeholder="Bir cevap yazın..."
           value={text}
           onChange={(e) => setText(e.target.value)}
           className="w-full border px-3 py-2 rounded resize-none"

@@ -378,12 +378,24 @@ export default function MiniCampaignsPage() {
                   className="w-full h-full object-cover"
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-black/15 to-transparent pointer-events-none" />
+
+                {/* HOVER'DA ORTADA DÜZENLE */}
+                <button
+                  onClick={() => openEdit(c)}
+                  className="absolute inset-0 hidden group-hover:flex items-center justify-center bg-white/55 backdrop-blur-sm transition"
+                  title="Düzenle"
+                >
+                  <span className="inline-flex items-center gap-2 px-3 py-2 bg-white border rounded-lg shadow-sm">
+                    <PencilIcon className="w-4 h-4" />
+                    Düzenle
+                  </span>
+                </button>
+
                 <div className="absolute top-2 left-2 flex gap-2">
                   {Number(c.slot) === 1 && <Badge color="blue">Slot 1</Badge>}
                   {Number(c.slot) === 2 && <Badge color="green">Slot 2</Badge>}
                 </div>
               </div>
-
               <CardBody>
                 <Typography variant="h6" className="line-clamp-1">
                   {c.title}

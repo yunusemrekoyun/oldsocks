@@ -69,13 +69,13 @@ export default function BlogSearch() {
   return (
     <div className="relative mb-8" ref={wrapperRef}>
       <h4 className="text-lg font-semibold mb-3 text-[#0b0b0d]">
-        Search Keyword
+        Arama Anahtar Kelimesi
       </h4>
       <div className="flex">
         <input
           type="text"
           value={query}
-          placeholder="Search..."
+          placeholder="Arama yapın..."
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={handleKeyDown}
           onFocus={() => query && setOpen(true)}

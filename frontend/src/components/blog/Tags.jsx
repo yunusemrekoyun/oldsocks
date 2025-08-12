@@ -16,7 +16,7 @@ export default function Tags() {
 
   return (
     <div className="mb-8">
-      <h4 className="text-lg font-semibold mb-3 text-[#0b0b0d]">Tags Clouds</h4>
+      <h4 className="text-lg font-semibold mb-3 text-[#0b0b0d]">Etiketler</h4>
       <div className="flex flex-wrap">
         {tags.map(({ tag, count }) => (
           <TagItem key={tag} tag={tag} count={count} />

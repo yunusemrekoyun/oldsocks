@@ -231,6 +231,19 @@ export default function CategoriesPage() {
                     className="w-full h-full object-cover"
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-black/15 to-transparent pointer-events-none" />
+
+                  {/* HOVER'DA ORTADA DÜZENLE */}
+                  <button
+                    onClick={() => openEdit(c)}
+                    className="absolute inset-0 hidden group-hover:flex items-center justify-center bg-white/55 backdrop-blur-sm transition"
+                    title="Düzenle"
+                  >
+                    <span className="inline-flex items-center gap-2 px-3 py-2 bg-white border rounded-lg shadow-sm">
+                      <FaPen className="w-4 h-4" />
+                      Düzenle
+                    </span>
+                  </button>
+
                   <div className="absolute top-2 left-2 flex gap-2">
                     <Badge color={isParent ? "blue" : "green"}>
                       {isParent
@@ -268,16 +281,8 @@ export default function CategoriesPage() {
                     </div>
                   )}
 
-                  {/* Aksiyonlar */}
-                  <div className="mt-4 flex items-center justify-between">
-                    <button
-                      onClick={() => openEdit(c)}
-                      className="text-sm inline-flex items-center gap-2 px-2 py-1 rounded hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      aria-label={`${c.name} kategorisini düzenle`}
-                    >
-                      <FaPen className="opacity-70" />
-                      Düzenle
-                    </button>
+                  {/* Aksiyonlar (Düzenle kaldırıldı, sağa Sil) */}
+                  <div className="mt-4 flex items-center justify-end">
                     <button
                       onClick={() => setDeleteId(c._id)}
                       className="text-sm inline-flex items-center gap-2 px-3 py-1 rounded border border-red-200 text-red-600 hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-400"

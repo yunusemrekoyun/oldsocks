@@ -415,6 +415,19 @@ export default function CampaignsPage() {
                 />
                 {/* gradient overlay */}
                 <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-black/15 to-transparent pointer-events-none" />
+
+                {/* HOVER'DA ORTADA DÜZENLE */}
+                <button
+                  onClick={() => openEdit(c)}
+                  className="absolute inset-0 hidden group-hover:flex items-center justify-center bg-white/55 backdrop-blur-sm transition"
+                  title="Düzenle"
+                >
+                  <span className="inline-flex items-center gap-2 px-3 py-2 bg-white border rounded-lg shadow-sm">
+                    <PencilIcon className="w-4 h-4" />
+                    Düzenle
+                  </span>
+                </button>
+
                 <div className="absolute top-2 left-2 flex gap-2">
                   {c.isActive ? (
                     <Badge color="green">Aktif</Badge>
