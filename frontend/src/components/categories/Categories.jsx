@@ -1,21 +1,20 @@
 // src/components/Categories.jsx
 import React, { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";   // ← EKLE
 import api from "../../../api";
 import CategoryItem from "./CategoryItem";
 
 export default function Categories() {
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
+  const navigate = useNavigate();                 // ← EKLE
 
   useEffect(() => {
     api
       .get("/categories")
       .then((res) => {
         const roots = res.data.filter((c) => c.parent === null);
-
-        // Karıştır ve ilk 4 tanesini seç
         const randomFour = roots.sort(() => Math.random() - 0.5).slice(0, 4);
-
         setCategories(randomFour);
       })
       .catch((err) => console.error("Kategoriler getirilirken hata:", err))
@@ -40,8 +39,10 @@ export default function Categories() {
               image={c.image}
               alt={c.name}
               onClick={() => {
-                // İleride kategori sayfasına yönlendirme ekleyebilirsiniz:
-                // navigate(`/category/${c._id}`);
+                // → /shop’a, bu kategori preset seçili gönder
+                navigate("/shop", {
+                  state: { preset: { category: [c._id], subCategory: [] } },
+                });
               }}
             />
           ))}

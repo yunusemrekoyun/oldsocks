@@ -445,20 +445,8 @@ export default function CampaignsPage() {
                   {c.subtitle}
                 </Typography>
 
-                {/* Aksiyon Çubuğu: solda Düzenle, sağda Aktif Yap & Sil */}
-                <div className="mt-4 flex items-center justify-between gap-2">
-                  <Button
-                    size="sm"
-                    variant="text"
-                    onClick={() => openEdit(c)}
-                    className="px-2"
-                  >
-                    <span className="inline-flex items-center gap-1">
-                      <PencilIcon className="w-4 h-4" />
-                      Düzenle
-                    </span>
-                  </Button>
-
+                {/* Aksiyon Çubuğu: yalnızca sağ tarafta aksiyonlar (hover overlay ile düzenleme kalır) */}
+                <div className="mt-4 flex items-center justify-end gap-2">
                   <div className="flex items-center gap-2">
                     <Tooltip content="Aktif Yap">
                       <Button

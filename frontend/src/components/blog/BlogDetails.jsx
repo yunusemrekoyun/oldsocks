@@ -58,17 +58,7 @@ export default function BlogDetails({
         </blockquote>
       )}
 
-      <div className="flex items-center space-x-4 mt-6">
-        {[FaFacebookF, FaTwitter, FaPinterestP].map((Icon, i) => (
-          <a
-            key={i}
-            href="#"
-            className="p-2 border border-gray-300 rounded-full hover:border-[#03588C] transition-colors"
-          >
-            <Icon className="text-[#666] hover:text-[#03588C]" />
-          </a>
-        ))}
-      </div>
+
     </article>
   );
 }

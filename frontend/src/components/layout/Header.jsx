@@ -33,9 +33,15 @@ const Header = () => {
     api.get("/categories").then(({ data }) => setCats(data)).catch(console.error);
   }, []);
 
+  // id helper (parent hem string/id hem obje olabilir)
+  const getId = (maybeObj) =>
+    typeof maybeObj === "object" && maybeObj?._id ? String(maybeObj._id) : String(maybeObj || "");
+
   const parents = cats.filter((c) => !c.parent);
+
+  // ÇOCUKLARI flat listeden üret (backend populate'a ihtiyaç duymadan)
   const childrenOf = (parentId) =>
-    cats.filter((c) => String(c.parent) === String(parentId));
+    cats.filter((c) => c.parent && getId(c.parent) === String(parentId));
 
   // Menü aç/kapa (flicker önleme)
   const openMenu = () => {
@@ -65,9 +71,13 @@ const Header = () => {
     { label: "İletişim", path: "/contact" },
   ];
 
-  // Mevcut parent için children listesi ve varlık kontrolü
-  const currentChildren = hoverParent ? childrenOf(hoverParent) : [];
-  const hasChildren = currentChildren.length > 0;
+  // Mevcut parent için children listesi:
+  // - Eğer backend virtual `children` doldurmuşsa onu kullan
+  // - Yoksa flat listeden türet
+  const hoveredParentObj = cats.find((x) => getId(x._id) === String(hoverParent));
+  const currentChildren =
+    hoveredParentObj?.children?.length ? hoveredParentObj.children : childrenOf(hoverParent);
+  const hasChildren = (currentChildren || []).length > 0;
 
   return (
     <header className="bg-light1 border-b border-light2 relative z-50">
@@ -118,14 +128,13 @@ const Header = () => {
                 {shopOpen && (
                   <div
                     className={
-                      // Sağ panel ancak alt kategori varsa açılacak, yoksa dar panel
                       `absolute left-0 top-full mt-3 bg-white border border-light2 rounded-xl shadow-xl p-4 z-50 ` +
                       (hasChildren ? "w-[680px] grid grid-cols-2 gap-4" : "w-[360px]")
                     }
                     onMouseEnter={openMenu}
                     onMouseLeave={scheduleClose}
                   >
-                    {/* Sol kolon: Parent kategoriler (tek kolonken border yok) */}
+                    {/* Sol kolon: Parent kategoriler */}
                     <div className={hasChildren ? "border-r border-light2 pr-4" : ""}>
                       <div className="text-xs uppercase text-dark2 mb-2">
                         Kategoriler
@@ -134,7 +143,7 @@ const Header = () => {
                         {parents.map((p) => (
                           <li key={p._id}>
                             <button
-                              onMouseEnter={() => setHoverParent(p._id)} // ← hover edince sağ panel değerlendirilecek
+                              onMouseEnter={() => setHoverParent(p._id)}
                               onClick={() =>
                                 goShopWith({ category: [p._id], subCategory: [] })
                               }

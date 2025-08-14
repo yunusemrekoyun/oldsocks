@@ -378,14 +378,11 @@ export default function AdminLayout({ children }) {
         {/* Top App Bar */}
         <header className="sticky top-0 z-[50] bg-gray-50/80 backdrop-blur supports-[backdrop-filter]:bg-gray-50/60 border-b">
           <div className="flex items-center justify-between px-4 md:px-6 h-14">
-            {/* Breadcrumb & Title */}
+            {/* Breadcrumb (büyük başlık kaldırıldı, breadcrumb büyütüldü) */}
             <div className="min-w-0">
-              <div className="text-xs text-gray-500 truncate">
+              <div className="text-sm md:text-base font-medium text-gray-700 truncate">
                 {crumbs.length ? crumbs.join(" / ") : "Ana Sayfa"}
               </div>
-              <h2 className="text-lg font-semibold text-gray-800 truncate">
-                {crumbs[crumbs.length - 1] || "Ana Sayfa"}
-              </h2>
             </div>
 
             {/* Right actions (placeholder) */}
