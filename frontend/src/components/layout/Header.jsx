@@ -72,8 +72,6 @@ const Header = () => {
   ];
 
   // Mevcut parent için children listesi:
-  // - Eğer backend virtual `children` doldurmuşsa onu kullan
-  // - Yoksa flat listeden türet
   const hoveredParentObj = cats.find((x) => getId(x._id) === String(hoverParent));
   const currentChildren =
     hoveredParentObj?.children?.length ? hoveredParentObj.children : childrenOf(hoverParent);
@@ -129,13 +127,24 @@ const Header = () => {
                   <div
                     className={
                       `absolute left-0 top-full mt-3 bg-white border border-light2 rounded-xl shadow-xl p-4 z-50 ` +
-                      (hasChildren ? "w-[680px] grid grid-cols-2 gap-4" : "w-[360px]")
+                      (hasChildren ? "w-[700px] grid grid-cols-2 gap-4" : "w-[380px]")
                     }
                     onMouseEnter={openMenu}
                     onMouseLeave={scheduleClose}
                   >
-                    {/* Sol kolon: Parent kategoriler */}
+                    {/* Sol kolon: Fırsatlar + Parent kategoriler */}
                     <div className={hasChildren ? "border-r border-light2 pr-4" : ""}>
+                      {/* Fırsatlar bölümü */}
+                      <div className="mb-3">
+                        <div className="text-xs uppercase text-dark2 mb-2">Fırsatlar</div>
+                        <button
+                          onClick={() => goShopWith({ discountOnly: true })}
+                          className="w-full text-left px-3 py-2 rounded-lg border border-amber-200 bg-amber-50 hover:bg-amber-100 transition"
+                        >
+                          İndirimdekiler
+                        </button>
+                      </div>
+
                       <div className="text-xs uppercase text-dark2 mb-2">
                         Kategoriler
                       </div>
@@ -269,6 +278,8 @@ const Header = () => {
             >
               Ana Sayfa
             </Link>
+
+            {/* Mağaza */}
             <button
               onClick={() => {
                 setMobileMenuOpen(false);
@@ -278,6 +289,15 @@ const Header = () => {
             >
               Mağaza
             </button>
+
+            {/* İndirimdekiler (Mobil) */}
+            <button
+              onClick={() => goShopWith({ discountOnly: true })}
+              className="text-left hover:text-brand"
+            >
+              İndirimdekiler
+            </button>
+
             {menuItems.slice(1).map(({ label, path }) => (
               <Link
                 key={path}

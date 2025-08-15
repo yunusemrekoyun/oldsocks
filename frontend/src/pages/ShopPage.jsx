@@ -32,15 +32,13 @@ export default function ShopPage() {
     sizes: [],
     colors: [],
     priceRange: [0, Infinity],
+    discountOnly: false, // <- İndirim filtresi
   };
   const [filters, setFilters] = useState(defaultFilters);
 
   // 1) Kategorileri çek
   useEffect(() => {
-    api
-      .get("/categories")
-      .then(({ data }) => setCategories(data))
-      .catch(console.error);
+    api.get("/categories").then(({ data }) => setCategories(data)).catch(console.error);
   }, []);
 
   // 2) Ürünleri (kampanya yoksa) çek
@@ -59,11 +57,17 @@ export default function ShopPage() {
   // 3) Header’dan preset geldiyse filtrelere uygula
   useEffect(() => {
     if (state?.preset) {
-      const { category = [], subCategory = [] } = state.preset || {};
+      const {
+        category = [],
+        subCategory = [],
+        discountOnly = false, // <- preset’ten al
+      } = state.preset || {};
+
       setFilters((f) => ({
         ...f,
         category: Array.isArray(category) ? category : [],
         subCategory: Array.isArray(subCategory) ? subCategory : [],
+        discountOnly: Boolean(discountOnly),
       }));
       setVisibleCount(20);
     }
@@ -72,7 +76,8 @@ export default function ShopPage() {
 
   // 4) Hangi liste?
   const baseList = miniItems || campaignItems || allProducts;
-  const title = miniTitle || campaignTitle || "";
+  const discountTitle = state?.preset?.discountOnly ? "İndirimdekiler" : "";
+  const title = discountTitle || miniTitle || campaignTitle || "";
 
   // 5) Kampanya varsa priceRange ayarla
   useEffect(() => {
@@ -92,14 +97,27 @@ export default function ShopPage() {
         ? p.category.parent._id
         : null;
 
+    // İndirimli ürün kontrolü:
+    // - effectiveDiscount (backend’den gelebilir)
+    // - discount alanı
+    // - fallback: originalPrice > price ise indirim vardır
+    const effectiveDiscount = Number(p.effectiveDiscount ?? p.discount ?? 0);
+    const hasDiscount =
+      effectiveDiscount > 0 ||
+      (p.originalPrice != null && Number(p.originalPrice) > Number(p.price));
+
+    if (filters.discountOnly && !hasDiscount) return false;
+
     if (filters.subCategory.length) {
       if (!filters.subCategory.includes(cat)) return false;
     } else if (filters.category.length) {
       if (!filters.category.includes(cat) && !filters.category.includes(parent))
         return false;
     }
+
     if (filters.sizes.length && !p.sizes?.some((s) => filters.sizes.includes(s)))
       return false;
+
     if (filters.colors.length && !filters.colors.includes(p.color)) return false;
 
     const [low, high] = filters.priceRange;
