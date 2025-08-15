@@ -6,10 +6,12 @@ const { allowRoles } = require("../middleware/roles");
 
 // Sağlık kontrolü
 router.get("/", (req, res) => res.json({ message: "API çalışıyor 🚀" }));
+
 // sadece login’li
 router.get("/protected", verifyToken, (req, res) =>
   res.json({ message: "Buraya eriştin!", user: req.user })
 );
+
 // sadece admin
 router.get("/admin-only", verifyToken, allowRoles("admin"), (req, res) =>
   res.json({ message: "Admin paneline hoş geldin." })
@@ -44,5 +46,9 @@ router.use("/profile-pictures", require("./userProfilePictures"));
 
 // Instagram postları
 router.use("/instagram-posts", require("./instagramPostRoutes"));
+
+/* --- İNDİRİM KURALLARI (YENİ) --- */
+// /api/v1/discount-rules altında hizmet verir
+router.use("/discount-rules", require("./discountRuleRoutes"));
 
 module.exports = router;

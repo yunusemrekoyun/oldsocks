@@ -112,11 +112,7 @@ export default function OrdersPage() {
     })}`;
 
   if (loading) {
-    return (
-      <div className="p-8 text-lg text-dark1">
-        Yükleniyor…
-      </div>
-    );
+    return <div className="p-8 text-lg text-dark1">Yükleniyor…</div>;
   }
 
   return (
@@ -174,15 +170,18 @@ export default function OrdersPage() {
       ) : (
         <div className="space-y-5">
           {filteredOrders.map((order) => {
-            const count = order.items?.reduce((t, it) => t + (it.qty || 0), 0) || 0;
+            const count =
+              order.items?.reduce((t, it) => t + (it.qty || 0), 0) || 0;
             const changed = order.selectedStatus !== order.status;
-            const statusClass = STATUS_STYLES[order.status] || "bg-light1 text-dark1";
-            const selectedClass = STATUS_STYLES[order.selectedStatus] || "bg-light1 text-dark1";
+            const statusClass =
+              STATUS_STYLES[order.status] || "bg-light1 text-dark1";
+            const selectedClass =
+              STATUS_STYLES[order.selectedStatus] || "bg-light1 text-dark1";
 
             return (
               <div
                 key={order._id}
-                className="bg-white border border-light2 rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-shadow"
+                className="bg-white border border-light2 rounded-2xl shadow-sm hover:shadow-md transition-shadow"
               >
                 {/* Üst şerit */}
                 <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 px-5 py-4 border-b border-light2">
@@ -219,20 +218,34 @@ export default function OrdersPage() {
                     <table className="w-full text-sm">
                       <thead className="bg-light1 text-dark2">
                         <tr>
-                          <th className="text-left px-4 py-2 font-medium">Ürün</th>
-                          <th className="text-left px-4 py-2 font-medium">Varyant</th>
-                          <th className="text-right px-4 py-2 font-medium">Adet</th>
-                          <th className="text-right px-4 py-2 font-medium">Birim</th>
-                          <th className="text-right px-4 py-2 font-medium">Tutar</th>
+                          <th className="text-left px-4 py-2 font-medium">
+                            Ürün
+                          </th>
+                          <th className="text-left px-4 py-2 font-medium">
+                            Varyant
+                          </th>
+                          <th className="text-right px-4 py-2 font-medium">
+                            Adet
+                          </th>
+                          <th className="text-right px-4 py-2 font-medium">
+                            Birim
+                          </th>
+                          <th className="text-right px-4 py-2 font-medium">
+                            Tutar
+                          </th>
                         </tr>
                       </thead>
                       <tbody>
                         {order.items.map((item, idx) => (
                           <tr
                             key={idx}
-                            className={idx % 2 === 0 ? "bg-white" : "bg-light1/50"}
+                            className={
+                              idx % 2 === 0 ? "bg-white" : "bg-light1/50"
+                            }
                           >
-                            <td className="px-4 py-2 text-dark1">{item.name}</td>
+                            <td className="px-4 py-2 text-dark1">
+                              {item.name}
+                            </td>
                             <td className="px-4 py-2 text-dark2">
                               {(item.size && `Beden: ${item.size}`) ||
                                 (item.color && `Renk: ${item.color}`) ||
@@ -270,28 +283,41 @@ export default function OrdersPage() {
                             <FaChevronDown className="absolute right-2 opacity-60" />
                           </Listbox.Button>
                           <Listbox.Options className="absolute mt-1 w-full bg-white border border-light2 rounded-lg shadow-lg z-10 text-sm overflow-hidden">
-                            {Object.entries(STATUS_LABELS).map(([key, label]) => {
-                              const cls = STATUS_STYLES[key] || "bg-light1 text-dark1";
-                              return (
-                                <Listbox.Option
-                                  key={key}
-                                  value={key}
-                                  className={({ active, selected }) =>
-                                    `px-3 py-2 cursor-pointer ${active ? "bg-light1" : "bg-white"}`
-                                  }
-                                >
-                                  {({ selected }) => (
-                                    <div className={`flex items-center gap-2 ${selected ? "font-semibold" : ""}`}>
-                                      <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full ${cls}`}>
-                                        {STATUS_ICON[key]}
-                                        {label}
-                                      </span>
-                                      {selected && <FaCheck className="ml-auto text-dark2" />}
-                                    </div>
-                                  )}
-                                </Listbox.Option>
-                              );
-                            })}
+                            {Object.entries(STATUS_LABELS).map(
+                              ([key, label]) => {
+                                const cls =
+                                  STATUS_STYLES[key] || "bg-light1 text-dark1";
+                                return (
+                                  <Listbox.Option
+                                    key={key}
+                                    value={key}
+                                    className={({ active, selected }) =>
+                                      `px-3 py-2 cursor-pointer ${
+                                        active ? "bg-light1" : "bg-white"
+                                      }`
+                                    }
+                                  >
+                                    {({ selected }) => (
+                                      <div
+                                        className={`flex items-center gap-2 ${
+                                          selected ? "font-semibold" : ""
+                                        }`}
+                                      >
+                                        <span
+                                          className={`inline-flex items-center gap-1 px-2 py-1 rounded-full ${cls}`}
+                                        >
+                                          {STATUS_ICON[key]}
+                                          {label}
+                                        </span>
+                                        {selected && (
+                                          <FaCheck className="ml-auto text-dark2" />
+                                        )}
+                                      </div>
+                                    )}
+                                  </Listbox.Option>
+                                );
+                              }
+                            )}
                           </Listbox.Options>
                         </div>
                       </Listbox>
@@ -304,11 +330,15 @@ export default function OrdersPage() {
                           disabled={updatingId === order._id}
                           className="px-4 py-2 rounded-lg bg-dark1 text-white hover:bg-dark2 transition disabled:opacity-60"
                         >
-                          {updatingId === order._id ? "Kaydediliyor..." : "Güncelle"}
+                          {updatingId === order._id
+                            ? "Kaydediliyor..."
+                            : "Güncelle"}
                         </button>
                       )}
                       {!changed && (
-                        <span className="text-xs text-dark2">Güncel durumda</span>
+                        <span className="text-xs text-dark2">
+                          Güncel durumda
+                        </span>
                       )}
                     </div>
                   </div>

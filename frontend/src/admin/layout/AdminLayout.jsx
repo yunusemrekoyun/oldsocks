@@ -1,6 +1,7 @@
 // src/components/layout/AdminLayout.jsx
 import React, { useEffect, useMemo, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
+import api from "../../../api";
 import {
   Card,
   Typography,
@@ -8,7 +9,6 @@ import {
   ListItemPrefix,
   Drawer,
   IconButton,
-  Input,
 } from "@material-tailwind/react";
 import {
   TagIcon,
@@ -27,11 +27,13 @@ import {
 /* --------- Küçük yardımcılar --------- */
 const cx = (...cls) => cls.filter(Boolean).join(" ");
 
-const NavBadge = ({ children }) => (
-  <span className="ml-auto text-[10px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-600">
-    {children}
-  </span>
-);
+// Kırmızı sayı rozeti
+const CountBadge = ({ count }) =>
+  count > 0 ? (
+    <span className="ml-auto inline-flex items-center justify-center min-w-[18px] h-[18px] px-1.5 rounded-full bg-red-600 text-white text-[10px]">
+      {count > 99 ? "99+" : count}
+    </span>
+  ) : null;
 
 /* --------- Ana Layout --------- */
 export default function AdminLayout({ children }) {
@@ -41,6 +43,9 @@ export default function AdminLayout({ children }) {
   const [blogMenuOpen, setBlogMenuOpen] = useState(false);
   const [commentsMenuOpen, setCommentsMenuOpen] = useState(false);
   const [instagramMenuOpen, setInstagramMenuOpen] = useState(false);
+
+  // Bildirim sayaçları
+  const [noti, setNoti] = useState({ orders: 0, comments: 0, replies: 0 });
 
   // Aktif rota kontrolü
   const isActive = (path) => {
@@ -57,7 +62,56 @@ export default function AdminLayout({ children }) {
       isActive("/admin/comments") || isActive("/admin/replies")
     );
     setInstagramMenuOpen(isActive("/admin/instagram-posts"));
-  }, []); // eslint-disable-line
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Bildirim sayaçlarını periyodik çek
+  useEffect(() => {
+    let ignore = false;
+
+    const fetchCounts = async () => {
+      try {
+        const [ordersRes, commentsRes, repliesRes] = await Promise.allSettled([
+          api.get("/orders/all"), // siparişler
+          api.get("/comments?approved=false"), // onaysız yorumlar
+          api.get("/replies?approved=false"), // onaysız yanıtlar
+        ]);
+
+        const orders =
+          ordersRes.status === "fulfilled" &&
+          Array.isArray(ordersRes.value.data)
+            ? ordersRes.value.data
+            : [];
+        const comments =
+          commentsRes.status === "fulfilled" &&
+          Array.isArray(commentsRes.value.data)
+            ? commentsRes.value.data
+            : [];
+        const replies =
+          repliesRes.status === "fulfilled" &&
+          Array.isArray(repliesRes.value.data)
+            ? repliesRes.value.data
+            : [];
+
+        const ordersCount = orders.filter((o) => o.status === "paid").length;
+
+        setNoti({
+          orders: ordersCount,
+          comments: comments.length,
+          replies: replies.length,
+        });
+      } catch {
+        // sessiz geç
+      }
+    };
+
+    fetchCounts();
+    const t = setInterval(fetchCounts, 30000); // 30 sn’de bir
+    return () => {
+      ignore = true;
+      clearInterval(t);
+    };
+  }, []);
 
   const navItems = useMemo(
     () => [
@@ -71,6 +125,11 @@ export default function AdminLayout({ children }) {
         label: "Ürünler",
         icon: <ShoppingBagIcon className="w-5 h-5" />,
         path: "/admin/products",
+      },
+      {
+        label: "İndirimler",
+        icon: <TagIcon className="w-5 h-5" />,
+        path: "/admin/discounts",
       },
       {
         label: "Kullanıcılar",
@@ -106,15 +165,10 @@ export default function AdminLayout({ children }) {
         </Typography>
       </div>
 
-      {/* Küçük arama */}
-      <div className="mb-3">
-        <Input label="Menüde ara" crossOrigin="" />
-      </div>
-
       {/* Scroll alanı */}
       <div
         className="overflow-y-auto pr-1 custom-scrollbar"
-        style={{ maxHeight: "calc(100vh - 140px)" }}
+        style={{ maxHeight: "calc(100vh - 100px)" }}
       >
         <List className="space-y-1">
           {/* Düz linkler */}
@@ -141,6 +195,7 @@ export default function AdminLayout({ children }) {
                 />
                 <ListItemPrefix>{icon}</ListItemPrefix>
                 <span className="truncate">{label}</span>
+                {path === "/admin/orders" && <CountBadge count={noti.orders} />}
               </Link>
             );
           })}
@@ -229,14 +284,14 @@ export default function AdminLayout({ children }) {
               <ChatBubbleLeftEllipsisIcon className="w-5 h-5" />
             </ListItemPrefix>
             <span className="truncate">Yorumlar</span>
-            <NavBadge>2</NavBadge>
-            <span className="ml-1">
+            <div className="ml-auto flex items-center gap-1">
+              <CountBadge count={noti.comments + noti.replies} />
               {commentsMenuOpen ? (
                 <ChevronDownIcon className="w-4 h-4" />
               ) : (
                 <ChevronRightIcon className="w-4 h-4" />
               )}
-            </span>
+            </div>
           </button>
           <div
             className={cx(
@@ -248,25 +303,27 @@ export default function AdminLayout({ children }) {
               to="/admin/comments"
               onClick={() => setOpen(false)}
               className={cx(
-                "block rounded px-3 py-1 text-sm transition",
+                "block rounded px-3 py-1 text-sm transition flex items-center justify-between",
                 isActive("/admin/comments")
                   ? "bg-blue-50 text-blue-700 font-semibold"
                   : "hover:bg-gray-100 text-gray-800"
               )}
             >
-              Yorumlar
+              <span>Yorumlar</span>
+              <CountBadge count={noti.comments} />
             </Link>
             <Link
               to="/admin/replies"
               onClick={() => setOpen(false)}
               className={cx(
-                "block rounded px-3 py-1 text-sm transition",
+                "block rounded px-3 py-1 text-sm transition flex items-center justify-between",
                 isActive("/admin/replies")
                   ? "bg-blue-50 text-blue-700 font-semibold"
                   : "hover:bg-gray-100 text-gray-800"
               )}
             >
-              Yanıtlar
+              <span>Yanıtlar</span>
+              <CountBadge count={noti.replies} />
             </Link>
           </div>
 
@@ -408,7 +465,7 @@ export default function AdminLayout({ children }) {
 
 /* ---- opsiyonel: ince scrollbar (Tailwind global css’inize ekleyebilirsiniz) ----
 .custom-scrollbar::-webkit-scrollbar { width: 8px; }
-.custom-scrollbar::-webkit-scrollbar-thumb {
+.custom-scrollbar::-webkit-scrollbar-thumb {F
   background-color: rgba(0,0,0,.12);
   border-radius: 9999px;
 }

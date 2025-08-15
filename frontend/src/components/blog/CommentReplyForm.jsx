@@ -46,7 +46,7 @@ export default function CommentReplyForm({ commentId, onReplyPosted }) {
               : "bg-green-600 text-white hover:bg-green-700"
           }`}
         >
-          {submitting ? "Posting…" : "Post Reply"}
+          {submitting ? "Gönderiliyor..." : "Yanıtı Gönder"}
         </button>
       </form>
 

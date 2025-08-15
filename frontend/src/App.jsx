@@ -41,6 +41,8 @@ import InstagramPostsPage from "./admin/pages/InstagramPostsPage";
 import OrdersPage from "./admin/pages/OrdersPage";
 import ProductListPage from "./admin/pages/ProductListPage";
 import AdminUsersPage from "./admin/pages/UsersPage";
+import DiscountsPage from "./admin/pages/DiscountsPage";
+
 export default function App() {
   return (
     <BrowserRouter>
@@ -100,6 +102,7 @@ export default function App() {
           >
             <Route index element={<div>Hoş geldin Admin!</div>} />
             <Route path="products" element={<ProductListPage />} />
+            <Route path="discounts" element={<DiscountsPage />} />
             <Route path="users" element={<AdminUsersPage />} />
             <Route path="categories" element={<CategoriesPage />} />
             <Route path="campaigns" element={<CampaignsPage />} />
