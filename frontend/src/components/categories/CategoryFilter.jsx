@@ -1,4 +1,4 @@
-// ✅ Redesigned CategoryFilter Component — Mobile Dropdown Friendly
+// ✅ Redesigned CategoryFilter Component — Mobile Dropdown Friendly (fixed)
 import React, { useState, useEffect } from "react";
 import { FaChevronDown, FaXmark } from "react-icons/fa6";
 
@@ -20,7 +20,8 @@ export default function CategoryFilter({
   const [expandedMobile, setExpandedMobile] = useState(false);
   const [priceInput, setPriceInput] = useState({ min: "", max: "" });
 
-  const prices = products.map((p) => p.price);
+  // Fiyat aralığı
+  const prices = products.map((p) => Number(p.price || 0));
   const minPrice = prices.length ? Math.min(...prices) : 0;
   const maxPrice = prices.length ? Math.max(...prices) : 0;
 
@@ -32,48 +33,68 @@ export default function CategoryFilter({
     });
   }, [filters.priceRange, minPrice, maxPrice]);
 
+  // Toggle helper
   const toggleFilter = (key, val) => {
-    const prev = filters[key];
+    const prev = Array.isArray(filters[key]) ? filters[key] : [];
     const next = prev.includes(val)
       ? prev.filter((x) => x !== val)
       : [...prev, val];
     onFilterChange({ ...filters, [key]: next });
   };
 
+  // Kategoriler
   const parentCats = categories.filter((c) => !c.parent);
   const allSub = parentCats.flatMap((p) =>
     (p.children || []).map((ch) => ({
-      value: ch._id,
+      value: String(ch._id),
       label: ch.name,
-      parent: p._id,
+      parent: String(p._id),
     }))
   );
+  // Duplicate clean
   const subCats = Array.from(new Map(allSub.map((i) => [i.value, i])).values());
   const subOptions = filters.category.length
     ? subCats.filter((s) => filters.category.includes(s.parent))
     : [];
 
-  const sizes = Array.from(new Set(products.flatMap((p) => p.sizes))).sort();
-  const colors = Array.from(new Set(products.map((p) => p.color))).filter(
-    Boolean
-  );
+  // ✅ BEDENLERİ string'e çevirip eşsiz hale getir
+  const sizeValues = Array.from(
+    new Set(
+      products
+        .flatMap((p) =>
+          Array.isArray(p.sizes)
+            ? p.sizes.map((s) => String((s?.size || "").trim()))
+            : []
+        )
+        .filter(Boolean)
+    )
+  ).sort((a, b) => a.localeCompare(b, "tr"));
+
+  // ✅ RENKLERİ normalize et
+  const colorValues = Array.from(
+    new Set(
+      products
+        .map((p) => String((p.color || "").trim()))
+        .filter((c) => c && c !== "-")
+    )
+  ).sort((a, b) => a.localeCompare(b, "tr"));
 
   const sections = [
     {
       label: "Kategori",
       key: "category",
-      options: parentCats.map((c) => ({ value: c._id, label: c.name })),
+      options: parentCats.map((c) => ({ value: String(c._id), label: c.name })),
     },
     { label: "Alt Kategori", key: "subCategory", options: subOptions },
     {
       label: "Beden",
       key: "sizes",
-      options: sizes.map((s) => ({ value: s, label: s })),
+      options: sizeValues.map((s) => ({ value: s, label: s })),
     },
     {
       label: "Renk",
       key: "colors",
-      options: colors.map((c) => ({ value: c, label: c })),
+      options: colorValues.map((c) => ({ value: c, label: c })),
     },
   ];
 
@@ -82,6 +103,7 @@ export default function CategoryFilter({
       className={`bg-white border border-light2 rounded-2xl shadow-md overflow-hidden transition-all duration-300 
         ${expandedMobile ? "max-h-[2000px]" : "max-h-[60px] md:max-h-none"}`}
     >
+      {/* Mobile header */}
       <button
         onClick={() => setExpandedMobile((p) => !p)}
         className="md:hidden w-full px-6 py-4 flex items-center justify-between bg-dark1 text-white text-lg font-semibold uppercase tracking-wide"
@@ -94,6 +116,7 @@ export default function CategoryFilter({
         />
       </button>
 
+      {/* Desktop header */}
       <div className="hidden md:block bg-dark1 text-white px-6 py-4 text-lg font-semibold uppercase tracking-wide">
         Filtrele
       </div>
@@ -127,11 +150,12 @@ export default function CategoryFilter({
                   </p>
                 ) : (
                   options.map(({ value, label }) => {
-                    const checked = filters[key].includes(value);
+                    const valueStr = String(value);
+                    const checked = (filters[key] || []).includes(valueStr);
                     return (
                       <button
-                        key={value}
-                        onClick={() => toggleFilter(key, value)}
+                        key={valueStr} // ✅ benzersiz string key
+                        onClick={() => toggleFilter(key, valueStr)}
                         className={`text-sm px-3 py-1 rounded-full border transition-all duration-200 ${
                           checked
                             ? "bg-dark1 text-white border-dark1"
@@ -148,6 +172,7 @@ export default function CategoryFilter({
           </div>
         ))}
 
+        {/* Fiyat Aralığı */}
         <div>
           <button
             onClick={() =>
@@ -202,6 +227,7 @@ export default function CategoryFilter({
           )}
         </div>
 
+        {/* Kampanya rozeti */}
         {campaignTitle && (
           <div className="flex items-center justify-between px-6 py-4 bg-light1 border-t border-light2">
             <span className="text-sm font-medium text-dark1 bg-white px-3 py-1 rounded-full">

@@ -12,7 +12,7 @@ import {
   FaCheckCircle,
   FaBan,
 } from "react-icons/fa";
-
+import useUnseenOrders from "../../hooks/useUnseenOrders";
 const STATUS_LABELS = {
   pending: "Sipariş oluşturuldu",
   paid: "Ödeme alındı",
@@ -43,7 +43,7 @@ export default function OrdersPage() {
   const [filteredOrders, setFilteredOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [updatingId, setUpdatingId] = useState(null);
-
+  const { markSeen } = useUnseenOrders();
   const [searchTerm, setSearchTerm] = useState("");
   const [sortOrder, setSortOrder] = useState("desc");
   const [statusFilter, setStatusFilter] = useState("");
@@ -85,6 +85,15 @@ export default function OrdersPage() {
       prev.map((o) => (o._id === id ? { ...o, selectedStatus: newStatus } : o))
     );
   };
+
+  useEffect(() => {
+    const doSeen = () => markSeen();
+    // sayfa ilk açılışında
+    doSeen();
+    // pencere yeniden odaklanınca
+    window.addEventListener("focus", doSeen);
+    return () => window.removeEventListener("focus", doSeen);
+  }, [markSeen]);
 
   const updateStatus = async (id) => {
     const order = orders.find((o) => o._id === id);
@@ -291,7 +300,7 @@ export default function OrdersPage() {
                                   <Listbox.Option
                                     key={key}
                                     value={key}
-                                    className={({ active, selected }) =>
+                                    className={({ active }) =>
                                       `px-3 py-2 cursor-pointer ${
                                         active ? "bg-light1" : "bg-white"
                                       }`

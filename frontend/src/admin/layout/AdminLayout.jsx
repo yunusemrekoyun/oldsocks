@@ -1,7 +1,10 @@
 // src/components/layout/AdminLayout.jsx
 import React, { useEffect, useMemo, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
-import api from "../../../api";
+import useUnseenOrders from "../../hooks/useUnseenOrders";
+import useUnseenComments from "../../hooks/useUnseenComments";
+import useUnseenReplies from "../../hooks/useUnseenReplies";
+// api importu ve bildirimle ilgili her şey kaldırıldı
 import {
   Card,
   Typography,
@@ -24,28 +27,19 @@ import {
   ChevronRightIcon,
 } from "@heroicons/react/24/solid";
 
-/* --------- Küçük yardımcılar --------- */
+/* --------- Küçük yardımcı --------- */
 const cx = (...cls) => cls.filter(Boolean).join(" ");
-
-// Kırmızı sayı rozeti
-const CountBadge = ({ count }) =>
-  count > 0 ? (
-    <span className="ml-auto inline-flex items-center justify-center min-w-[18px] h-[18px] px-1.5 rounded-full bg-red-600 text-white text-[10px]">
-      {count > 99 ? "99+" : count}
-    </span>
-  ) : null;
 
 /* --------- Ana Layout --------- */
 export default function AdminLayout({ children }) {
   const location = useLocation();
-
+  const { count: unseenOrders } = useUnseenOrders({ poll: true });
+  const { count: unseenComments } = useUnseenComments({ poll: true });
+  const { count: unseenReplies } = useUnseenReplies({ poll: true });
   const [open, setOpen] = useState(false); // mobile drawer
   const [blogMenuOpen, setBlogMenuOpen] = useState(false);
   const [commentsMenuOpen, setCommentsMenuOpen] = useState(false);
   const [instagramMenuOpen, setInstagramMenuOpen] = useState(false);
-
-  // Bildirim sayaçları
-  const [noti, setNoti] = useState({ orders: 0, comments: 0, replies: 0 });
 
   // Aktif rota kontrolü
   const isActive = (path) => {
@@ -63,54 +57,6 @@ export default function AdminLayout({ children }) {
     );
     setInstagramMenuOpen(isActive("/admin/instagram-posts"));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // Bildirim sayaçlarını periyodik çek
-  useEffect(() => {
-    let ignore = false;
-
-    const fetchCounts = async () => {
-      try {
-        const [ordersRes, commentsRes, repliesRes] = await Promise.allSettled([
-          api.get("/orders/all"), // siparişler
-          api.get("/comments?approved=false"), // onaysız yorumlar
-          api.get("/replies?approved=false"), // onaysız yanıtlar
-        ]);
-
-        const orders =
-          ordersRes.status === "fulfilled" &&
-          Array.isArray(ordersRes.value.data)
-            ? ordersRes.value.data
-            : [];
-        const comments =
-          commentsRes.status === "fulfilled" &&
-          Array.isArray(commentsRes.value.data)
-            ? commentsRes.value.data
-            : [];
-        const replies =
-          repliesRes.status === "fulfilled" &&
-          Array.isArray(repliesRes.value.data)
-            ? repliesRes.value.data
-            : [];
-
-        const ordersCount = orders.filter((o) => o.status === "paid").length;
-
-        setNoti({
-          orders: ordersCount,
-          comments: comments.length,
-          replies: replies.length,
-        });
-      } catch {
-        // sessiz geç
-      }
-    };
-
-    fetchCounts();
-    const t = setInterval(fetchCounts, 30000); // 30 sn’de bir
-    return () => {
-      ignore = true;
-      clearInterval(t);
-    };
   }, []);
 
   const navItems = useMemo(
@@ -171,7 +117,7 @@ export default function AdminLayout({ children }) {
         style={{ maxHeight: "calc(100vh - 100px)" }}
       >
         <List className="space-y-1">
-          {/* Düz linkler */}
+          {/* Düz linkler (rozetler kaldırıldı) */}
           {navItems.map(({ label, icon, path }) => {
             const active = isActive(path);
             return (
@@ -195,12 +141,16 @@ export default function AdminLayout({ children }) {
                 />
                 <ListItemPrefix>{icon}</ListItemPrefix>
                 <span className="truncate">{label}</span>
-                {path === "/admin/orders" && <CountBadge count={noti.orders} />}
+                {path === "/admin/orders" && unseenOrders > 0 && (
+                  <span className="ml-auto inline-flex items-center justify-center min-w-[18px] h-[18px] px-1.5 rounded-full bg-red-600 text-white text-[10px]">
+                    {unseenOrders > 99 ? "99+" : unseenOrders}
+                  </span>
+                )}
               </Link>
             );
           })}
 
-          {/* Bloglar menüsü */}
+          {/* Bloglar menüsü (rozet yok) */}
           <button
             onClick={() => setBlogMenuOpen((o) => !o)}
             className={cx(
@@ -262,7 +212,7 @@ export default function AdminLayout({ children }) {
             </Link>
           </div>
 
-          {/* Yorumlar menüsü */}
+          {/* Yorumlar menüsü (rozet yok) */}
           <button
             onClick={() => setCommentsMenuOpen((o) => !o)}
             className={cx(
@@ -285,7 +235,13 @@ export default function AdminLayout({ children }) {
             </ListItemPrefix>
             <span className="truncate">Yorumlar</span>
             <div className="ml-auto flex items-center gap-1">
-              <CountBadge count={noti.comments + noti.replies} />
+              {unseenComments + unseenReplies > 0 && (
+                <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1.5 rounded-full bg-red-600 text-white text-[10px]">
+                  {unseenComments + unseenReplies > 99
+                    ? "99+"
+                    : unseenComments + unseenReplies}
+                </span>
+              )}
               {commentsMenuOpen ? (
                 <ChevronDownIcon className="w-4 h-4" />
               ) : (
@@ -303,27 +259,36 @@ export default function AdminLayout({ children }) {
               to="/admin/comments"
               onClick={() => setOpen(false)}
               className={cx(
-                "block rounded px-3 py-1 text-sm transition flex items-center justify-between",
+                "rounded px-3 py-1 text-sm transition flex items-center justify-between",
                 isActive("/admin/comments")
                   ? "bg-blue-50 text-blue-700 font-semibold"
                   : "hover:bg-gray-100 text-gray-800"
               )}
             >
               <span>Yorumlar</span>
-              <CountBadge count={noti.comments} />
+              {unseenComments > 0 && (
+                <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1.5 rounded-full bg-red-600 text-white text-[10px]">
+                  {unseenComments > 99 ? "99+" : unseenComments}
+                </span>
+              )}
             </Link>
+
             <Link
               to="/admin/replies"
               onClick={() => setOpen(false)}
               className={cx(
-                "block rounded px-3 py-1 text-sm transition flex items-center justify-between",
+                " rounded px-3 py-1 text-sm transition flex items-center justify-between",
                 isActive("/admin/replies")
                   ? "bg-blue-50 text-blue-700 font-semibold"
                   : "hover:bg-gray-100 text-gray-800"
               )}
             >
               <span>Yanıtlar</span>
-              <CountBadge count={noti.replies} />
+              {unseenReplies > 0 && (
+                <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1.5 rounded-full bg-red-600 text-white text-[10px]">
+                  {unseenReplies > 99 ? "99+" : unseenReplies}
+                </span>
+              )}
             </Link>
           </div>
 
@@ -397,6 +362,7 @@ export default function AdminLayout({ children }) {
       comments: "Yorumlar",
       replies: "Yanıtlar",
       "instagram-posts": "Instagram",
+      discounts: "İndirimler",
     };
     return parts.map((p) => map[p] || p);
   }, [location.pathname]);
@@ -435,14 +401,11 @@ export default function AdminLayout({ children }) {
         {/* Top App Bar */}
         <header className="sticky top-0 z-[50] bg-gray-50/80 backdrop-blur supports-[backdrop-filter]:bg-gray-50/60 border-b">
           <div className="flex items-center justify-between px-4 md:px-6 h-14">
-            {/* Breadcrumb (büyük başlık kaldırıldı, breadcrumb büyütüldü) */}
             <div className="min-w-0">
               <div className="text-sm md:text-base font-medium text-gray-700 truncate">
                 {crumbs.length ? crumbs.join(" / ") : "Ana Sayfa"}
               </div>
             </div>
-
-            {/* Right actions (placeholder) */}
             <div className="flex items-center gap-2">
               <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center text-[10px] text-gray-600">
                 ADM
@@ -454,7 +417,7 @@ export default function AdminLayout({ children }) {
         {/* Page body */}
         <main className="flex-1 p-4 md:p-6">{children}</main>
 
-        {/* Footer (opsiyonel) */}
+        {/* Footer */}
         <footer className="px-6 py-4 text-xs text-gray-500">
           © {new Date().getFullYear()} Admin Panel • Tüm hakları saklıdır.
         </footer>
@@ -465,7 +428,7 @@ export default function AdminLayout({ children }) {
 
 /* ---- opsiyonel: ince scrollbar (Tailwind global css’inize ekleyebilirsiniz) ----
 .custom-scrollbar::-webkit-scrollbar { width: 8px; }
-.custom-scrollbar::-webkit-scrollbar-thumb {F
+.custom-scrollbar::-webkit-scrollbar-thumb {
   background-color: rgba(0,0,0,.12);
   border-radius: 9999px;
 }

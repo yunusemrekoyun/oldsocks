@@ -14,6 +14,12 @@ router.patch(
   allowRoles("admin"),
   ctrl.approveComment
 );
+router.patch(
+  "/mark-seen",
+  verifyToken,
+  allowRoles("admin"),
+  ctrl.markAllCommentsSeen
+);
 
 // Public ve kullanıcı
 router.get("/blogs/:blogId/comments", ctrl.getCommentsByBlog);

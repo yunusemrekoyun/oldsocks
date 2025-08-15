@@ -4,7 +4,7 @@ import api from "../../../api";
 import { Button, IconButton } from "@material-tailwind/react";
 import { TrashIcon, CheckIcon } from "@heroicons/react/24/outline";
 import ToastAlert from "../../components/ui/ToastAlert"; // ← yolu kontrol edin
-
+import useUnseenReplies from "../../hooks/useUnseenReplies";
 /* ───────── Silme Onay Modali ───────── */
 const ConfirmModal = ({ open, onClose, onConfirm, message }) => {
   if (!open) return null;
@@ -33,7 +33,13 @@ export default function CommentRepliesPage() {
   /* toast & sil onay */
   const [toast, setToast] = useState(null); // { msg, type }
   const [deleteId, setDeleteId] = useState(null);
-
+  const { markSeen } = useUnseenReplies();
+  useEffect(() => {
+    markSeen();
+    const fn = () => markSeen();
+    window.addEventListener("focus", fn);
+    return () => window.removeEventListener("focus", fn);
+  }, [markSeen]);
   /* ───────── Yanıtları getir ───────── */
   const fetchReplies = useCallback(async () => {
     setLoading(true);

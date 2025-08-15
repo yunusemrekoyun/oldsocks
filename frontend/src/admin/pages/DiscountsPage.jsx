@@ -1,679 +1,549 @@
+// src/pages/admin/DiscountsPage.jsx
 import React, { useEffect, useMemo, useState } from "react";
-import {
-  Card,
-  CardBody,
-  Typography,
-  Button,
-  Dialog,
-  DialogHeader,
-  DialogBody,
-  DialogFooter,
-  Input,
-  Tooltip,
-  Checkbox,
-} from "@material-tailwind/react";
-import { PencilIcon, TrashIcon, CheckIcon } from "@heroicons/react/24/outline";
 import api from "../../../api";
-import ToastAlert from "../../components/ui/ToastAlert";
+import {
+  FaPercent,
+  FaTrash,
+  FaPowerOff,
+  FaPlus,
+  FaSearch,
+  FaEdit,
+} from "react-icons/fa";
 
-/* ───────────────── helpers ───────────────── */
 const cx = (...cls) => cls.filter(Boolean).join(" ");
 
-const Badge = ({ children, color = "gray" }) => {
-  const map = {
-    green: "bg-green-100 text-green-800",
-    gray: "bg-gray-100 text-gray-700",
-    blue: "bg-blue-100 text-blue-800",
-    red: "bg-red-100 text-red-800",
-    amber: "bg-amber-100 text-amber-800",
-  };
-  return (
-    <span
-      className={cx(
-        "inline-flex items-center px-2 py-0.5 rounded text-xs",
-        map[color]
-      )}
-    >
-      {children}
-    </span>
-  );
-};
-
-const fmtDate = (d) => (d ? new Date(d).toLocaleDateString("tr-TR") : "—");
-const toISO = (d) => {
-  if (!d) return undefined;
-  const dt = new Date(d);
-  return isNaN(dt) ? undefined : dt.toISOString();
-};
-
-/** Kuralın etkileyeceği ürün sayısını hesapla */
-const countImpacted = (rule, allProducts) => {
-  if (!rule?.targetIds?.length) return 0;
-  const set = new Set();
-
-  if (rule.selectionType === "product") {
-    rule.targetIds.forEach((id) => set.add(String(id)));
-    return set.size;
-  }
-
-  const targetSet = new Set(rule.targetIds.map(String));
-  for (const p of allProducts) {
-    const cat = p.category;
-    const pc = String(cat?._id || "");
-    const pp = String(cat?.parent?._id || cat?.parent || "");
-    if (rule.selectionType === "subcategory") {
-      if (targetSet.has(pc)) set.add(String(p._id));
-    } else {
-      if (targetSet.has(pc) || (pp && targetSet.has(pp)))
-        set.add(String(p._id));
-    }
-  }
-  return set.size;
-};
-
-/* ───────────────── Page ───────────────── */
 export default function DiscountsPage() {
-  const [rules, setRules] = useState([]);
+  /* -------- list state -------- */
   const [loading, setLoading] = useState(true);
+  const [rules, setRules] = useState([]);
 
-  const [options, setOptions] = useState({
-    products: [],
-    categories: [],
-    subcategories: [],
-  });
-
-  // dialog & form
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [dirty, setDirty] = useState(false);
-  const [toast, setToast] = useState(null);
-
-  // UI seçim tipi: 'product' | 'category' | 'subcategory'
-  const [selectionType, setSelectionType] = useState("");
-
-  const [form, setForm] = useState({
-    _id: null,
+  /* -------- form state -------- */
+  const [openForm, setOpenForm] = useState(false);
+  const [mode, setMode] = useState("create"); // "create" | "edit"
+  const [editingId, setEditingId] = useState(null);
+  const emptyForm = {
     title: "",
-    selectionType: "", // api ile birebir: 'product' | 'category' | 'subcategory'
+    discountRate: 0,
+    selectionType: "product", // "product" | "category" | "subcategory"
     targetIds: [],
-    discountRate: "",
-    overrideExisting: true,
-    startAt: "",
-    endAt: "",
     isActive: false,
-  });
+  };
+  const [form, setForm] = useState(emptyForm);
 
-  /* data fetch (rules + products + categories) */
+  /* -------- targets -------- */
+  const [products, setProducts] = useState([]);
+  const [rootCats, setRootCats] = useState([]); // children populated
+  const [search, setSearch] = useState("");
+
+  const resetForm = () => {
+    setForm(emptyForm);
+    setMode("create");
+    setEditingId(null);
+    setSearch("");
+  };
+
+  /* -------- fetch list -------- */
+  const fetchRules = async () => {
+    setLoading(true);
+    try {
+      const { data } = await api.get("/discounts");
+      setRules(Array.isArray(data) ? data : []);
+    } catch (e) {
+      console.error(e);
+      alert("İndirimler alınamadı.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  /* -------- fetch targets -------- */
   useEffect(() => {
-    let alive = true;
-    (async () => {
-      try {
-        const [{ data: ruleList }, { data: prods }, { data: cats }] =
-          await Promise.all([
-            api.get("/discount-rules"),
-            api.get("/products"),
-            api.get("/categories"),
-          ]);
-        if (!alive) return;
-        setRules(Array.isArray(ruleList) ? ruleList : []);
-        setOptions({
-          products: prods || [],
-          categories: cats || [],
-          subcategories: (cats || []).flatMap((c) => c.children || []),
-        });
-      } catch {
-        setToast({
-          type: "error",
-          msg: "İndirim kuralları / veri yüklenemedi.",
-        });
-      } finally {
-        if (alive) setLoading(false);
-      }
-    })();
-    return () => {
-      alive = false;
-    };
+    api
+      .get("/products")
+      .then(({ data }) => setProducts(Array.isArray(data) ? data : []))
+      .catch((e) => console.error("products fetch", e));
+
+    api
+      .get("/categories")
+      .then(({ data }) => setRootCats(Array.isArray(data) ? data : []))
+      .catch((e) => console.error("categories fetch", e));
+
+    fetchRules();
   }, []);
 
-  /* mevcut seçim tipine göre seçenek listesi */
-  const currentOptions = useMemo(() => {
-    if (selectionType === "product") return options.products;
-    if (selectionType === "category") return options.categories;
-    if (selectionType === "subcategory") return options.subcategories;
-    return [];
-  }, [selectionType, options]);
+  const allSubCats = useMemo(
+    () =>
+      rootCats.flatMap((r) =>
+        (r.children || []).map((c) => ({ ...c, parentName: r.name }))
+      ),
+    [rootCats]
+  );
 
-  const selectionCount = form.targetIds.length;
+  const filteredProducts = useMemo(() => {
+    if (!search.trim()) return products;
+    const s = search.toLowerCase();
+    return products.filter((p) => (p.name || "").toLowerCase().includes(s));
+  }, [products, search]);
 
-  const previewRule = useMemo(
-    () => ({
+  /* -------- helpers -------- */
+  const toggleId = (id) => {
+    setForm((f) => {
+      const has = f.targetIds.includes(id);
+      return {
+        ...f,
+        targetIds: has
+          ? f.targetIds.filter((x) => x !== id)
+          : [...f.targetIds, id],
+      };
+    });
+  };
+
+  const openCreate = () => {
+    resetForm();
+    setMode("create");
+    setOpenForm(true);
+  };
+
+  const openEdit = (rule) => {
+    setMode("edit");
+    setEditingId(rule._id);
+    setForm({
+      title: rule.title || "",
+      discountRate: Number(rule.discountRate || 0),
+      selectionType: rule.selectionType || "product",
+      targetIds: (rule.targetIds || []).map(String),
+      isActive: Boolean(rule.isActive),
+    });
+    setOpenForm(true);
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!form.title.trim()) return alert("İndirim adı zorunlu.");
+    if (form.discountRate < 0 || form.discountRate > 100)
+      return alert("İndirim yüzdesi 0-100 olmalı.");
+    if (form.targetIds.length === 0)
+      return alert("En az bir hedef seçmelisiniz.");
+
+    const payload = {
+      title: form.title.trim(),
+      discountRate: Number(form.discountRate),
       selectionType: form.selectionType,
       targetIds: form.targetIds,
-    }),
-    [form.selectionType, form.targetIds]
-  );
-
-  const impactedCount = useMemo(
-    () => countImpacted(previewRule, options.products),
-    [previewRule, options.products]
-  );
-
-  /* dialog helpers */
-  const resetForm = () => {
-    setForm({
-      _id: null,
-      title: "",
-      selectionType: "",
-      targetIds: [],
-      discountRate: "",
-      overrideExisting: true,
-      startAt: "",
-      endAt: "",
-      isActive: false,
-    });
-    setSelectionType("");
-    setDirty(false);
-  };
-
-  const openNew = () => {
-    resetForm();
-    setDialogOpen(true);
-  };
-
-  const openEdit = (r) => {
-    const uiType = r.selectionType; // 'product' | 'category' | 'subcategory'
-    setSelectionType(uiType);
-    setForm({
-      _id: r._id,
-      title: r.title || "",
-      selectionType: r.selectionType,
-      targetIds: r.targetIds || [],
-      discountRate: r.discountRate ?? "",
-      overrideExisting: Boolean(r.overrideExisting),
-      startAt: r.startAt ? r.startAt.slice(0, 10) : "",
-      endAt: r.endAt ? r.endAt.slice(0, 10) : "",
-      isActive: Boolean(r.isActive),
-    });
-    setDirty(false);
-    setDialogOpen(true);
-  };
-
-  const closeDialog = () => {
-    if (
-      dirty &&
-      !window.confirm("Kaydedilmemiş değişiklikler var. Kapatılsın mı?")
-    )
-      return;
-    setDialogOpen(false);
-  };
-
-  /* validation */
-  const isValid =
-    form.title.trim().length > 0 &&
-    !!form.selectionType &&
-    selectionCount > 0 &&
-    String(form.discountRate).trim() !== "" &&
-    !Number.isNaN(Number(form.discountRate));
-
-  /* crud */
-  const refreshList = async () => {
-    try {
-      const { data } = await api.get("/discount-rules");
-      setRules(Array.isArray(data) ? data : []);
-    } catch {
-      setToast({ type: "error", msg: "Liste yenilenemedi." });
-    }
-  };
-
-  const toISO = (d) => {
-    if (!d) return undefined;
-    const dt = new Date(d);
-    return isNaN(dt) ? undefined : dt.toISOString();
-  };
-
-  const saveRule = async () => {
-    const targetIds = (form.targetIds || []).map(String).filter(Boolean);
-    if (!form.selectionType || targetIds.length === 0) {
-      setToast({ type: "error", msg: "Seçim türünü ve hedefleri belirtin." });
-      return;
-    }
-    const payload = {
-      title: (form.title || "").trim(),
-      selectionType: form.selectionType, // 'product' | 'category' | 'subcategory'
-      targetIds,
-      discountRate: Number(form.discountRate),
-      overrideExisting: !!form.overrideExisting,
-      ...(toISO(form.startAt) ? { startAt: toISO(form.startAt) } : {}),
-      ...(toISO(form.endAt) ? { endAt: toISO(form.endAt) } : {}),
+      isActive: Boolean(form.isActive),
     };
 
     try {
-      if (form._id) {
-        await api.put(
-          `/discount-rules/${encodeURIComponent(form._id)}`,
-          payload
+      if (mode === "create") {
+        await api.post("/discounts", payload);
+      } else {
+        await api.put(`/discounts/${editingId}`, payload);
+      }
+      setOpenForm(false);
+      resetForm();
+      await fetchRules();
+    } catch (err) {
+      console.error(err);
+      if (err?.response?.status === 409) {
+        const ids = err?.response?.data?.conflictingProductIds || [];
+        alert(
+          `Çakışan aktif indirim(ler) var. Etkilenen ürün sayısı: ${ids.length}`
         );
       } else {
-        await api.post(`/discount-rules`, payload);
+        alert("İşlem tamamlanamadı.");
       }
-      setToast({ type: "success", msg: "Kural kaydedildi." });
-      setDialogOpen(false);
-      await refreshList();
+    }
+  };
+
+  const toggleRule = async (r, next) => {
+    try {
+      await api.put(`/discounts/${r._id}/toggle`, { isActive: next });
+      await fetchRules();
+    } catch (err) {
+      console.error(err);
+      if (err?.response?.status === 409) {
+        alert(
+          "Çakışan aktif indirim(ler) var. Önce diğerlerini kapatın ya da kapsamı değiştirin."
+        );
+      } else {
+        alert("İndirim güncellenemedi.");
+      }
+    }
+  };
+
+  const deleteRule = async (r) => {
+    if (!window.confirm(`"${r.title}" kuralını silmek istiyor musunuz?`))
+      return;
+    try {
+      await api.delete(`/discounts/${r._id}`);
+      await fetchRules();
     } catch (e) {
-      const msg =
-        e?.response?.data?.message ||
-        e?.response?.data?.error ||
-        "Kural kaydedilemedi.";
-      setToast({ type: "error", msg });
+      console.error(e);
+      alert("İndirim silinemedi.");
     }
   };
 
-  const deleteRule = async (id) => {
-    const rid = encodeURIComponent(id);
-    try {
-      await api.delete(`/discount-rules/${rid}`);
-    } catch (e1) {
-      if (e1?.response?.status === 404) {
-        try {
-          await api.delete(`/discount-rules`, { params: { id: rid } });
-        } catch (e2) {
-          const msg =
-            e2?.response?.data?.message ||
-            e2?.response?.data?.error ||
-            "Kural silinemedi.";
-          setToast({ type: "error", msg });
-          return;
-        }
-      } else {
-        const msg =
-          e1?.response?.data?.message ||
-          e1?.response?.data?.error ||
-          "Kural silinemedi.";
-        setToast({ type: "error", msg });
-        return;
-      }
-    }
-    setToast({ type: "success", msg: "Kural silindi." });
-    await refreshList();
-  };
-
-  const activateRule = async (id) => {
-    const rid = encodeURIComponent(id);
-    try {
-      await api.patch(`/discount-rules/${rid}/activate`);
-    } catch (e1) {
-      if (e1?.response?.status === 404) {
-        try {
-          await api.patch(`/discount-rules/activate/${rid}`);
-        } catch (e2) {
-          try {
-            await api.post(`/discount-rules/${rid}/activate`);
-          } catch (e3) {
-            const msg =
-              e3?.response?.data?.message ||
-              e3?.response?.data?.error ||
-              "Aktif etme başarısız.";
-            setToast({ type: "error", msg });
-            return;
-          }
-        }
-      } else {
-        const msg =
-          e1?.response?.data?.message ||
-          e1?.response?.data?.error ||
-          "Aktif etme başarısız.";
-        setToast({ type: "error", msg });
-        return;
-      }
-    }
-    setToast({ type: "success", msg: "Kural aktif edildi." });
-    await refreshList();
-  };
-
-  if (loading) return <div className="p-6">Yükleniyor…</div>;
-
+  /* -------- UI -------- */
   return (
     <div className="space-y-6">
-      {/* üst bar */}
+      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <Typography variant="h4">İndirim Kuralları</Typography>
-          <Typography variant="small" className="text-gray-600">
-            Kategori/Alt Kategori/Ürün seçerek toplu indirim yönet.
-          </Typography>
+          <h1 className="text-xl font-semibold">İndirimler</h1>
+          <p className="text-sm text-gray-500">
+            Ürün / kategori bazlı toplu indirimleri yönetin.
+          </p>
         </div>
-        <Button color="blue" onClick={openNew}>
-          + Yeni Kural
-        </Button>
+        <button
+          onClick={openCreate}
+          className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-black text-white hover:bg-gray-800"
+        >
+          <FaPlus /> Yeni İndirim
+        </button>
       </div>
 
-      {/* liste */}
-      {rules.length === 0 ? (
-        <div className="rounded-xl border border-dashed p-12 text-center">
-          <Typography variant="h6" className="mb-2">
-            Kural bulunamadı
-          </Typography>
-          <Typography className="text-gray-600 mb-4">
-            Yeni bir indirim kuralı oluşturun.
-          </Typography>
-          <Button color="blue" onClick={openNew}>
-            Kural Oluştur
-          </Button>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {rules.map((r) => {
-            const uiType =
-              r.selectionType === "product"
-                ? "Ürün"
-                : r.selectionType === "subcategory"
-                ? "Alt Kategori"
-                : "Kategori";
-            const affected = countImpacted(r, options.products);
-
-            return (
-              <Card
-                key={r._id}
-                className="relative border border-gray-100 hover:shadow-xl transition-shadow group"
-              >
-                {/* küçük hover edit butonu */}
-                <button
-                  onClick={() => openEdit(r)}
-                  className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity z-10
-                             inline-flex items-center gap-2 px-2 py-1 bg-white border rounded-lg shadow-sm text-xs"
-                  title="Düzenle"
-                >
-                  <PencilIcon className="w-4 h-4" />
-                  Düzenle
-                </button>
-
-                <CardBody className="space-y-2">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0">
-                      <Typography variant="h6" className="truncate">
-                        {r.title || "Başlıksız Kural"}
-                      </Typography>
-                      <div className="flex flex-wrap items-center gap-2 mt-1">
-                        <Badge color={r.isActive ? "green" : "gray"}>
-                          {r.isActive ? "Aktif" : "Pasif"}
-                        </Badge>
-                        <Badge color="blue">{uiType}-hedefli</Badge>
-                        <span className="text-sm text-gray-700">
-                          %{r.discountRate}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="text-xs text-gray-600">
-                    {fmtDate(r.startAt)} → {fmtDate(r.endAt)}
-                  </div>
-                  <div className="text-xs text-gray-600">
-                    Hedef sayısı: <b>{r.targetIds?.length || 0}</b> •
-                    Etkilenecek ürün: <b>{affected}</b>
-                  </div>
-                  <div className="text-sm text-gray-700">
-                    {r.overrideExisting
-                      ? "Mevcut indirimi ezer"
-                      : "Mevcut indirimi korur"}
-                  </div>
-
-                  {/* aksiyonlar */}
-                  <div className="mt-3 flex items-center justify-end gap-2">
-                    <Tooltip content="Aktif Yap">
-                      <Button
-                        size="sm"
-                        variant="outlined"
-                        className="px-3"
-                        onClick={() => activateRule(r._id)}
-                      >
-                        <CheckIcon className="w-4 h-4" />
-                      </Button>
-                    </Tooltip>
-                    <Tooltip content="Sil">
-                      <Button
-                        size="sm"
-                        color="red"
-                        variant="outlined"
-                        className="px-3"
-                        onClick={() => deleteRule(r._id)}
-                      >
-                        <TrashIcon className="w-4 h-4" />
-                      </Button>
-                    </Tooltip>
-                  </div>
-                </CardBody>
-              </Card>
-            );
-          })}
-        </div>
-      )}
-
-      {/* dialog */}
-      <Dialog
-        open={dialogOpen}
-        size="xl"
-        handler={closeDialog}
-        className="z-[1000]"
-      >
-        <DialogHeader>
-          {form._id ? "Kuralı Düzenle" : "Yeni Kural Oluştur"}
-        </DialogHeader>
-        <DialogBody divider className="overflow-auto max-h-[75vh] pr-4">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* SOL: FORM */}
-            <div className="space-y-4">
-              <Input
-                label="Başlık *"
-                value={form.title}
-                onChange={(e) => {
-                  setForm((f) => ({ ...f, title: e.target.value }));
-                  setDirty(true);
-                }}
-                crossOrigin=""
-              />
-
-              <div>
-                <label className="block mb-2 font-medium">Seçim Türü *</label>
-                <div className="grid grid-cols-3 gap-2">
-                  {[
-                    { key: "product", label: "Ürün" },
-                    { key: "category", label: "Kategori" },
-                    { key: "subcategory", label: "Alt Kategori" },
-                  ].map((t) => (
-                    <button
-                      key={t.key}
-                      type="button"
-                      onClick={() => {
-                        setSelectionType(t.key);
-                        setForm((f) => ({
-                          ...f,
-                          selectionType: t.key, // 🔑 backend’in beklediği alan
-                          targetIds: [], // seçim tipi değişince temizle
-                        }));
-                        setDirty(true);
-                      }}
-                      className={`border rounded-lg py-2 text-sm ${
-                        selectionType === t.key
-                          ? "border-blue-500 bg-blue-50"
-                          : "border-gray-200 hover:bg-gray-50"
-                      }`}
-                    >
-                      {t.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {selectionType && (
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <label className="block font-medium">
-                      {selectionType === "product"
-                        ? "Ürünleri Seçin *"
-                        : selectionType === "category"
-                        ? "Kategorileri Seçin *"
-                        : "Alt Kategorileri Seçin *"}
-                    </label>
-                    <Badge color={selectionCount > 0 ? "blue" : "gray"}>
-                      {selectionCount} hedef
-                    </Badge>
-                  </div>
-
-                  <select
-                    multiple
-                    className="w-full border rounded p-2 h-36"
-                    value={form.targetIds}
-                    onChange={(e) => {
-                      const vals = Array.from(e.target.selectedOptions).map(
-                        (o) => o.value
-                      );
-                      setForm((f) => ({ ...f, targetIds: vals }));
-                      setDirty(true);
-                    }}
+      {/* List */}
+      <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+        <table className="w-full text-sm">
+          <thead className="bg-gray-50 text-gray-600">
+            <tr>
+              <th className="text-left px-4 py-2">İndirim</th>
+              <th className="text-left px-4 py-2">Yüzde</th>
+              <th className="text-left px-4 py-2">Hedef</th>
+              <th className="text-left px-4 py-2">Durum</th>
+              <th className="text-right px-4 py-2">İşlem</th>
+            </tr>
+          </thead>
+          <tbody>
+            {loading ? (
+              <tr>
+                <td colSpan={5} className="px-4 py-6 text-center text-gray-500">
+                  Yükleniyor…
+                </td>
+              </tr>
+            ) : rules.length === 0 ? (
+              <tr>
+                <td colSpan={5} className="px-4 py-6 text-center text-gray-500">
+                  Kural bulunamadı.
+                </td>
+              </tr>
+            ) : (
+              rules.map((r, idx) => {
+                const activeNow = Boolean(r.isActive);
+                const targetBadge =
+                  r.selectionType === "product"
+                    ? "Ürün"
+                    : r.selectionType === "category"
+                    ? "Kategori + Altları"
+                    : "Alt Kategori";
+                return (
+                  <tr
+                    key={r._id}
+                    className={idx % 2 ? "bg-white" : "bg-gray-50/50"}
                   >
-                    {currentOptions.map((opt) => (
-                      <option key={opt._id} value={opt._id}>
-                        {opt.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              )}
+                    <td className="px-4 py-3">
+                      <div className="font-medium">{r.title}</div>
+                      <div className="text-xs text-gray-500">
+                        Uygulanan ürün: {r.appliedProducts?.length || 0}
+                      </div>
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-blue-100 text-blue-800 text-xs">
+                        <FaPercent className="-mt-0.5" /> {r.discountRate}%
+                      </span>
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className="inline-flex items-center px-2 py-1 rounded-full bg-amber-100 text-amber-800 text-xs">
+                        {targetBadge}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3">
+                      <span
+                        className={cx(
+                          "inline-flex items-center px-2 py-1 rounded-full text-xs",
+                          activeNow
+                            ? "bg-green-100 text-green-800"
+                            : "bg-gray-200 text-gray-700"
+                        )}
+                      >
+                        {activeNow ? "Aktif" : "Pasif"}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center justify-end gap-2">
+                        <button
+                          onClick={() => openEdit(r)}
+                          className="inline-flex items-center gap-2 px-3 py-1.5 rounded-md bg-indigo-600 hover:bg-indigo-700 text-black"
+                          title="Düzenle"
+                        >
+                          <FaEdit className="text-xs" />
+                          Düzenle
+                        </button>
+                        <button
+                          onClick={() => toggleRule(r, !r.isActive)}
+                          className={cx(
+                            "inline-flex items-center gap-2 px-3 py-1.5 rounded-md text-black",
+                            r.isActive
+                              ? "bg-gray-700 hover:bg-gray-800"
+                              : "bg-emerald-600 hover:bg-emerald-700"
+                          )}
+                          title={r.isActive ? "Pasifleştir" : "Aktifleştir"}
+                        >
+                          <FaPowerOff className="text-xs" />
+                          {r.isActive ? "Kapat" : "Aç"}
+                        </button>
+                        <button
+                          onClick={() => deleteRule(r)}
+                          className="inline-flex items-center gap-2 px-3 py-1.5 rounded-md bg-red-600 hover:bg-red-700 text-white"
+                          title="Sil"
+                        >
+                          <FaTrash className="text-xs" /> Sil
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })
+            )}
+          </tbody>
+        </table>
+      </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <Input
-                  type="number"
-                  label="İndirim Oranı (%) *"
-                  value={form.discountRate}
-                  onChange={(e) => {
-                    setForm((f) => ({ ...f, discountRate: e.target.value }));
-                    setDirty(true);
-                  }}
-                  crossOrigin=""
-                />
-                <div className="flex items-center h-10 mt-5">
-                  <Checkbox
-                    checked={form.overrideExisting}
-                    onChange={(e) => {
+      {/* Create/Edit Modal */}
+      {openForm && (
+        <div className="fixed inset-0 z-[999] flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-3xl bg-white rounded-2xl shadow-xl overflow-hidden">
+            <div className="px-6 py-4 border-b flex items-center justify-between">
+              <h2 className="text-lg font-semibold">
+                {mode === "create" ? "Yeni İndirim" : "İndirimi Düzenle"}
+              </h2>
+              <button
+                onClick={() => {
+                  setOpenForm(false);
+                  resetForm();
+                }}
+                className="text-sm text-gray-500 hover:text-gray-800"
+              >
+                Kapat
+              </button>
+            </div>
+
+            <form
+              onSubmit={handleSubmit}
+              className="p-6 grid grid-cols-1 md:grid-cols-3 gap-5"
+            >
+              {/* sol: temel */}
+              <div className="md:col-span-1 space-y-4">
+                <div>
+                  <label className="block text-sm font-medium mb-1">
+                    İndirim adı
+                  </label>
+                  <input
+                    className="w-full border rounded-lg px-3 py-2"
+                    value={form.title}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...f, title: e.target.value }))
+                    }
+                    placeholder="Örn. Yaz Fırsatı %20"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-1">
+                    Yüzde
+                  </label>
+                  <input
+                    type="number"
+                    min={0}
+                    max={100}
+                    className="w-full border rounded-lg px-3 py-2"
+                    value={form.discountRate}
+                    onChange={(e) =>
                       setForm((f) => ({
                         ...f,
-                        overrideExisting: e.target.checked,
-                      }));
-                      setDirty(true);
-                    }}
-                    ripple={false}
-                    label="Seçilenlerde mevcut indirimi ez"
+                        discountRate: Number(e.target.value),
+                      }))
+                    }
+                    required
                   />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-1">
+                    Hedef türü
+                  </label>
+                  <select
+                    className="w-full border rounded-lg px-3 py-2"
+                    value={form.selectionType}
+                    onChange={(e) =>
+                      setForm((f) => ({
+                        ...f,
+                        selectionType: e.target.value,
+                        targetIds: [],
+                      }))
+                    }
+                  >
+                    <option value="product">Ürün</option>
+                    <option value="category">Kategori (altları dahil)</option>
+                    <option value="subcategory">Alt Kategori</option>
+                  </select>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <input
+                    id="active"
+                    type="checkbox"
+                    checked={form.isActive}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...f, isActive: e.target.checked }))
+                    }
+                  />
+                  <label htmlFor="active" className="text-sm">
+                    {mode === "create" ? "Hemen Aktif" : "Aktif"}
+                  </label>
                 </div>
               </div>
 
-              {/* Tarihler opsiyonel */}
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-sm mb-1">
-                    Başlangıç (opsiyonel)
-                  </label>
-                  <input
-                    type="date"
-                    className="w-full border rounded p-2 text-sm"
-                    value={form.startAt}
-                    onChange={(e) => {
-                      setForm((f) => ({ ...f, startAt: e.target.value }));
-                      setDirty(true);
-                    }}
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm mb-1">
-                    Bitiş (opsiyonel)
-                  </label>
-                  <input
-                    type="date"
-                    className="w-full border rounded p-2 text-sm"
-                    value={form.endAt}
-                    onChange={(e) => {
-                      setForm((f) => ({ ...f, endAt: e.target.value }));
-                      setDirty(true);
-                    }}
-                  />
-                </div>
-              </div>
+              {/* sağ: hedef seçimi */}
+              <div className="md:col-span-2">
+                <label className="block text-sm font-medium mb-2">
+                  {form.selectionType === "product"
+                    ? "Ürün Seçimi"
+                    : form.selectionType === "category"
+                    ? "Kategori Seçimi (root)"
+                    : "Alt Kategori Seçimi"}
+                </label>
 
-              {!isValid && (
-                <Typography variant="small" className="text-red-600">
-                  Başlık, seçim türü, en az bir hedef ve geçerli indirim oranı
-                  gereklidir.
-                </Typography>
-              )}
-            </div>
-
-            {/* SAĞ: ÖNİZLEME */}
-            <div>
-              <Typography variant="small" className="text-gray-600 mb-2">
-                Canlı Önizleme
-              </Typography>
-              <div className="rounded-xl border overflow-hidden">
-                <div className="relative h-40 bg-gradient-to-r from-blue-50 to-indigo-50 flex items-center justify-center">
-                  <div className="absolute top-2 left-2">
-                    <Badge color="amber">
-                      {selectionType
-                        ? selectionType === "product"
-                          ? "Ürün hedefli"
-                          : selectionType === "category"
-                          ? "Kategori hedefli"
-                          : "Alt kategori hedefli"
-                        : "Hedef seçilmedi"}
-                    </Badge>
-                  </div>
-                  <div className="text-center px-4">
-                    <div className="text-xs text-blue-900/70 mb-1">İndirim</div>
-                    <div className="text-2xl font-semibold text-blue-900">
-                      %{form.discountRate || 0}
+                {/* search (ürün için) */}
+                {form.selectionType === "product" && (
+                  <div className="mb-2 flex items-center gap-2">
+                    <div className="relative flex-1">
+                      <FaSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                      <input
+                        placeholder="Ürün ara…"
+                        className="w-full border rounded-lg pl-9 pr-3 py-2"
+                        value={search}
+                        onChange={(e) => setSearch(e.target.value)}
+                      />
                     </div>
+                    <button
+                      type="button"
+                      className="text-xs px-2 py-1 rounded border"
+                      onClick={() =>
+                        setForm((f) => ({
+                          ...f,
+                          targetIds: filteredProducts.map((p) => p._id),
+                        }))
+                      }
+                    >
+                      Tümünü Seç
+                    </button>
+                    <button
+                      type="button"
+                      className="text-xs px-2 py-1 rounded border"
+                      onClick={() => setForm((f) => ({ ...f, targetIds: [] }))}
+                    >
+                      Temizle
+                    </button>
                   </div>
+                )}
+
+                <div className="h-72 overflow-y-auto rounded-lg border p-3 space-y-1">
+                  {form.selectionType === "product" &&
+                    (filteredProducts.length ? (
+                      filteredProducts.map((p) => (
+                        <label
+                          key={p._id}
+                          className="flex items-center gap-2 px-2 py-1 rounded hover:bg-gray-50"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={form.targetIds.includes(p._id)}
+                            onChange={() => toggleId(p._id)}
+                          />
+                          <span className="text-sm">{p.name}</span>
+                          <span className="ml-auto text-xs text-gray-500">
+                            {p.category?.name || ""}
+                          </span>
+                        </label>
+                      ))
+                    ) : (
+                      <div className="text-sm text-gray-500 px-2 py-1">
+                        Sonuç yok
+                      </div>
+                    ))}
+
+                  {form.selectionType === "category" &&
+                    (rootCats.length ? (
+                      rootCats.map((c) => (
+                        <label
+                          key={c._id}
+                          className="flex items-center gap-2 px-2 py-1 rounded hover:bg-gray-50"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={form.targetIds.includes(c._id)}
+                            onChange={() => toggleId(c._id)}
+                          />
+                          <span className="text-sm">{c.name}</span>
+                          <span className="ml-auto text-xs text-gray-500">
+                            Alt: {c.children?.length || 0}
+                          </span>
+                        </label>
+                      ))
+                    ) : (
+                      <div className="text-sm text-gray-500 px-2 py-1">
+                        Kategori bulunamadı
+                      </div>
+                    ))}
+
+                  {form.selectionType === "subcategory" &&
+                    (allSubCats.length ? (
+                      allSubCats.map((c) => (
+                        <label
+                          key={c._id}
+                          className="flex items-center gap-2 px-2 py-1 rounded hover:bg-gray-50"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={form.targetIds.includes(c._id)}
+                            onChange={() => toggleId(c._id)}
+                          />
+                          <span className="text-sm">{c.name}</span>
+                          <span className="ml-auto text-xs text-gray-500">
+                            Üst: {c.parentName}
+                          </span>
+                        </label>
+                      ))
+                    ) : (
+                      <div className="text-sm text-gray-500 px-2 py-1">
+                        Alt kategori bulunamadı
+                      </div>
+                    ))}
                 </div>
-                <div className="p-4 space-y-1">
-                  <Typography variant="h6" className="line-clamp-1">
-                    {form.title || "Kural Başlığı"}
-                  </Typography>
-                  <div className="text-sm text-gray-700">
-                    <b>{selectionCount}</b> hedef seçildi
-                  </div>
-                  <div className="text-sm text-gray-700">
-                    Etkilenecek ürün: <b>{impactedCount}</b>
-                  </div>
-                  <div className="text-xs text-gray-500">
-                    {form.startAt ? fmtDate(form.startAt) : "Başlangıç yok"} →{" "}
-                    {form.endAt ? fmtDate(form.endAt) : "Bitiş yok"}
-                  </div>
-                  <div className="text-xs text-gray-600">
-                    {form.overrideExisting
-                      ? "Mevcut indirimi ezer."
-                      : "Mevcut indirimi korur."}
-                  </div>
+
+                <div className="mt-4 flex items-center justify-end gap-3">
+                  <button
+                    type="button"
+                    className="px-4 py-2 rounded-md border"
+                    onClick={() => {
+                      setOpenForm(false);
+                      resetForm();
+                    }}
+                  >
+                    İptal
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-4 py-2 rounded-md bg-black text-white hover:bg-gray-800"
+                  >
+                    {mode === "create" ? "Kaydet" : "Güncelle"}
+                  </button>
                 </div>
               </div>
-            </div>
+            </form>
           </div>
-        </DialogBody>
-        <DialogFooter>
-          <Button variant="text" onClick={closeDialog}>
-            İptal
-          </Button>
-          <Button disabled={!isValid || !dirty} color="blue" onClick={saveRule}>
-            Kaydet
-          </Button>
-        </DialogFooter>
-      </Dialog>
-
-      {/* toast */}
-      {toast && (
-        <div className="z-[2000] fixed bottom-4 right-4">
-          <ToastAlert
-            msg={toast.msg}
-            type={toast.type}
-            onClose={() => setToast(null)}
-          />
         </div>
       )}
     </div>

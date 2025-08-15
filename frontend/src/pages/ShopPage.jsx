@@ -1,19 +1,18 @@
+// src/pages/ShopPage.jsx
 import React, { useState, useEffect, useRef } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import BreadCrumb from "../components/breadCrumb/BreadCrumb";
 import CategoryFilter from "../components/categories/CategoryFilter";
 import Products from "../components/products/Products";
-import Categories from "../components/categories/Categories";
 import api from "../../api";
 
 export default function ShopPage() {
   const { state } = useLocation();
   const navigate = useNavigate();
 
-  // Campaign (normal)
+  // Campaign (opsiyonel)
   const campaignItems = state?.campaignItems;
   const campaignTitle = state?.campaignTitle;
-  // Mini campaign
   const miniItems = state?.miniCampaignItems;
   const miniTitle = state?.miniCampaignTitle;
 
@@ -21,7 +20,12 @@ export default function ShopPage() {
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // Gösterilecek ürün sayısı (lazy load)
+  // Header’dan gelen preset (kategori/alt kategori/indirim)
+  const [presetTitle, setPresetTitle] = useState("");
+  const [discountOnly, setDiscountOnly] = useState(false);
+  const [discountProductIdSet, setDiscountProductIdSet] = useState(null); // Set<string> | null
+
+  // lazy-load
   const [visibleCount, setVisibleCount] = useState(20);
   const browseRef = useRef(null);
 
@@ -32,104 +36,146 @@ export default function ShopPage() {
     sizes: [],
     colors: [],
     priceRange: [0, Infinity],
-    discountOnly: false, // <- İndirim filtresi
   };
   const [filters, setFilters] = useState(defaultFilters);
 
-  // 1) Kategorileri çek
+  /* 1) Kategoriler */
   useEffect(() => {
-    api.get("/categories").then(({ data }) => setCategories(data)).catch(console.error);
+    api
+      .get("/categories")
+      .then(({ data }) => setCategories(data))
+      .catch(console.error);
   }, []);
 
-  // 2) Ürünleri (kampanya yoksa) çek
+  /* 2) Ürünler (kampanya yoksa) */
   useEffect(() => {
     if (campaignItems || miniItems) {
       setLoading(false);
       return;
     }
+    setLoading(true);
     api
       .get("/products")
-      .then(({ data }) => setAllProducts(data))
+      .then(({ data }) => setAllProducts(Array.isArray(data) ? data : []))
       .catch(console.error)
       .finally(() => setLoading(false));
   }, [campaignItems, miniItems]);
 
-  // 3) Header’dan preset geldiyse filtrelere uygula
+  /* 3) Header preset */
   useEffect(() => {
-    if (state?.preset) {
-      const {
-        category = [],
-        subCategory = [],
-        discountOnly = false, // <- preset’ten al
-      } = state.preset || {};
+    const preset = state?.preset || null;
 
-      setFilters((f) => ({
-        ...f,
-        category: Array.isArray(category) ? category : [],
-        subCategory: Array.isArray(subCategory) ? subCategory : [],
-        discountOnly: Boolean(discountOnly),
-      }));
-      setVisibleCount(20);
+    setPresetTitle(
+      preset?.title || (preset?.discountOnly ? "İndirimdekiler" : "") || ""
+    );
+
+    setDiscountOnly(Boolean(preset?.discountOnly));
+
+    setFilters((f) => ({
+      ...f,
+      category: Array.isArray(preset?.category)
+        ? preset.category.map(String)
+        : [],
+      subCategory: Array.isArray(preset?.subCategory)
+        ? preset.subCategory.map(String)
+        : [],
+    }));
+
+    setVisibleCount(20);
+
+    if (preset?.discountId) {
+      (async () => {
+        try {
+          const { data } = await api.get(`/discounts/${preset.discountId}`);
+          const ids = (data?.appliedProducts || []).map((ap) =>
+            typeof ap.product === "object" ? ap.product._id : ap.product
+          );
+          setDiscountProductIdSet(new Set(ids.map(String)));
+        } catch (e) {
+          console.error("İndirim bilgisi alınamadı:", e);
+          setDiscountProductIdSet(new Set()); // boş set → sonuç yok
+        }
+      })();
+    } else {
+      setDiscountProductIdSet(null);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state?.preset]);
 
-  // 4) Hangi liste?
+  /* 4) Hangi liste? */
   const baseList = miniItems || campaignItems || allProducts;
-  const discountTitle = state?.preset?.discountOnly ? "İndirimdekiler" : "";
-  const title = discountTitle || miniTitle || campaignTitle || "";
 
-  // 5) Kampanya varsa priceRange ayarla
+  /* 5) Kampanya varsa priceRange ayarla */
   useEffect(() => {
-    const prices = baseList.map((p) => p.price);
+    if (!(campaignItems || miniItems)) return;
+    const prices = baseList.map((p) => Number(p.price || 0));
     const min = prices.length ? Math.min(...prices) : 0;
     const max = prices.length ? Math.max(...prices) : 0;
-    if (campaignItems || miniItems) {
-      setFilters((f) => ({ ...f, priceRange: [min, max] }));
-    }
+    setFilters((f) => ({ ...f, priceRange: [min, max] }));
   }, [baseList, campaignItems, miniItems]);
 
-  // 6) Filtrele
+  /* 6) Listeyi filtrele (normalize’larla) */
   const filtered = baseList.filter((p) => {
-    const cat = typeof p.category === "object" ? p.category._id : p.category;
+    const cat =
+      typeof p.category === "object"
+        ? String(p.category._id)
+        : String(p.category);
     const parent =
       typeof p.category === "object" && p.category.parent
-        ? p.category.parent._id
+        ? String(p.category.parent._id || p.category.parent)
         : null;
 
-    // İndirimli ürün kontrolü:
-    // - effectiveDiscount (backend’den gelebilir)
-    // - discount alanı
-    // - fallback: originalPrice > price ise indirim vardır
-    const effectiveDiscount = Number(p.effectiveDiscount ?? p.discount ?? 0);
-    const hasDiscount =
-      effectiveDiscount > 0 ||
-      (p.originalPrice != null && Number(p.originalPrice) > Number(p.price));
+    // Belirli indirim → sadece o indirimin ürünleri
+    if (discountProductIdSet) {
+      if (!discountProductIdSet.has(String(p._id))) return false;
+    }
 
-    if (filters.discountOnly && !hasDiscount) return false;
+    // Genel "İndirimdekiler"
+    if (!discountProductIdSet && discountOnly) {
+      const rate = Number(p.discount || 0);
+      if (!(rate > 0)) return false; // toplu indirimler product.discount’a yazılıyor
+    }
 
+    // Alt kategori > kategori
     if (filters.subCategory.length) {
-      if (!filters.subCategory.includes(cat)) return false;
+      if (!filters.subCategory.map(String).includes(cat)) return false;
     } else if (filters.category.length) {
-      if (!filters.category.includes(cat) && !filters.category.includes(parent))
+      const cats = filters.category.map(String);
+      if (!cats.includes(cat) && !(parent && cats.includes(parent)))
         return false;
     }
 
-    if (filters.sizes.length && !p.sizes?.some((s) => filters.sizes.includes(s)))
-      return false;
+    // Beden
+    if (filters.sizes.length) {
+      const sizeStrs = Array.isArray(p.sizes)
+        ? p.sizes
+            .map((s) => String((s?.size ?? s ?? "").toString().trim()))
+            .filter(Boolean)
+        : [];
+      const ok = sizeStrs.some((s) => filters.sizes.includes(s));
+      if (!ok) return false;
+    }
 
-    if (filters.colors.length && !filters.colors.includes(p.color)) return false;
+    // Renk
+    if (filters.colors.length) {
+      const color = String((p.color || "").trim());
+      if (!filters.colors.includes(color)) return false;
+    }
 
+    // Fiyat aralığı
     const [low, high] = filters.priceRange;
-    if (p.price < low || p.price > high) return false;
+    const price = Number(p.price || 0);
+    if (price < low || price > high) return false;
 
     return true;
   });
 
-  // 7) Kampanya filtresini temizle
+  /* 7) Kampanya/preset temizleme */
   const clearCampaign = () => {
     navigate("/shop", { replace: true, state: {} });
     setFilters(defaultFilters);
+    setDiscountOnly(false);
+    setDiscountProductIdSet(null);
+    setPresetTitle("");
     setVisibleCount(20);
   };
 
@@ -141,16 +187,16 @@ export default function ShopPage() {
 
       <main className="container mx-auto px-4 py-14 grid grid-cols-1 lg:grid-cols-4 gap-10">
         {/* SOL: Filtre */}
-        <aside className="lg:col-span-1 bg-transparent rounded-xl p-0 lg:p-0">
+        <aside className="lg:col-span-1 bg-transparent rounded-xl p-6 shadow-sm">
           <CategoryFilter
             products={filtered}
             categories={categories}
             filters={filters}
             onFilterChange={(next) => {
               setFilters(next);
-              setVisibleCount(20); // filtre değişince başa al
+              setVisibleCount(20);
             }}
-            campaignTitle={title}
+            campaignTitle={presetTitle || miniTitle || campaignTitle || ""}
             onClearCampaign={clearCampaign}
           />
         </aside>
@@ -158,39 +204,34 @@ export default function ShopPage() {
         {/* SAĞ: Ürünler */}
         <section className="lg:col-span-3">
           <header className="mb-6">
-            {!!title && (
-              <h1 className="text-4xl font-playfair font-bold text-black">
-                {title}
-              </h1>
-            )}
+            <h1 className="text-4xl font-playfair font-bold text-black">
+              {presetTitle || miniTitle || campaignTitle || ""}
+            </h1>
             <p className="text-dark2 text-sm mt-1">
               {filtered.length} ürün listeleniyor
             </p>
           </header>
 
-          {/* Ürünler (20’lik dilimler) */}
           <Products products={filtered.slice(0, visibleCount)} />
 
-          {/* Browse More */}
-          {visibleCount < filtered.length && !title && (
-            <div ref={browseRef} className="mt-10 text-center">
-              <button
-                className="px-6 py-2 border border-dark1 text-dark1 rounded-full hover:bg-dark1 hover:text-white transition"
-                onClick={() => {
-                  setVisibleCount((prev) => prev + 20);
-                  setTimeout(() => {
-                    browseRef.current?.scrollIntoView({ behavior: "smooth" });
-                  }, 100);
-                }}
-              >
-                Browse More
-              </button>
-            </div>
-          )}
+          {visibleCount < filtered.length &&
+            !(presetTitle || miniTitle || campaignTitle) && (
+              <div ref={browseRef} className="mt-10 text-center">
+                <button
+                  className="px-6 py-2 border border-dark1 text-dark1 rounded-full hover:bg-dark1 hover:text-white transition"
+                  onClick={() => {
+                    setVisibleCount((prev) => prev + 20);
+                    setTimeout(() => {
+                      browseRef.current?.scrollIntoView({ behavior: "smooth" });
+                    }, 100);
+                  }}
+                >
+                  Browse More
+                </button>
+              </div>
+            )}
         </section>
       </main>
-
-      <Categories />
     </div>
   );
 }

@@ -2,9 +2,18 @@
 import React, { useRef, useState } from "react";
 import PropTypes from "prop-types";
 import { Link } from "react-router-dom";
-import { FaVolumeMute, FaVolumeUp, FaStar } from "react-icons/fa";
+import { FaVolumeMute, FaVolumeUp } from "react-icons/fa";
 
-const ProductItem = ({ id, video, poster, name, price, stock }) => {
+const ProductItem = ({
+  id,
+  video,
+  poster,
+  name,
+  price,
+  discountedPrice,
+  discountRate,
+  stock,
+}) => {
   const videoRef = useRef(null);
   const [isHovered, setIsHovered] = useState(false);
   const [isMuted, setIsMuted] = useState(true);
@@ -12,11 +21,10 @@ const ProductItem = ({ id, video, poster, name, price, stock }) => {
   const handleMouseEnter = () => {
     setIsHovered(true);
     if (videoRef.current && video) {
-      videoRef.current.play().catch(() => {
-        /* ignore AbortError */
-      });
+      videoRef.current.play().catch(() => {});
     }
   };
+
   const handleMouseLeave = () => {
     setIsHovered(false);
     if (videoRef.current) {
@@ -24,6 +32,7 @@ const ProductItem = ({ id, video, poster, name, price, stock }) => {
       videoRef.current.currentTime = 0;
     }
   };
+
   const toggleMute = (e) => {
     e.preventDefault();
     e.stopPropagation();
@@ -33,6 +42,8 @@ const ProductItem = ({ id, video, poster, name, price, stock }) => {
     }
   };
 
+  const showDiscount = discountedPrice != null && discountedPrice < price;
+
   return (
     <Link
       to={`/product-details/${id}`}
@@ -40,11 +51,14 @@ const ProductItem = ({ id, video, poster, name, price, stock }) => {
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
     >
+      {/* Stok etiketi */}
       {stock === 0 && (
         <div className="absolute top-2 left-2 bg-red-600 text-white text-xs px-2 py-1 rounded shadow z-20">
           TÜKENDİ
         </div>
       )}
+
+      {/* Ses butonu */}
       {isHovered && video && (
         <button
           onClick={toggleMute}
@@ -58,15 +72,32 @@ const ProductItem = ({ id, video, poster, name, price, stock }) => {
         </button>
       )}
 
+      {/* İndirim rozeti (sol-alt, hafif yukarı çekilmiş) */}
+      {showDiscount && (
+        <div className="absolute left-3 bottom-3 z-10">
+          <div className="bg-red-600 text-white w-10 h-10 rounded-full flex items-center justify-center text-xs font-bold shadow-md translate-y-[-4px]">
+            %{discountRate}
+          </div>
+        </div>
+      )}
+
       <div className="relative h-64 overflow-hidden bg-light1">
         {video ? (
           <video
             ref={videoRef}
             src={video}
-            poster={poster}
+            // poster sadece varsa verelim; yoksa tarayıcı ilk kareyi çizsin
+            poster={poster || undefined}
             muted
             playsInline
-            preload="metadata"
+            preload="auto" // ← metadata yerine auto
+            onLoadedMetadata={() => {
+              try {
+                if (videoRef.current) videoRef.current.currentTime = 0;
+              } catch {
+                console.error("Video oynatılırken hata");
+              }
+            }}
             className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
           />
         ) : (
@@ -78,14 +109,24 @@ const ProductItem = ({ id, video, poster, name, price, stock }) => {
         )}
       </div>
 
-      <div className="p-4">
-        <h3 className="text-sm font-medium text-dark1 mb-2 text-center">
-          {name}
-        </h3>
+      {/* Metin / Fiyat */}
+      <div className="p-4 text-center">
+        <h3 className="text-sm font-medium text-dark1 mb-2">{name}</h3>
 
-        <p className="text-center text-base font-semibold text-dark2">
-          {price.toFixed(2)}₺
-        </p>
+        {showDiscount ? (
+          <div>
+            <p className="text-sm text-gray-500 line-through">
+              {price.toFixed(2)}₺
+            </p>
+            <p className="text-lg font-bold text-dark2">
+              {discountedPrice.toFixed(2)}₺
+            </p>
+          </div>
+        ) : (
+          <p className="text-lg font-semibold text-dark2">
+            {price.toFixed(2)}₺
+          </p>
+        )}
       </div>
     </Link>
   );
@@ -97,13 +138,17 @@ ProductItem.propTypes = {
   poster: PropTypes.string,
   name: PropTypes.string.isRequired,
   price: PropTypes.number.isRequired,
-  rating: PropTypes.number,
+  discountedPrice: PropTypes.number,
+  discountRate: PropTypes.number,
+  stock: PropTypes.number,
 };
 
 ProductItem.defaultProps = {
   video: null,
   poster: null,
-  rating: 0,
+  discountedPrice: null,
+  discountRate: 0,
+  stock: undefined,
 };
 
 export default ProductItem;

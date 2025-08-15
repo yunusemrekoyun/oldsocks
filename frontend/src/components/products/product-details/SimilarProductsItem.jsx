@@ -3,7 +3,13 @@ import { Link } from "react-router-dom";
 import PropTypes from "prop-types";
 import { FaVolumeMute, FaVolumeUp } from "react-icons/fa";
 
-export default function SimilarProductItem({ id, video, name, price }) {
+export default function SimilarProductItem({
+  id,
+  video,
+  name,
+  price,
+  discountedPrice,
+}) {
   const videoRef = useRef(null);
   const [hovered, setHovered] = useState(false);
   const [muted, setMuted] = useState(true);
@@ -29,6 +35,12 @@ export default function SimilarProductItem({ id, video, name, price }) {
       setMuted(videoRef.current.muted);
     }
   };
+
+  const hasDiscount =
+    typeof discountedPrice === "number" && discountedPrice < price;
+  const pct = hasDiscount
+    ? Math.max(1, Math.round(100 - (discountedPrice / price) * 100))
+    : 0;
 
   return (
     <Link
@@ -63,6 +75,13 @@ export default function SimilarProductItem({ id, video, name, price }) {
             )}
           </button>
         )}
+
+        {/* İndirim Rozeti */}
+        {hasDiscount && (
+          <span className="absolute bottom-2 left-2 z-10 inline-flex items-center justify-center w-7 h-7 rounded-full bg-red-600 text-white text-[10px] font-bold shadow">
+            -{pct}%
+          </span>
+        )}
       </div>
 
       {/* İçerik */}
@@ -70,9 +89,20 @@ export default function SimilarProductItem({ id, video, name, price }) {
         <h4 className="text-dark1 text-sm font-semibold leading-snug line-clamp-2 text-center">
           {name}
         </h4>
-        <p className="text-dark1 font-bold text-sm text-center mt-1">
-          {price.toFixed(2)}₺
-        </p>
+        {hasDiscount ? (
+          <div className="text-center">
+            <p className="text-xs text-gray-500 line-through">
+              {price.toFixed(2)}₺
+            </p>
+            <p className="text-sm font-bold text-red-600">
+              {discountedPrice.toFixed(2)}₺
+            </p>
+          </div>
+        ) : (
+          <p className="text-dark1 font-bold text-sm text-center mt-1">
+            {price.toFixed(2)}₺
+          </p>
+        )}
       </div>
     </Link>
   );
@@ -83,4 +113,5 @@ SimilarProductItem.propTypes = {
   video: PropTypes.string.isRequired,
   name: PropTypes.string.isRequired,
   price: PropTypes.number.isRequired,
+  discountedPrice: PropTypes.number,
 };

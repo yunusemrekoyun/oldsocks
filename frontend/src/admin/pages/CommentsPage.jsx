@@ -4,6 +4,7 @@ import api from "../../../api";
 import { Button, IconButton } from "@material-tailwind/react";
 import { TrashIcon, CheckIcon } from "@heroicons/react/24/outline";
 import ToastAlert from "../../components/ui/ToastAlert"; // yolu kontrol edin
+import useUnseenComments from "../../hooks/useUnseenComments";
 
 /* ————— Silme Onay Modali ————— */
 const ConfirmModal = ({ open, onClose, onConfirm, message }) => {
@@ -33,7 +34,14 @@ export default function CommentsPage() {
   /* toast & sil onay */
   const [toast, setToast] = useState(null); // { msg, type }
   const [deleteId, setDeleteId] = useState(null);
-
+  const { markSeen } = useUnseenComments(); // poll gerekmiyor
+  useEffect(() => {
+    markSeen(); // sayfa açılınca onaysız unseen yorumları seen yap
+    // ekstra: pencere fokus alınca tekrar işaretlemek istersen:
+    const fn = () => markSeen();
+    window.addEventListener("focus", fn);
+    return () => window.removeEventListener("focus", fn);
+  }, [markSeen]);
   /* ——— Yorumları getir ——— */
   const fetchComments = useCallback(async () => {
     setLoading(true);

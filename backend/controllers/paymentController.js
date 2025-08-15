@@ -180,7 +180,7 @@ exports.paymentCallback = async (req, res) => {
       const conversationId = convFromQuery || result.conversationId;
       await Order.findOneAndUpdate(
         { conversationId },
-        { paymentId, status: "paid" }
+        { paymentId, status: "paid", adminSeenAt: null }
       );
 
       // redirect’e tüm parametreleri ekle

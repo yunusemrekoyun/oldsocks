@@ -4,14 +4,22 @@ import { Link } from "react-router-dom";
 import { FaVolumeMute, FaVolumeUp } from "react-icons/fa";
 
 // ProductGridItem ile birebir stil & davranış
-export default function NewProductItem({ id, video, poster, name, price, stock }) {
+export default function NewProductItem({
+  id,
+  video,
+  poster,
+  name,
+  price,
+  originalPrice,
+  discountPercentage,
+  stock,
+}) {
   const videoRef = useRef(null);
   const [isHovered, setIsHovered] = useState(false);
   const [isMuted, setIsMuted] = useState(true);
 
   const handleMouseEnter = () => {
     setIsHovered(true);
-
     if (videoRef.current && video) {
       const videoEl = videoRef.current;
       const tryPlay = async () => {
@@ -48,6 +56,16 @@ export default function NewProductItem({ id, video, poster, name, price, stock }
       setIsMuted(videoRef.current.muted);
     }
   };
+
+  const hasDiscount = Number(discountPercentage || 0) > 0;
+  const fmt = (n) =>
+    `${Number(n || 0).toLocaleString("tr-TR", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    })}₺`;
+  const discountedPrice = hasDiscount
+    ? Math.max(0, (Number(price || 0) * (100 - discountPercentage)) / 100)
+    : Number(price || 0);
 
   return (
     <Link
@@ -87,13 +105,35 @@ export default function NewProductItem({ id, video, poster, name, price, stock }
         />
       </div>
 
-      <div className="p-4">
+      {/* İçerik alanı: sol altta indirim rozeti */}
+      <div className="relative p-4">
+        {hasDiscount && (
+          <div className="absolute bottom-4 left-2 bg-red-600 text-white text-xs font-bold w-10 h-10 flex items-center justify-center rounded-full shadow z-20">
+            %{discountPercentage}
+          </div>
+        )}
+
         <h3 className="text-sm font-medium text-dark1 mb-2 text-center">
           {name}
         </h3>
-        <p className="text-center text-base font-semibold text-dark2">
-          {price?.toFixed ? price.toFixed(2) : Number(price || 0).toFixed(2)}₺
-        </p>
+
+        {/* Fiyat alanı */}
+        {hasDiscount ? (
+          <div className="text-center">
+            {/* Orijinal fiyat (üstü çizili) */}
+            <div className="text-xs text-gray-500 line-through">
+              {fmt(originalPrice || price)}
+            </div>
+            {/* İndirimli fiyat */}
+            <div className="text-base font-semibold text-dark2">
+              {fmt(discountedPrice)}
+            </div>
+          </div>
+        ) : (
+          <p className="text-center text-base font-semibold text-dark2">
+            {fmt(price)}
+          </p>
+        )}
       </div>
     </Link>
   );
@@ -105,10 +145,14 @@ NewProductItem.propTypes = {
   poster: PropTypes.string,
   name: PropTypes.string.isRequired,
   price: PropTypes.number.isRequired,
+  originalPrice: PropTypes.number,
+  discountPercentage: PropTypes.number,
   stock: PropTypes.number.isRequired,
 };
 
 NewProductItem.defaultProps = {
   video: null,
   poster: null,
+  originalPrice: undefined,
+  discountPercentage: 0,
 };

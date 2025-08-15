@@ -31,30 +31,38 @@ export default function Products({ products: propProducts }) {
   if (loading)
     return <div className="text-center py-10">Ürünler yükleniyor…</div>;
 
-  if (Array.isArray(propProducts) && products.length === 0) {
-    return <div className="text-center py-10">Ürün bulunamadı.</div>;
-  }
-  if (!Array.isArray(propProducts) && products.length === 0) {
+  if (products.length === 0) {
     return <div className="text-center py-10">Ürün bulunamadı.</div>;
   }
 
   return (
     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-6 mt-8">
-      {products.map((p) => (
-        <ProductItem
-          key={p._id}
-          id={p._id}
-          video={p.video}
-          name={p.name}
-          price={p.price}
-          rating={5}
-          stock={
-            Array.isArray(p.sizes)
-              ? p.sizes.reduce((sum, s) => sum + (s.stock || 0), 0)
-              : 0
-          }
-        />
-      ))}
+      {products.map((p) => {
+        const rate = Number(p.discount || 0);
+        const hasDiscount = rate > 0 && p.price != null;
+        const discountedPrice = hasDiscount
+          ? Math.max(0, Number(((p.price * (100 - rate)) / 100).toFixed(2)))
+          : null;
+
+        return (
+          <ProductItem
+            key={p._id}
+            id={p._id}
+            video={p.video}
+            poster={p.poster || p.images?.[0] || null}
+            name={p.name}
+            price={Number(p.price || 0)}
+            discountedPrice={discountedPrice}
+            discountRate={hasDiscount ? rate : 0}
+            // stok bilgisi gerekiyorsa:
+            stock={
+              Array.isArray(p.sizes)
+                ? p.sizes.reduce((sum, s) => sum + (s.stock || 0), 0)
+                : 0
+            }
+          />
+        );
+      })}
     </div>
   );
 }

@@ -1,20 +1,26 @@
-// src/components/products/ProductGridItem.jsx
 import React, { useRef, useState } from "react";
 import PropTypes from "prop-types";
 import { Link } from "react-router-dom";
-import { FaVolumeMute, FaVolumeUp, FaStar } from "react-icons/fa";
+import { FaVolumeMute, FaVolumeUp } from "react-icons/fa";
 
-const ProductGridItem = ({ id, video, poster, name, price, stock }) => {
+const ProductGridItem = ({
+  id,
+  video,
+  poster,
+  name,
+  price,
+  originalPrice,
+  discount,
+  stock,
+}) => {
   const videoRef = useRef(null);
   const [isHovered, setIsHovered] = useState(false);
   const [isMuted, setIsMuted] = useState(true);
 
   const handleMouseEnter = () => {
     setIsHovered(true);
-
     if (videoRef.current && video) {
       const videoEl = videoRef.current;
-
       const tryPlay = async () => {
         try {
           videoEl.muted = isMuted;
@@ -23,7 +29,6 @@ const ProductGridItem = ({ id, video, poster, name, price, stock }) => {
           console.warn("Video oynatılırken hata:", error);
         }
       };
-
       tryPlay();
     }
   };
@@ -50,6 +55,24 @@ const ProductGridItem = ({ id, video, poster, name, price, stock }) => {
     }
   };
 
+  // ---- İndirim hesapları ----
+  const rate = Number(discount || 0);
+  const hasDiscount =
+    rate > 0 ||
+    (Number.isFinite(originalPrice) && Number(originalPrice) > Number(price));
+
+  const discountPercentage = Math.min(100, Math.max(0, Math.round(rate)));
+  const discountedPrice =
+    hasDiscount && rate > 0
+      ? Math.max(0, Number(((price * (100 - rate)) / 100).toFixed(2)))
+      : Number(price || 0);
+
+  const fmt = (n) =>
+    Number(n || 0).toLocaleString("tr-TR", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
+
   return (
     <Link
       to={`/product-details/${id}`}
@@ -62,6 +85,7 @@ const ProductGridItem = ({ id, video, poster, name, price, stock }) => {
           TÜKENDİ
         </div>
       )}
+
       {isHovered && video && (
         <button
           onClick={toggleMute}
@@ -87,14 +111,33 @@ const ProductGridItem = ({ id, video, poster, name, price, stock }) => {
         />
       </div>
 
-      <div className="p-4">
+      {/* İçerik alanını relative yap: rozet burada beyaz zeminde görünsün */}
+      <div className="p-4 relative">
+        {/* İndirim rozeti */}
+        {hasDiscount && discountPercentage > 0 && (
+          <div className="absolute bottom-3 left-3 bg-red-600 text-white text-xs font-bold w-10 h-10 flex items-center justify-center rounded-full shadow z-20">
+            %{discountPercentage}
+          </div>
+        )}
+
         <h3 className="text-sm font-medium text-dark1 mb-2 text-center">
           {name}
         </h3>
 
-        <p className="text-center text-base font-semibold text-dark2">
-          {price.toFixed(2)}₺
-        </p>
+        {hasDiscount ? (
+          <div className="flex flex-col items-center gap-0.5">
+            <div className="text-sm text-dark2 line-through opacity-70">
+              {fmt(originalPrice || price)}₺
+            </div>
+            <div className="text-center text-base font-semibold text-dark1">
+              {fmt(discountedPrice)}₺
+            </div>
+          </div>
+        ) : (
+          <p className="text-center text-base font-semibold text-dark2">
+            {fmt(price)}₺
+          </p>
+        )}
       </div>
     </Link>
   );
@@ -106,14 +149,16 @@ ProductGridItem.propTypes = {
   poster: PropTypes.string,
   name: PropTypes.string.isRequired,
   price: PropTypes.number.isRequired,
-  rating: PropTypes.number,
+  originalPrice: PropTypes.number,
+  discount: PropTypes.number,
   stock: PropTypes.number.isRequired,
 };
 
 ProductGridItem.defaultProps = {
   video: null,
   poster: null,
-  rating: 0,
+  originalPrice: 0,
+  discount: 0,
 };
 
 export default ProductGridItem;

@@ -1,5 +1,5 @@
 // src/components/layout/Header.jsx
-import React, { useContext, useState, useEffect, useRef } from "react";
+import React, { useContext, useState, useEffect, useRef, useMemo } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
   FaInstagram,
@@ -10,6 +10,7 @@ import {
   FaBars,
   FaTimes,
 } from "react-icons/fa";
+import { ChevronDownIcon, ChevronRightIcon } from "@heroicons/react/24/solid";
 import Logout from "../auth/Logout";
 import { AuthContext } from "../../context/AuthContext";
 import { useCart } from "../../context/useCart";
@@ -19,35 +20,55 @@ import api from "../../../api";
 const Header = () => {
   const { isLoggedIn } = useContext(AuthContext);
   const { items } = useCart();
-  const [showSearch, setShowSearch] = useState(false);
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
-  // Mağaza dropdown state
+  const [showSearch, setShowSearch] = useState(false);
+
+  // Mobil Drawer
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [drawerVisible, setDrawerVisible] = useState(false); // animasyon
+
+  // Mağaza dropdown (desktop)
   const [cats, setCats] = useState([]);
   const [shopOpen, setShopOpen] = useState(false);
   const [hoverParent, setHoverParent] = useState(null);
   const closeTimer = useRef(null);
   const navigate = useNavigate();
 
+  // Mobil akordeon: açık parent id'leri
+  const [openParents, setOpenParents] = useState(() => new Set());
+
   useEffect(() => {
-    api.get("/categories").then(({ data }) => setCats(data)).catch(console.error);
+    api
+      .get("/categories")
+      .then(({ data }) => setCats(Array.isArray(data) ? data : []))
+      .catch(console.error);
   }, []);
 
-  // id helper (parent hem string/id hem obje olabilir)
+  // id helper
   const getId = (maybeObj) =>
-    typeof maybeObj === "object" && maybeObj?._id ? String(maybeObj._id) : String(maybeObj || "");
+    typeof maybeObj === "object" && maybeObj?._id
+      ? String(maybeObj._id)
+      : String(maybeObj || "");
 
-  const parents = cats.filter((c) => !c.parent);
-
-  // ÇOCUKLARI flat listeden üret (backend populate'a ihtiyaç duymadan)
+  const parents = useMemo(() => cats.filter((c) => !c.parent), [cats]);
   const childrenOf = (parentId) =>
     cats.filter((c) => c.parent && getId(c.parent) === String(parentId));
 
-  // Menü aç/kapa (flicker önleme)
+  // Desktop hover’lı menüde children
+  const hoveredParentObj = cats.find(
+    (x) => getId(x._id) === String(hoverParent)
+  );
+  const currentChildren = hoveredParentObj?.children?.length
+    ? hoveredParentObj.children
+    : childrenOf(hoverParent);
+  const hasChildren = (currentChildren || []).length > 0;
+  const hasRightPanel = hasChildren;
+
+  // Desktop dropdown açık/kapalı
   const openMenu = () => {
     if (closeTimer.current) clearTimeout(closeTimer.current);
     setShopOpen(true);
-    setHoverParent(null); // açıldığında sağ panel kapalı başlasın
+    setHoverParent(null);
   };
   const scheduleClose = () => {
     closeTimer.current = setTimeout(() => {
@@ -61,7 +82,29 @@ const Header = () => {
     setShopOpen(false);
     setHoverParent(null);
     setMobileMenuOpen(false);
+    setDrawerVisible(false);
     navigate("/shop", { state: { preset } });
+  };
+
+  // Mobil drawer animasyonu
+  useEffect(() => {
+    if (mobileMenuOpen) {
+      // çizimden sonra translateX’i sıfırla
+      const t = setTimeout(() => setDrawerVisible(true), 10);
+      return () => clearTimeout(t);
+    } else {
+      setDrawerVisible(false);
+    }
+  }, [mobileMenuOpen]);
+
+  // Akordeon toggle
+  const toggleParentOpen = (pid) => {
+    setOpenParents((prev) => {
+      const next = new Set(prev);
+      if (next.has(pid)) next.delete(pid);
+      else next.add(pid);
+      return next;
+    });
   };
 
   const menuItems = [
@@ -71,12 +114,6 @@ const Header = () => {
     { label: "İletişim", path: "/contact" },
   ];
 
-  // Mevcut parent için children listesi:
-  const hoveredParentObj = cats.find((x) => getId(x._id) === String(hoverParent));
-  const currentChildren =
-    hoveredParentObj?.children?.length ? hoveredParentObj.children : childrenOf(hoverParent);
-  const hasChildren = (currentChildren || []).length > 0;
-
   return (
     <header className="bg-light1 border-b border-light2 relative z-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -85,10 +122,11 @@ const Header = () => {
           <div className="flex items-center gap-4">
             {/* Hamburger - Mobil */}
             <button
-              onClick={() => setMobileMenuOpen((prev) => !prev)}
+              onClick={() => setMobileMenuOpen(true)}
               className="lg:hidden text-dark2 text-xl"
+              aria-label="Menüyü Aç"
             >
-              {mobileMenuOpen ? <FaTimes /> : <FaBars />}
+              <FaBars />
             </button>
 
             <Link to="/" className="flex items-center">
@@ -101,12 +139,11 @@ const Header = () => {
 
             {/* Menü - Desktop */}
             <nav className="hidden lg:flex gap-8 text-base font-normal text-dark2 relative">
-              {/* 1) Ana Sayfa */}
               <Link to="/" className="hover:text-brand transition-colors">
                 Ana Sayfa
               </Link>
 
-              {/* 2) Mağaza (tıkla → /shop, hover → dropdown) */}
+              {/* Mağaza (hover → mega menü) */}
               <div
                 className="relative"
                 onMouseEnter={openMenu}
@@ -127,21 +164,27 @@ const Header = () => {
                   <div
                     className={
                       `absolute left-0 top-full mt-3 bg-white border border-light2 rounded-xl shadow-xl p-4 z-50 ` +
-                      (hasChildren ? "w-[700px] grid grid-cols-2 gap-4" : "w-[380px]")
+                      (hasRightPanel
+                        ? "w-[900px] grid grid-cols-2 gap-6"
+                        : "w-[420px]")
                     }
                     onMouseEnter={openMenu}
                     onMouseLeave={scheduleClose}
                   >
                     {/* Sol kolon: Fırsatlar + Parent kategoriler */}
-                    <div className={hasChildren ? "border-r border-light2 pr-4" : ""}>
-                      {/* Fırsatlar bölümü */}
-                      <div className="mb-3">
-                        <div className="text-xs uppercase text-dark2 mb-2">Fırsatlar</div>
+                    <div
+                      className={
+                        hasRightPanel ? "border-r border-light2 pr-4" : ""
+                      }
+                    >
+                      {/* Fırsatlar */}
+                      <div className="mb-4">
                         <button
                           onClick={() => goShopWith({ discountOnly: true })}
-                          className="w-full text-left px-3 py-2 rounded-lg border border-amber-200 bg-amber-50 hover:bg-amber-100 transition"
+                          className="w-full text-left px-3 py-2 font-medium text-red-600 animate-pulse"
+                          title="İndirimdeki tüm ürünler"
                         >
-                          İndirimdekiler
+                          İndirim
                         </button>
                       </div>
 
@@ -154,7 +197,10 @@ const Header = () => {
                             <button
                               onMouseEnter={() => setHoverParent(p._id)}
                               onClick={() =>
-                                goShopWith({ category: [p._id], subCategory: [] })
+                                goShopWith({
+                                  category: [p._id],
+                                  subCategory: [],
+                                })
                               }
                               className={`w-full text-left px-3 py-2 rounded-lg transition ${
                                 hoverParent === p._id
@@ -169,8 +215,8 @@ const Header = () => {
                       </ul>
                     </div>
 
-                    {/* Sağ kolon: SADECE alt kategori varsa görünür */}
-                    {hasChildren && (
+                    {/* Sağ kolon: Alt Kategoriler */}
+                    {hasRightPanel && (
                       <div className="pl-2">
                         <div className="text-xs uppercase text-dark2 mb-2">
                           Alt Kategoriler
@@ -198,7 +244,7 @@ const Header = () => {
                 )}
               </div>
 
-              {/* 3) Diğer menü öğeleri */}
+              {/* Diğer menüler */}
               {menuItems.slice(1).map(({ label, path }) => (
                 <Link
                   key={path}
@@ -267,48 +313,162 @@ const Header = () => {
         </div>
       </div>
 
-      {/* Mobil Menü */}
+      {/* =================== Mobil Drawer =================== */}
       {mobileMenuOpen && (
-        <div className="lg:hidden bg-light1 border-t border-light2 absolute top-full left-0 w-full shadow-md z-40">
-          <nav className="flex flex-col py-4 px-6 space-y-4 text-dark2 font-medium">
-            <Link
-              to="/"
-              className="hover:text-brand"
-              onClick={() => setMobileMenuOpen(false)}
-            >
-              Ana Sayfa
-            </Link>
-
-            {/* Mağaza */}
-            <button
-              onClick={() => {
-                setMobileMenuOpen(false);
-                navigate("/shop");
-              }}
-              className="text-left hover:text-brand"
-            >
-              Mağaza
-            </button>
-
-            {/* İndirimdekiler (Mobil) */}
-            <button
-              onClick={() => goShopWith({ discountOnly: true })}
-              className="text-left hover:text-brand"
-            >
-              İndirimdekiler
-            </button>
-
-            {menuItems.slice(1).map(({ label, path }) => (
+        <div className="fixed inset-0 z-[60]">
+          {/* Backdrop */}
+          <div
+            className={`absolute inset-0 bg-black/40 backdrop-blur-sm transition-opacity ${
+              drawerVisible ? "opacity-100" : "opacity-0"
+            }`}
+            onClick={() => setMobileMenuOpen(false)}
+          />
+          {/* Panel */}
+          <div
+            className={`absolute left-0 top-0 h-full w-[86%] max-w-sm bg-white shadow-2xl border-r border-light2 transform transition-transform duration-300 ${
+              drawerVisible ? "translate-x-0" : "-translate-x-full"
+            } flex flex-col`}
+          >
+            {/* Drawer Header */}
+            <div className="flex items-center justify-between px-4 py-3 border-b border-light2">
               <Link
-                key={path}
-                to={path}
-                className="hover:text-brand"
+                to="/"
+                onClick={() => setMobileMenuOpen(false)}
+                className="flex items-center"
+              >
+                <img
+                  src="../src/assets/logo/logo.png"
+                  alt="Oldsocks Logo"
+                  className="h-10 w-auto object-contain"
+                />
+              </Link>
+              <button
+                onClick={() => setMobileMenuOpen(false)}
+                className="w-9 h-9 flex items-center justify-center rounded-full border border-light3 hover:bg-light1"
+                aria-label="Kapat"
+              >
+                <FaTimes className="text-dark2" />
+              </button>
+            </div>
+
+            {/* Quick Actions */}
+            <div className="px-4 pt-3 pb-1 grid grid-cols-3 gap-2">
+              <button
+                onClick={() => {
+                  setMobileMenuOpen(false);
+                  navigate("/shop");
+                }}
+                className="px-3 py-2 rounded-lg bg-light1 hover:bg-light1/80 border border-light2 text-sm"
+              >
+                Mağaza
+              </button>
+              <button
+                onClick={() => {
+                  setMobileMenuOpen(false);
+                  goShopWith({ discountOnly: true });
+                }}
+                className="px-3 py-2 rounded-lg bg-red-50 text-red-600 border border-red-100 hover:bg-red-100 text-sm"
+              >
+                İndirim
+              </button>
+              <button
+                onClick={() => {
+                  setShowSearch(true);
+                  setMobileMenuOpen(false);
+                }}
+                className="px-3 py-2 rounded-lg bg-light1 hover:bg-light1/80 border border-light2 text-sm"
+              >
+                Ara
+              </button>
+            </div>
+
+            {/* Links */}
+            <nav className="px-4 py-2 space-y-2 overflow-y-auto">
+              <Link
+                to="/"
+                className="block px-4 py-3 rounded-xl hover:bg-light1 transition"
                 onClick={() => setMobileMenuOpen(false)}
               >
-                {label}
+                Ana Sayfa
               </Link>
-            ))}
-          </nav>
+
+              {/* Kategoriler (akordeon kart) */}
+              <div className="rounded-2xl border border-light2 overflow-hidden">
+                <div className="px-4 py-2 text-xs uppercase text-dark2 bg-light1/60">
+                  Kategoriler
+                </div>
+                <ul className="divide-y divide-light2">
+                  {parents.map((p) => {
+                    const pid = String(p._id);
+                    const children =
+                      (p.children && p.children.length
+                        ? p.children
+                        : childrenOf(pid)) || [];
+                    const isOpen = openParents.has(pid);
+
+                    return (
+                      <li key={pid} className="bg-white">
+                        <div className="flex items-center">
+                          <button
+                            onClick={() =>
+                              goShopWith({ category: [pid], subCategory: [] })
+                            }
+                            className="flex-1 text-left px-4 py-3 hover:bg-light1 transition"
+                          >
+                            {p.name}
+                          </button>
+                          {children.length > 0 && (
+                            <button
+                              onClick={() => toggleParentOpen(pid)}
+                              className="px-3 py-3 hover:bg-light1 transition"
+                              aria-label="Alt kategorileri aç/kapat"
+                            >
+                              {isOpen ? (
+                                <ChevronDownIcon className="w-4 h-4 text-dark2" />
+                              ) : (
+                                <ChevronRightIcon className="w-4 h-4 text-dark2" />
+                              )}
+                            </button>
+                          )}
+                        </div>
+
+                        {children.length > 0 && isOpen && (
+                          <ul className="bg-light1/60 px-2 py-2 grid grid-cols-1 gap-1">
+                            {children.map((sc) => (
+                              <li key={sc._id}>
+                                <button
+                                  onClick={() =>
+                                    goShopWith({
+                                      category: [],
+                                      subCategory: [sc._id],
+                                    })
+                                  }
+                                  className="w-full text-left px-3 py-2 rounded-lg hover:bg-light1 transition text-sm"
+                                >
+                                  {sc.name}
+                                </button>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+
+              {menuItems.slice(1).map(({ label, path }) => (
+                <Link
+                  key={path}
+                  to={path}
+                  className="block px-4 py-3 rounded-xl hover:bg-light1 transition"
+                  onClick={() => setMobileMenuOpen(false)}
+                >
+                  {label}
+                </Link>
+              ))}
+            </nav>
+          </div>
         </div>
       )}
 

@@ -39,8 +39,9 @@ const OrderSchema = new mongoose.Schema(
       default: "pending",
     },
     stockUpdated: { type: Boolean, default: false },
+    adminSeenAt: { type: Date, default: null },
   },
   { timestamps: true }
 );
-
+OrderSchema.index({ status: 1, adminSeenAt: 1, createdAt: -1 });
 module.exports = mongoose.model("Order", OrderSchema);

@@ -15,7 +15,8 @@ const BlogCommentReplySchema = new Schema(
       required: true,
     },
     text: { type: String, required: true, trim: true },
-    approved: { type: Boolean, default: false }, // ← eklendi
+    approved: { type: Boolean, default: false },
+    seen: { type: Boolean, default: false },
   },
   { timestamps: true }
 );

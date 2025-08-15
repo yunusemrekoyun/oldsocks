@@ -47,8 +47,10 @@ router.use("/profile-pictures", require("./userProfilePictures"));
 // Instagram postları
 router.use("/instagram-posts", require("./instagramPostRoutes"));
 
+router.use("/discounts", require("./discounts"));
+
 /* --- İNDİRİM KURALLARI (YENİ) --- */
 // /api/v1/discount-rules altında hizmet verir
-router.use("/discount-rules", require("./discountRuleRoutes"));
+// router.use("/discount-rules", require("./discountRuleRoutes"));
 
 module.exports = router;

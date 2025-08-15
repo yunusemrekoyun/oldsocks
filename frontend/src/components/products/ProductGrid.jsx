@@ -1,4 +1,3 @@
-// src/components/ProductGrid.jsx
 import React, { useState, useEffect } from "react";
 import api from "../../../api";
 import ProductGridItem from "./ProductGridItem";
@@ -12,7 +11,8 @@ export default function ProductGrid() {
       .get("/products")
       .then((res) => {
         // sadece ilk 4 ürün
-        setProducts(res.data.slice(0, 4));
+        const list = Array.isArray(res.data) ? res.data : [];
+        setProducts(list.slice(0, 4));
       })
       .catch((err) => console.error("Ürünler getirilirken hata:", err))
       .finally(() => setLoading(false));
@@ -41,13 +41,14 @@ export default function ProductGrid() {
               video={p.video}
               poster={p.poster}
               name={p.name}
-              price={p.price}
+              price={Number(p.price || 0)}
+              originalPrice={Number(p.originalPrice || 0)}
+              discount={Number(p.discount || 0)}
               stock={
                 Array.isArray(p.sizes)
                   ? p.sizes.reduce((sum, s) => sum + (s.stock || 0), 0)
                   : 0
               }
-              rating={5}
             />
           ))}
         </div>

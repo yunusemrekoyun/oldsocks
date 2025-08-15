@@ -15,6 +15,19 @@ const getCreatedMs = (p) => {
   return 0;
 };
 
+// discount yüzdesini belirle: p.discount varsa onu kullan; yoksa price-originalPrice'tan türet
+const computeDiscountPct = (p) => {
+  const direct = Number(p?.discount || 0);
+  if (direct > 0) return direct;
+  const op = Number(p?.originalPrice ?? 0);
+  const pr = Number(p?.price ?? 0);
+  if (op > pr && op > 0) {
+    const pct = Math.round(((op - pr) / op) * 100);
+    return pct > 0 ? pct : 0;
+  }
+  return 0;
+};
+
 export default function NewProducts() {
   const [all, setAll] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -42,12 +55,15 @@ export default function NewProducts() {
 
   // 2 → 3 → 4 hafta pencerelerini deneyip ilk dolu olanı al; sonra en yeni 4 taneyi göster
   const items = useMemo(() => {
-    const sortDesc = (arr) => arr.sort((a, b) => getCreatedMs(b) - getCreatedMs(a));
+    const sortDesc = (arr) =>
+      arr.sort((a, b) => getCreatedMs(b) - getCreatedMs(a));
     const inLast = (weeks) =>
-      sortDesc(all.filter((p) => {
-        const t = getCreatedMs(p);
-        return t > 0 && now - t <= weeks * WEEK;
-      }));
+      sortDesc(
+        all.filter((p) => {
+          const t = getCreatedMs(p);
+          return t > 0 && now - t <= weeks * WEEK;
+        })
+      );
 
     const two = inLast(2);
     if (two.length) return two.slice(0, 4);
@@ -58,8 +74,9 @@ export default function NewProducts() {
     const four = inLast(4);
     if (four.length) return four.slice(0, 4);
 
-    // 4 haftada da hiç yoksa boş bırak (isteğe göre burayı en yenilerden 4’e de çevirebilirsin)
+    // 4 haftada da hiç yoksa boş bırak (ya da en yenilerden 4'e çevirebilirsin)
     return [];
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [all, now]);
 
   if (loading) {
@@ -71,10 +88,9 @@ export default function NewProducts() {
   }
 
   if (items.length === 0) {
-    return null; // ya da istersen küçük bir boş durum mesajı dönebilirsin
+    return null;
   }
 
-  // ProductGrid ile birebir görünüm
   return (
     <section className="bg-light1 py-12">
       <div className="container mx-auto px-4">
@@ -83,21 +99,26 @@ export default function NewProducts() {
         </h2>
 
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-6">
-          {items.map((p) => (
-            <NewProductItem
-              key={p._id}
-              id={p._id}
-              video={p.video}
-              poster={p.poster}
-              name={p.name}
-              price={p.price}
-              stock={
-                Array.isArray(p.sizes)
-                  ? p.sizes.reduce((sum, s) => sum + (s.stock || 0), 0)
-                  : 0
-              }
-            />
-          ))}
+          {items.map((p) => {
+            const discountPercentage = computeDiscountPct(p);
+            return (
+              <NewProductItem
+                key={p._id}
+                id={p._id}
+                video={p.video}
+                poster={p.poster}
+                name={p.name}
+                price={p.price}
+                originalPrice={p.originalPrice}
+                discountPercentage={discountPercentage}
+                stock={
+                  Array.isArray(p.sizes)
+                    ? p.sizes.reduce((sum, s) => sum + (s.stock || 0), 0)
+                    : 0
+                }
+              />
+            );
+          })}
         </div>
       </div>
     </section>

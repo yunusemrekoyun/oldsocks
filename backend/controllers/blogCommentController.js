@@ -14,18 +14,43 @@ const {
 // Admin: tüm yorumları listele (approved filtresiyle)
 exports.getAllComments = async (req, res) => {
   try {
-    const approved = req.query.approved === "true";
-    const comments = await BlogComment.find({ approved })
+    const query = {};
+    if (req.query.approved === "true") query.approved = true;
+    if (req.query.approved === "false") query.approved = false;
+    if (req.query.seen === "true") query.seen = true;
+    if (req.query.seen === "false") query.seen = false;
+
+    const comments = await BlogComment.find(query)
       .populate("author", "firstName lastName avatar")
       .populate("blog", "title slug")
       .sort({ createdAt: -1 });
+
     res.json(comments);
   } catch (err) {
     console.error("🔥 getAllComments error:", err);
     res.status(500).json({ message: err.message });
   }
 };
+exports.markAllCommentsSeen = async (req, res) => {
+  try {
+    // İstersen approved filtresi de al: ?approved=false|true (default: false)
+    const approved =
+      req.query.approved === "true"
+        ? true
+        : req.query.approved === "false"
+        ? false
+        : false;
 
+    const { modifiedCount } = await BlogComment.updateMany(
+      { approved, seen: false },
+      { $set: { seen: true } }
+    );
+    res.json({ updated: modifiedCount });
+  } catch (err) {
+    console.error("🔥 markAllCommentsSeen error:", err);
+    res.status(500).json({ message: "Yorumlar seen yapılırken hata." });
+  }
+};
 // Admin: tek bir yorumu getir (populate eklendi)
 exports.getComment = async (req, res) => {
   try {

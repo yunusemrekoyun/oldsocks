@@ -3,8 +3,13 @@ const BlogCommentReply = require("../models/BlogCommentReply");
 // Admin: tüm yanıtları listele (approved filtresiyle)
 exports.getAllReplies = async (req, res) => {
   try {
-    const approved = req.query.approved === "true";
-    const replies = await BlogCommentReply.find({ approved })
+    const query = {};
+    if (req.query.approved === "true") query.approved = true;
+    if (req.query.approved === "false") query.approved = false;
+    if (req.query.seen === "true") query.seen = true;
+    if (req.query.seen === "false") query.seen = false;
+
+    const replies = await BlogCommentReply.find(query)
       .populate("author", "firstName lastName avatar")
       .populate({
         path: "comment",
@@ -12,13 +17,32 @@ exports.getAllReplies = async (req, res) => {
         populate: { path: "blog", select: "title slug" },
       })
       .sort({ createdAt: -1 });
+
     res.json(replies);
   } catch (err) {
     console.error("🔥 getAllReplies error:", err);
     res.status(500).json({ message: err.message });
   }
 };
+exports.markAllRepliesSeen = async (req, res) => {
+  try {
+    const approved =
+      req.query.approved === "true"
+        ? true
+        : req.query.approved === "false"
+        ? false
+        : false;
 
+    const { modifiedCount } = await BlogCommentReply.updateMany(
+      { approved, seen: false },
+      { $set: { seen: true } }
+    );
+    res.json({ updated: modifiedCount });
+  } catch (err) {
+    console.error("🔥 markAllRepliesSeen error:", err);
+    res.status(500).json({ message: "Yanıtlar seen yapılırken hata." });
+  }
+};
 // Admin: tek bir yanıtı getir
 exports.getReply = async (req, res) => {
   try {

@@ -6,13 +6,16 @@ import prevFallback from "../../assets/blog/blog-pagination/previous.png";
 import nextFallback from "../../assets/blog/blog-pagination/next.png";
 
 const slugify = (s = "") =>
-  s.toLowerCase().trim().replace(/[\s\W-]+/g, "-");
+  s
+    .toLowerCase()
+    .trim()
+    .replace(/[\s\W-]+/g, "-");
 
 export default function BlogDetailsPagination({ posts: postsProp, currentId }) {
   const location = useLocation();
   const params = useParams();
 
-  // URL’den mevcut anahtar: prop > param değeri > path son segment
+  // URL’den mevcut anahtar: prop > param > path son segment
   const anyParamVal =
     currentId ||
     Object.values(params)[0] ||
@@ -30,8 +33,11 @@ export default function BlogDetailsPagination({ posts: postsProp, currentId }) {
       .get("/blogs")
       .then(({ data }) => {
         if (!alive) return;
-        const arr = Array.isArray(data) ? data : Array.isArray(data?.items) ? data.items : [];
-        // statü varsa yine dursun; yoksa tümünü al
+        const arr = Array.isArray(data)
+          ? data
+          : Array.isArray(data?.items)
+          ? data.items
+          : [];
         setPosts(arr);
       })
       .catch(() => setPosts([]))
@@ -41,14 +47,13 @@ export default function BlogDetailsPagination({ posts: postsProp, currentId }) {
     };
   }, [postsProp]);
 
-  // Normalize + sırala
+  // Normalize + sırala (eski → yeni)
   const sorted = useMemo(() => {
     const norm = posts.map((p) => ({
       ...p,
       _slug: p.slug || slugify(p.title || ""),
       _ts: new Date(p.publishedAt || p.createdAt || 0).getTime(),
     }));
-    // eski → yeni
     return norm.sort((a, b) => a._ts - b._ts);
   }, [posts]);
 
@@ -64,6 +69,7 @@ export default function BlogDetailsPagination({ posts: postsProp, currentId }) {
     );
   }, [sorted, anyParamVal]);
 
+  // Komşular
   const prevPost = idx > 0 ? sorted[idx - 1] : null;
   const nextPost = idx >= 0 && idx < sorted.length - 1 ? sorted[idx + 1] : null;
 
@@ -81,76 +87,51 @@ export default function BlogDetailsPagination({ posts: postsProp, currentId }) {
     );
   }
 
-  // Mevcut yazıyı bulamazsak bile boş dönmek yerine, en azından iki yazı varsa
-  // “sonraki” olarak en yeniyi, “önceki” olarak da ondan bir öncekini gösterebiliriz.
-  const fallbackPrev = !prevPost && sorted.length >= 2 ? sorted[sorted.length - 2] : null;
-  const fallbackNext = !nextPost && sorted.length >= 1 ? sorted[sorted.length - 1] : null;
+  // Mevcut yazı bulunamadıysa veya hiç komşu yoksa tamamen gizle
+  if (idx === -1 || (!prevPost && !nextPost)) {
+    return null;
+  }
 
   return (
     <div className="flex justify-between items-center py-8 border-t border-gray-200">
-      {/* Önceki */}
-      {prevPost || (idx === -1 && fallbackPrev) ? (
+      {/* Önceki (varsa göster) */}
+      {prevPost ? (
         <Link
-          to={urlFor(prevPost || fallbackPrev)}
+          to={urlFor(prevPost)}
           className="group flex items-center space-x-4 hover:text-[#03588C] transition"
         >
           <img
-            src={coverOf(prevPost || fallbackPrev) || prevFallback}
-            alt={titleOf(prevPost || fallbackPrev)}
+            src={coverOf(prevPost) || prevFallback}
+            alt={titleOf(prevPost)}
             className="w-16 h-16 object-cover rounded"
           />
           <div>
             <p className="text-sm text-gray-500">Önceki Gönderi</p>
-            <h4 className="font-medium line-clamp-1">
-              {titleOf(prevPost || fallbackPrev)}
-            </h4>
+            <h4 className="font-medium line-clamp-1">{titleOf(prevPost)}</h4>
           </div>
         </Link>
       ) : (
-        <span className="opacity-40 cursor-not-allowed flex items-center space-x-4">
-          <img
-            src={prevFallback}
-            alt="Önceki yok"
-            className="w-16 h-16 object-cover rounded"
-          />
-          <div>
-            <p className="text-sm text-gray-400">Önceki Gönderi</p>
-            <h4 className="font-medium text-gray-400">—</h4>
-          </div>
-        </span>
+        // Sadece “sonraki” varsa sağa itmek için boş alan
+        <div />
       )}
 
-      {/* Sonraki */}
-      {nextPost || (idx === -1 && fallbackNext) ? (
+      {/* Sonraki (varsa göster) */}
+      {nextPost ? (
         <Link
-          to={urlFor(nextPost || fallbackNext)}
+          to={urlFor(nextPost)}
           className="group flex items-center space-x-4 hover:text-[#03588C] transition"
         >
           <div className="text-right">
             <p className="text-sm text-gray-500">Sonraki Gönderi</p>
-            <h4 className="font-medium line-clamp-1">
-              {titleOf(nextPost || fallbackNext)}
-            </h4>
+            <h4 className="font-medium line-clamp-1">{titleOf(nextPost)}</h4>
           </div>
           <img
-            src={coverOf(nextPost || fallbackNext) || nextFallback}
-            alt={titleOf(nextPost || fallbackNext)}
+            src={coverOf(nextPost) || nextFallback}
+            alt={titleOf(nextPost)}
             className="w-16 h-16 object-cover rounded"
           />
         </Link>
-      ) : (
-        <span className="opacity-40 cursor-not-allowed flex items-center space-x-4">
-          <div className="text-right">
-            <p className="text-sm text-gray-400">Sonraki Gönderi</p>
-            <h4 className="font-medium text-gray-400">—</h4>
-          </div>
-          <img
-            src={nextFallback}
-            alt="Sonraki yok"
-            className="w-16 h-16 object-cover rounded"
-          />
-        </span>
-      )}
+      ) : null}
     </div>
   );
 }

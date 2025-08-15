@@ -16,6 +16,14 @@ router.patch(
   allowRoles("admin"),
   ctrl.approveReply
 );
+
+router.patch(
+  "/replies/mark-seen",
+  verifyToken,
+  allowRoles("admin"),
+  ctrl.markAllRepliesSeen
+);
+
 // Yanıt sil
 router.delete("/replies/:id", verifyToken, ctrl.deleteReply);
 

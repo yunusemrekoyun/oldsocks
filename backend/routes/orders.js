@@ -13,6 +13,18 @@ router.put(
   allowRoles("admin"),
   orderCtrl.updateOrderStatus
 );
+router.get(
+  "/unseen-count",
+  verifyToken,
+  allowRoles("admin"),
+  orderCtrl.getUnseenPaidCount
+);
+router.put(
+  "/mark-seen",
+  verifyToken,
+  allowRoles("admin"),
+  orderCtrl.markPaidOrdersSeen
+);
 // Tüm endpoint’ler korumalı
 router.use(verifyToken);
 

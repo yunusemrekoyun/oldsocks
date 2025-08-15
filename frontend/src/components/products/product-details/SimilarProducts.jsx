@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import api from "../../../../api";
-import SimilarProductsItem from "../product-details/SimilarProductsItem";
+import SimilarProductsItem from "./SimilarProductsItem";
 import { Swiper, SwiperSlide } from "swiper/react";
 import { Autoplay, FreeMode } from "swiper/modules";
 import "swiper/css";
@@ -54,6 +54,7 @@ export default function SimilarProducts({ categoryId, currentProductId }) {
           result = filtered;
         }
 
+        // Basit shuffle
         for (let i = result.length - 1; i > 0; i--) {
           const j = Math.floor(Math.random() * (i + 1));
           [result[i], result[j]] = [result[j], result[i]];
@@ -95,6 +96,7 @@ export default function SimilarProducts({ categoryId, currentProductId }) {
               video={p.video}
               name={p.name}
               price={p.price}
+              discountedPrice={p.discountedPrice} // ✅ Artık doğru geçiyor
             />
           </SwiperSlide>
         ))}
