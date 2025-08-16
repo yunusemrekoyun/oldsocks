@@ -88,6 +88,7 @@ export default function BlogsPage() {
 
   // form
   const [dialogOpen, setDialogOpen] = useState(false);
+  // eslint-disable-next-line no-unused-vars
   const [dirty, setDirty] = useState(false);
   const [form, setForm] = useState({
     _id: null,
@@ -100,6 +101,7 @@ export default function BlogsPage() {
     tagsArray: [],
     coverImage: null,
     coverPreview: null,
+    status: "draft", // ✅ yeni
   });
   const [tagInput, setTagInput] = useState("");
 
@@ -155,6 +157,7 @@ export default function BlogsPage() {
       tagsArray: [],
       coverImage: null,
       coverPreview: null,
+      status: "draft", // ✅ yeni
     });
     setTagInput("");
     setDirty(false);
@@ -170,11 +173,12 @@ export default function BlogsPage() {
         subtitle: data.subtitle,
         excerpt: data.excerpt,
         content: data.content,
-        categories: data.categories.map((c) => c._id),
-        author: data.author._id,
+        categories: (data.categories || []).map((c) => c._id),
+        author: data.author?._id || "",
         tagsArray: data.tags || [],
         coverImage: null,
-        coverPreview: data.coverImageUrl,
+        coverPreview: data.coverImageUrl || null,
+        status: data.status || "draft", // ✅ yeni
       });
       setTagInput("");
       setDirty(false);
@@ -215,6 +219,14 @@ export default function BlogsPage() {
       setToast({ msg: "Lütfen bir yazar seçin.", type: "error" });
       return;
     }
+    if (!form._id && !form.coverImage) {
+      setToast({ msg: "Kapak görseli zorunludur.", type: "error" });
+      return;
+    }
+    if (!form.title.trim() || !form.content.trim()) {
+      setToast({ msg: "Başlık ve içerik zorunludur.", type: "error" });
+      return;
+    }
 
     const fd = new FormData();
     fd.append("title", form.title);
@@ -224,6 +236,7 @@ export default function BlogsPage() {
     fd.append("categories", JSON.stringify(form.categories));
     fd.append("author", form.author);
     fd.append("tags", JSON.stringify(form.tagsArray));
+    fd.append("status", form.status); // ✅ yeni
     if (form.coverImage) fd.append("coverImage", form.coverImage);
 
     const id = uuidv4();
@@ -310,11 +323,11 @@ export default function BlogsPage() {
 
   /* ---------------- computed ---------------- */
   const canSave =
-    dirty &&
     form.categories.length > 0 &&
     form.author &&
     form.title.trim() !== "" &&
-    form.content.trim() !== "";
+    form.content.trim() !== "" &&
+    (form._id ? true : !!form.coverImage); // create’te kapak zorunlu
 
   /* ---------------- render ---------------- */
   return (
@@ -328,22 +341,23 @@ export default function BlogsPage() {
           </Typography>
         </div>
 
-        <div className="flex flex-col md:flex-row gap-3 md:items-center">
+        <div className="flex flex-col md:flex-row gap-3 md:items-center w-full md:w-auto">
           {/* search */}
-          <div className="relative">
+          <div className="relative w-full md:w-72">
             <Input
               inputRef={searchRef}
               icon={<MagnifyingGlassIcon className="h-5 w-5" />}
               label="Ara (başlık, özet, tag)"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && searchRef.current?.blur()}
               crossOrigin=""
             />
           </div>
 
           {/* kategori filtresi */}
           <select
-            className="border rounded-lg p-2 text-sm"
+            className="border rounded-lg p-2 text-sm w-full md:w-auto"
             value={catFilter}
             onChange={(e) => setCatFilter(e.target.value)}
           >
@@ -357,7 +371,7 @@ export default function BlogsPage() {
 
           {/* yazar filtresi */}
           <select
-            className="border rounded-lg p-2 text-sm"
+            className="border rounded-lg p-2 text-sm w-full md:w-auto"
             value={authorFilter}
             onChange={(e) => setAuthorFilter(e.target.value)}
           >
@@ -371,7 +385,7 @@ export default function BlogsPage() {
 
           {/* sıralama */}
           <select
-            className="border rounded-lg p-2 text-sm"
+            className="border rounded-lg p-2 text-sm w-full md:w-auto"
             value={sortBy}
             onChange={(e) => setSortBy(e.target.value)}
           >
@@ -380,7 +394,7 @@ export default function BlogsPage() {
             <option value="title">Başlık (A→Z)</option>
           </select>
 
-          <Button color="blue" onClick={openNew}>
+          <Button color="blue" onClick={openNew} className="w-full md:w-auto">
             + Yeni Blog
           </Button>
         </div>
@@ -388,7 +402,7 @@ export default function BlogsPage() {
 
       {/* liste */}
       {loading ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           {Array.from({ length: 6 }).map((_, i) => (
             <CardSkeleton key={i} />
           ))}
@@ -401,19 +415,19 @@ export default function BlogsPage() {
           <Typography className="text-gray-600 mb-4">
             Filtreleri temizleyin veya yeni bir blog ekleyin.
           </Typography>
-          <Button color="blue" onClick={openNew}>
+          <Button color="blue" onClick={openNew} className="w-full md:w-auto">
             Blog Oluştur
           </Button>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           {filtered.map((b) => (
             <Card
               key={b._id}
               className="relative overflow-hidden group border border-gray-100 hover:shadow-xl transition-shadow"
             >
               {/* Görsel alanı */}
-              <div className="relative h-48">
+              <div className="relative h-40 sm:h-48">
                 {b.coverImageUrl ? (
                   <img
                     src={b.coverImageUrl}
@@ -442,10 +456,10 @@ export default function BlogsPage() {
                   )}
                 </div>
 
-                {/* HOVER EDIT OVERLAY */}
+                {/* HOVER EDIT OVERLAY (desktop) */}
                 <button
                   onClick={() => openEdit(b)}
-                  className="absolute inset-0 flex items-center justify-center bg-white/60 opacity-0 group-hover:opacity-100 transition-opacity z-20"
+                  className="absolute inset-0 hidden md:flex items-center justify-center bg-white/60 opacity-0 group-hover:opacity-100 transition-opacity z-20"
                   title="Düzenle"
                 >
                   <span className="inline-flex items-center gap-2 px-3 py-2 rounded-full bg-white shadow">
@@ -477,10 +491,30 @@ export default function BlogsPage() {
                     </div>
                   )}
 
-                  {/* SİL BUTONU */}
+                  {/* SİL BUTONU (desktop görünür) */}
                   <button
                     onClick={() => triggerDelete(b._id)}
-                    className="inline-flex items-center gap-1 px-2 py-1 rounded border border-red-200 text-red-600 hover:bg-red-50 text-xs"
+                    className="hidden md:inline-flex items-center gap-1 px-2 py-1 rounded border border-red-200 text-red-600 hover:bg-red-50 text-xs"
+                  >
+                    <TrashIcon className="w-4 h-4" />
+                    Sil
+                  </button>
+                </div>
+
+                {/* mobil aksiyonlar */}
+                <div className="flex md:hidden gap-2 mt-3">
+                  <button
+                    onClick={() => openEdit(b)}
+                    className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded border text-xs hover:bg-gray-50"
+                    title="Düzenle"
+                  >
+                    <PencilIcon className="w-4 h-4" />
+                    Düzenle
+                  </button>
+                  <button
+                    onClick={() => triggerDelete(b._id)}
+                    className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded border border-red-200 text-red-600 text-xs hover:bg-red-50"
+                    title="Sil"
                   >
                     <TrashIcon className="w-4 h-4" />
                     Sil
@@ -493,9 +527,14 @@ export default function BlogsPage() {
       )}
 
       {/* form dialog */}
-      <Dialog open={dialogOpen} size="xl" handler={() => setDialogOpen(false)}>
+      <Dialog
+        open={dialogOpen}
+        size="xl"
+        handler={() => setDialogOpen(false)}
+        className="!max-w-[95vw]"
+      >
         <DialogHeader>{form._id ? "Blogu Güncelle" : "Yeni Blog"}</DialogHeader>
-        <DialogBody divider className="overflow-auto max-h-[75vh] pr-2">
+        <DialogBody divider className="overflow-auto max-h-[70svh] pr-2">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* SOL: FORM */}
             <div className="space-y-4">
@@ -587,25 +626,45 @@ export default function BlogsPage() {
               </div>
 
               {/* yazar */}
-              <div>
-                <label className="block mb-1 text-sm font-medium">
-                  Yazar *
-                </label>
-                <select
-                  className="w-full border rounded p-2"
-                  value={form.author}
-                  onChange={(e) => {
-                    setForm((f) => ({ ...f, author: e.target.value }));
-                    setDirty(true);
-                  }}
-                >
-                  <option value="">-- Yazar Seçiniz --</option>
-                  {admins.map((u) => (
-                    <option key={u._id} value={u._id}>
-                      {u.firstName} {u.lastName}
-                    </option>
-                  ))}
-                </select>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block mb-1 text-sm font-medium">
+                    Yazar *
+                  </label>
+                  <select
+                    className="w-full border rounded p-2"
+                    value={form.author}
+                    onChange={(e) => {
+                      setForm((f) => ({ ...f, author: e.target.value }));
+                      setDirty(true);
+                    }}
+                  >
+                    <option value="">-- Yazar Seçiniz --</option>
+                    {admins.map((u) => (
+                      <option key={u._id} value={u._id}>
+                        {u.firstName} {u.lastName}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* ✅ Durum */}
+                <div>
+                  <label className="block mb-1 text-sm font-medium">
+                    Durum
+                  </label>
+                  <select
+                    className="w-full border rounded p-2"
+                    value={form.status}
+                    onChange={(e) => {
+                      setForm((f) => ({ ...f, status: e.target.value }));
+                      setDirty(true);
+                    }}
+                  >
+                    <option value="draft">Taslak</option>
+                    <option value="published">Yayınla</option>
+                  </select>
+                </div>
               </div>
 
               {/* tags */}
@@ -644,7 +703,7 @@ export default function BlogsPage() {
               {/* kapak resmi */}
               <div>
                 <label className="block text-sm font-medium mb-1">
-                  Kapak Görseli
+                  Kapak Görseli {form._id ? "" : "*"}
                 </label>
                 <label className="border-2 border-dashed rounded-xl p-4 flex items-center justify-center gap-2 cursor-pointer hover:bg-gray-50">
                   <span className="text-sm">
@@ -685,7 +744,7 @@ export default function BlogsPage() {
                 Canlı Önizleme
               </Typography>
               <div className="rounded-xl border overflow-hidden">
-                <div className="relative h-48">
+                <div className="relative h-40 sm:h-48">
                   {form.coverPreview ? (
                     <img
                       src={form.coverPreview}
@@ -730,12 +789,16 @@ export default function BlogsPage() {
                         : ""}
                     </div>
                   )}
+                  <div className="mt-2 text-[11px] text-gray-500">
+                    Durum:{" "}
+                    {form.status === "published" ? "Yayınlanacak" : "Taslak"}
+                  </div>
                 </div>
               </div>
             </div>
           </div>
         </DialogBody>
-        <DialogFooter>
+        <DialogFooter className="gap-2">
           <Button variant="text" onClick={() => setDialogOpen(false)}>
             İptal
           </Button>

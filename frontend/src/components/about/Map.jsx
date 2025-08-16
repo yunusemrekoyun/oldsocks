@@ -2,10 +2,10 @@
 import React from "react";
 
 const Map = () => {
-  const address = "1600 Amphitheatre Parkway, Mountain View, CA";
+  const address = "Alipaşa, Üçbey Sk. No:7, 43020 Kütahya Merkez/Kütahya";
   const src = `https://maps.google.com/maps?q=${encodeURIComponent(
     address
-  )}&t=&z=13&ie=UTF8&iwloc=&output=embed`;
+  )}&t=&z=15&ie=UTF8&iwloc=&output=embed`;
 
   return (
     <div className="w-full h-96 rounded-lg overflow-hidden shadow-lg">

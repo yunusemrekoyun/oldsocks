@@ -116,19 +116,21 @@ export default function CommentsPage() {
           {comments.map((c) => (
             <li
               key={c._id}
-              className="p-4 bg-white rounded shadow flex justify-between items-start"
+              className="p-4 bg-white rounded shadow flex flex-col sm:flex-row sm:justify-between sm:items-start gap-3"
             >
-              <div>
-                <p className="font-medium">
+              {/* Yorum metni */}
+              <div className="flex-1">
+                <p className="font-medium break-words">
                   {c.author.firstName} {c.author.lastName}
                 </p>
-                <p className="text-sm mt-1">{c.text}</p>
+                <p className="text-sm mt-1 break-words">{c.text}</p>
                 <p className="text-xs text-gray-500 mt-1">
                   {new Date(c.createdAt).toLocaleString()}
                 </p>
               </div>
 
-              <div className="flex gap-2">
+              {/* Butonlar */}
+              <div className="flex gap-2 shrink-0">
                 {filter === "pending" && (
                   <IconButton
                     variant="text"

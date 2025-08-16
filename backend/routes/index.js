@@ -49,6 +49,10 @@ router.use("/instagram-posts", require("./instagramPostRoutes"));
 
 router.use("/discounts", require("./discounts"));
 
+router.use("/contact", require("./contact"));
+
+router.use("/newsletter", require("./newsletter"));
+
 /* --- İNDİRİM KURALLARI (YENİ) --- */
 // /api/v1/discount-rules altında hizmet verir
 // router.use("/discount-rules", require("./discountRuleRoutes"));

@@ -54,7 +54,7 @@ export default function Hero() {
           to="/shop"
           className="px-7 md:px-8 py-3 md:py-3.5 bg-dark1 hover:bg-dark2 text-light1 font-medium rounded-full transition"
         >
-          Shop Now
+Alışverişe Başla
         </Link>
       </div>
     </section>

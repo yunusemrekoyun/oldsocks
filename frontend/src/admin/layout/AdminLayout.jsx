@@ -4,7 +4,7 @@ import { Link, useLocation } from "react-router-dom";
 import useUnseenOrders from "../../hooks/useUnseenOrders";
 import useUnseenComments from "../../hooks/useUnseenComments";
 import useUnseenReplies from "../../hooks/useUnseenReplies";
-// api importu ve bildirimle ilgili her şey kaldırıldı
+
 import {
   Card,
   Typography,
@@ -36,10 +36,20 @@ export default function AdminLayout({ children }) {
   const { count: unseenOrders } = useUnseenOrders({ poll: true });
   const { count: unseenComments } = useUnseenComments({ poll: true });
   const { count: unseenReplies } = useUnseenReplies({ poll: true });
+
   const [open, setOpen] = useState(false); // mobile drawer
   const [blogMenuOpen, setBlogMenuOpen] = useState(false);
   const [commentsMenuOpen, setCommentsMenuOpen] = useState(false);
   const [instagramMenuOpen, setInstagramMenuOpen] = useState(false);
+
+  // Drawer açıkken body scroll’u kilitle
+  useEffect(() => {
+    if (open) {
+      const prev = document.body.style.overflow;
+      document.body.style.overflow = "hidden";
+      return () => (document.body.style.overflow = prev);
+    }
+  }, [open]);
 
   // Aktif rota kontrolü
   const isActive = (path) => {
@@ -114,10 +124,11 @@ export default function AdminLayout({ children }) {
       {/* Scroll alanı */}
       <div
         className="overflow-y-auto pr-1 custom-scrollbar"
-        style={{ maxHeight: "calc(100vh - 100px)" }}
+        // 100svh: mobil tarayıcı chrome/safari adres çubuğu dinamiklerinde daha tutarlı yükseklik
+        style={{ maxHeight: "calc(100svh - 100px)" }}
       >
         <List className="space-y-1">
-          {/* Düz linkler (rozetler kaldırıldı) */}
+          {/* Düz linkler */}
           {navItems.map(({ label, icon, path }) => {
             const active = isActive(path);
             return (
@@ -125,8 +136,10 @@ export default function AdminLayout({ children }) {
                 key={path}
                 to={path}
                 onClick={() => setOpen(false)}
+                aria-current={active ? "page" : undefined}
                 className={cx(
                   "relative flex items-center gap-3 rounded px-3 py-2 text-sm font-medium transition",
+                  "focus:outline-none focus:ring-2 focus:ring-blue-200",
                   active
                     ? "bg-blue-50 text-blue-700"
                     : "hover:bg-gray-100 text-gray-800"
@@ -134,6 +147,7 @@ export default function AdminLayout({ children }) {
               >
                 {/* Aktif sol şerit */}
                 <span
+                  aria-hidden="true"
                   className={cx(
                     "absolute left-0 top-0 h-full w-1 rounded-r",
                     active ? "bg-blue-600" : "bg-transparent"
@@ -150,17 +164,19 @@ export default function AdminLayout({ children }) {
             );
           })}
 
-          {/* Bloglar menüsü (rozet yok) */}
+          {/* Bloglar menüsü */}
           <button
             onClick={() => setBlogMenuOpen((o) => !o)}
             className={cx(
               "w-full text-left relative flex items-center gap-3 rounded px-3 py-2 text-sm font-medium transition",
+              "focus:outline-none focus:ring-2 focus:ring-blue-200",
               isActive("/admin/blogs") || isActive("/admin/blog-categories")
                 ? "bg-blue-50 text-blue-700"
                 : "hover:bg-gray-100 text-gray-800"
             )}
           >
             <span
+              aria-hidden="true"
               className={cx(
                 "absolute left-0 top-0 h-full w-1 rounded-r",
                 isActive("/admin/blogs") || isActive("/admin/blog-categories")
@@ -191,6 +207,7 @@ export default function AdminLayout({ children }) {
               onClick={() => setOpen(false)}
               className={cx(
                 "block rounded px-3 py-1 text-sm transition",
+                "focus:outline-none focus:ring-2 focus:ring-blue-200",
                 isActive("/admin/blogs")
                   ? "bg-blue-50 text-blue-700 font-semibold"
                   : "hover:bg-gray-100 text-gray-800"
@@ -203,6 +220,7 @@ export default function AdminLayout({ children }) {
               onClick={() => setOpen(false)}
               className={cx(
                 "block rounded px-3 py-1 text-sm transition",
+                "focus:outline-none focus:ring-2 focus:ring-blue-200",
                 isActive("/admin/blog-categories")
                   ? "bg-blue-50 text-blue-700 font-semibold"
                   : "hover:bg-gray-100 text-gray-800"
@@ -212,17 +230,19 @@ export default function AdminLayout({ children }) {
             </Link>
           </div>
 
-          {/* Yorumlar menüsü (rozet yok) */}
+          {/* Yorumlar menüsü */}
           <button
             onClick={() => setCommentsMenuOpen((o) => !o)}
             className={cx(
               "w-full text-left relative flex items-center gap-3 rounded px-3 py-2 text-sm font-medium transition",
+              "focus:outline-none focus:ring-2 focus:ring-blue-200",
               isActive("/admin/comments") || isActive("/admin/replies")
                 ? "bg-blue-50 text-blue-700"
                 : "hover:bg-gray-100 text-gray-800"
             )}
           >
             <span
+              aria-hidden="true"
               className={cx(
                 "absolute left-0 top-0 h-full w-1 rounded-r",
                 isActive("/admin/comments") || isActive("/admin/replies")
@@ -260,6 +280,7 @@ export default function AdminLayout({ children }) {
               onClick={() => setOpen(false)}
               className={cx(
                 "rounded px-3 py-1 text-sm transition flex items-center justify-between",
+                "focus:outline-none focus:ring-2 focus:ring-blue-200",
                 isActive("/admin/comments")
                   ? "bg-blue-50 text-blue-700 font-semibold"
                   : "hover:bg-gray-100 text-gray-800"
@@ -278,6 +299,7 @@ export default function AdminLayout({ children }) {
               onClick={() => setOpen(false)}
               className={cx(
                 " rounded px-3 py-1 text-sm transition flex items-center justify-between",
+                "focus:outline-none focus:ring-2 focus:ring-blue-200",
                 isActive("/admin/replies")
                   ? "bg-blue-50 text-blue-700 font-semibold"
                   : "hover:bg-gray-100 text-gray-800"
@@ -297,12 +319,14 @@ export default function AdminLayout({ children }) {
             onClick={() => setInstagramMenuOpen((o) => !o)}
             className={cx(
               "w-full text-left relative flex items-center gap-3 rounded px-3 py-2 text-sm font-medium transition",
+              "focus:outline-none focus:ring-2 focus:ring-blue-200",
               isActive("/admin/instagram-posts")
                 ? "bg-blue-50 text-blue-700"
                 : "hover:bg-gray-100 text-gray-800"
             )}
           >
             <span
+              aria-hidden="true"
               className={cx(
                 "absolute left-0 top-0 h-full w-1 rounded-r",
                 isActive("/admin/instagram-posts")
@@ -333,6 +357,7 @@ export default function AdminLayout({ children }) {
               onClick={() => setOpen(false)}
               className={cx(
                 "block rounded px-3 py-1 text-sm transition",
+                "focus:outline-none focus:ring-2 focus:ring-blue-200",
                 isActive("/admin/instagram-posts")
                   ? "bg-blue-50 text-blue-700 font-semibold"
                   : "hover:bg-gray-100 text-gray-800"
@@ -368,29 +393,46 @@ export default function AdminLayout({ children }) {
   }, [location.pathname]);
 
   return (
-    <div className="min-h-screen flex bg-gray-50">
+    <div className="min-h-svh md:min-h-screen flex bg-gray-50">
       {/* Desktop Sidebar */}
-      <aside className="hidden md:block w-64 sticky top-0 h-screen">
+      <aside className="hidden md:block w-64 md:sticky md:top-0 md:h-[100svh]">
         {SidebarContent}
       </aside>
 
       {/* Mobile Drawer */}
-      <Drawer open={open} onClose={() => setOpen(false)} className="md:hidden">
-        <div className="p-4 flex justify-between items-center border-b">
+      <Drawer
+        open={open}
+        onClose={() => setOpen(false)}
+        className="md:hidden"
+        overlayProps={{ className: "bg-black/40 backdrop-blur-[2px]" }}
+      >
+        {/* Drawer header */}
+        <div
+          className="p-4 flex justify-between items-center border-b"
+          style={{
+            paddingTop: "max(env(safe-area-inset-top), 1rem)",
+          }}
+        >
           <Typography variant="h6">Menü</Typography>
           <IconButton variant="text" onClick={() => setOpen(false)}>
             <XMarkIcon className="h-5 w-5 text-gray-700" />
           </IconButton>
         </div>
-        {SidebarContent}
+        <div className="overflow-y-auto h-[calc(100svh-64px)]">
+          {SidebarContent}
+        </div>
       </Drawer>
 
       {/* Floating burger on mobile */}
-      <div className="md:hidden fixed top-4 left-4 z-[999]">
+      <div
+        className="md:hidden fixed left-4 z-[999]"
+        style={{ top: "calc(env(safe-area-inset-top) + 12px)" }}
+      >
         <IconButton
           variant="text"
           onClick={() => setOpen(true)}
           aria-label="Menüyü aç"
+          className="bg-white/80 backdrop-blur border border-gray-200 shadow"
         >
           <Bars3Icon className="h-6 w-6 text-gray-800" />
         </IconButton>
@@ -400,7 +442,10 @@ export default function AdminLayout({ children }) {
       <div className="flex-1 flex flex-col min-w-0">
         {/* Top App Bar */}
         <header className="sticky top-0 z-[50] bg-gray-50/80 backdrop-blur supports-[backdrop-filter]:bg-gray-50/60 border-b">
-          <div className="flex items-center justify-between px-4 md:px-6 h-14">
+          <div
+            className="flex items-center justify-between px-4 md:px-6 h-14"
+            style={{ paddingTop: "env(safe-area-inset-top)" }}
+          >
             <div className="min-w-0">
               <div className="text-sm md:text-base font-medium text-gray-700 truncate">
                 {crumbs.length ? crumbs.join(" / ") : "Ana Sayfa"}

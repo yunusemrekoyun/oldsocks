@@ -131,40 +131,65 @@ export default function InstagramPostsPage() {
 
   /* ─────── Render ─────── */
   return (
-    <div className="max-w-5xl mx-auto px-4 py-8">
+    <div className="max-w-6xl mx-auto px-3 sm:px-4 py-6 sm:py-8">
       {/* Başlık + ekle butonu */}
-      <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-4 mb-6">
-        <Typography variant="h4">Instagram Gönderileri</Typography>
+      <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-3 sm:gap-4 mb-6">
+        <div className="min-w-0">
+          <Typography variant="h4" className="text-2xl sm:text-3xl">
+            Instagram Gönderileri
+          </Typography>
+          <Typography variant="small" className="text-gray-600">
+            Embed URL ile gönderi ekleyin, düzenleyin ve aktif/pasif yapın.
+          </Typography>
+        </div>
         <Button
           color="blue"
-          className="flex items-center gap-2"
+          className="inline-flex items-center gap-2 self-start md:self-auto"
           onClick={() => handleOpen()}
         >
           <PlusIcon className="h-5 w-5" />
-          Yeni Gönderi
+          <span className="hidden xs:inline">Yeni Gönderi</span>
         </Button>
       </div>
 
       {/* Liste */}
-      <Card>
-        <CardBody className="space-y-4">
+      <Card className="overflow-hidden">
+        <CardBody className="space-y-4 p-3 sm:p-4">
           {posts.length === 0 ? (
-            <Typography>Henüz gönderi eklenmemiş.</Typography>
+            <div className="rounded-xl border border-dashed p-10 text-center">
+              <Typography variant="h6" className="mb-2">
+                Henüz gönderi eklenmemiş
+              </Typography>
+              <Typography className="text-gray-600">
+                Sağ üstten “Yeni Gönderi” ile ekleyin.
+              </Typography>
+            </div>
           ) : (
             posts.map((post) => (
               <div
                 key={post._id}
-                className="flex flex-col md:flex-row md:justify-between md:items-center border p-4 rounded-md gap-2"
+                className="grid grid-cols-1 md:grid-cols-[1fr,auto] gap-3 md:gap-4 border rounded-lg p-3 sm:p-4"
               >
-                <div className="flex-1">
-                  <Typography className="truncate font-medium text-blue-800">
-                    {post.embedLink}
+                {/* Sol bilgi alanı */}
+                <div className="min-w-0">
+                  <Typography className="font-medium text-blue-800 break-all">
+                    <a
+                      href={post.embedLink}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="underline underline-offset-2 decoration-blue-300 hover:decoration-blue-500"
+                      title={post.embedLink}
+                    >
+                      {post.embedLink}
+                    </a>
                   </Typography>
+
                   {post.caption && (
-                    <Typography className="text-sm text-gray-600 mt-1">
+                    <Typography className="text-sm text-gray-700 mt-1 line-clamp-2 sm:line-clamp-3">
                       {post.caption}
                     </Typography>
                   )}
+
                   <Typography
                     className={`text-xs mt-1 ${
                       post.active ? "text-green-600" : "text-red-500"
@@ -174,11 +199,13 @@ export default function InstagramPostsPage() {
                   </Typography>
                 </div>
 
-                <div className="flex gap-2 self-end md:self-auto">
+                {/* Sağ aksiyon alanı */}
+                <div className="flex items-center justify-end gap-2">
                   <IconButton
                     variant="text"
                     color="blue"
                     onClick={() => handleOpen(post)}
+                    aria-label="Düzenle"
                   >
                     <PencilIcon className="h-5 w-5" />
                   </IconButton>
@@ -186,6 +213,7 @@ export default function InstagramPostsPage() {
                     variant="text"
                     color="red"
                     onClick={() => triggerDelete(post._id)}
+                    aria-label="Sil"
                   >
                     <TrashIcon className="h-5 w-5" />
                   </IconButton>
@@ -197,18 +225,26 @@ export default function InstagramPostsPage() {
       </Card>
 
       {/* Dialog */}
-      <Dialog open={open} handler={handleClose}>
+      <Dialog
+        open={open}
+        handler={handleClose}
+        size="lg"
+        className="mx-2 sm:mx-auto"
+      >
         <DialogHeader>
           {form._id ? "Gönderiyi Düzenle" : "Yeni Gönderi Ekle"}
         </DialogHeader>
-        <DialogBody>
-          <div className="grid gap-4">
+
+        {/* mobilde rahat kullanım için max yükseklik + scroll */}
+        <DialogBody divider className="max-h-[70vh] overflow-auto">
+          <div className="grid grid-cols-1 gap-4">
             <Input
               label="Instagram Embed URL"
               value={form.embedLink}
               onChange={(e) =>
                 setForm((f) => ({ ...f, embedLink: e.target.value }))
               }
+              crossOrigin=""
             />
             <Input
               label="Açıklama (isteğe bağlı)"
@@ -216,6 +252,7 @@ export default function InstagramPostsPage() {
               onChange={(e) =>
                 setForm((f) => ({ ...f, caption: e.target.value }))
               }
+              crossOrigin=""
             />
             <div className="flex items-center justify-between">
               <Typography className="text-sm">Gönderi Aktif mi?</Typography>
@@ -231,11 +268,20 @@ export default function InstagramPostsPage() {
             </Typography>
           </div>
         </DialogBody>
-        <DialogFooter>
-          <Button variant="text" onClick={handleClose}>
+
+        <DialogFooter className="flex flex-col-reverse sm:flex-row gap-2 sm:gap-3">
+          <Button
+            variant="text"
+            onClick={handleClose}
+            className="w-full sm:w-auto"
+          >
             Vazgeç
           </Button>
-          <Button color="blue" onClick={handleSubmit}>
+          <Button
+            color="blue"
+            onClick={handleSubmit}
+            className="w-full sm:w-auto"
+          >
             Kaydet
           </Button>
         </DialogFooter>

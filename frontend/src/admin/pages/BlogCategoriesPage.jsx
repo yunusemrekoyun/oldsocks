@@ -227,7 +227,8 @@ export default function BlogCategoriesPage() {
           </Button>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {/* Responsive skeleton grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           {Array.from({ length: 6 }).map((_, i) => (
             <CardSkeleton key={i} />
           ))}
@@ -245,22 +246,23 @@ export default function BlogCategoriesPage() {
           <Badge color="blue">{categories.length}</Badge>
         </div>
 
-        <div className="flex flex-col md:flex-row gap-3 md:items-center">
+        <div className="flex flex-col md:flex-row gap-3 md:items-center w-full md:w-auto">
           {/* search */}
-          <div className="relative">
+          <div className="relative w-full md:w-72">
             <Input
               inputRef={searchRef}
               icon={<MagnifyingGlassIcon className="h-5 w-5" />}
               label="Ara (ad, slug, açıklama)"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && searchRef.current?.blur()}
               crossOrigin=""
             />
           </div>
 
           {/* sort */}
           <select
-            className="border rounded-lg p-2 text-sm"
+            className="border rounded-lg p-2 text-sm w-full md:w-auto"
             value={sortBy}
             onChange={(e) => setSortBy(e.target.value)}
           >
@@ -270,7 +272,7 @@ export default function BlogCategoriesPage() {
             <option value="za">Ad (Z→A)</option>
           </select>
 
-          <Button color="blue" onClick={openNew}>
+          <Button color="blue" onClick={openNew} className="w-full md:w-auto">
             + Yeni Kategori
           </Button>
         </div>
@@ -285,19 +287,19 @@ export default function BlogCategoriesPage() {
           <Typography className="text-gray-600 mb-4">
             Filtreleri temizleyin veya yeni bir kategori ekleyin.
           </Typography>
-          <Button color="blue" onClick={openNew}>
+          <Button color="blue" onClick={openNew} className="w-full md:w-auto">
             Kategori Oluştur
           </Button>
         </div>
       ) : (
         /* Kartlar */
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           {filtered.map((cat) => (
             <Card
               key={cat._id}
               className="relative overflow-hidden group border border-gray-100 hover:shadow-xl transition-shadow"
             >
-              {/* hover aksiyon şeridi */}
+              {/* hover aksiyon şeridi (desktop) */}
               <div className="absolute inset-x-0 top-0 h-0 group-hover:h-12 bg-white/80 backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-all flex items-center justify-end px-3 gap-2 z-10">
                 <Button
                   variant="text"
@@ -330,18 +332,18 @@ export default function BlogCategoriesPage() {
                     </Typography>
                   </div>
 
-                  {/* mobil görünür aksiyonlar */}
+                  {/* mobil aksiyonlar */}
                   <div className="flex md:hidden items-center gap-1">
                     <button
                       onClick={() => openEdit(cat)}
-                      className="inline-flex items-center gap-1 px-2 py-1 rounded border text-xs hover:bg-gray-50"
+                      className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded border text-xs hover:bg-gray-50"
                       title="Düzenle"
                     >
                       <PencilIcon className="w-4 h-4" />
                     </button>
                     <button
                       onClick={() => triggerDelete(cat._id)}
-                      className="inline-flex items-center gap-1 px-2 py-1 rounded border border-red-200 text-red-600 text-xs hover:bg-red-50"
+                      className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded border border-red-200 text-red-600 text-xs hover:bg-red-50"
                       title="Sil"
                     >
                       <TrashIcon className="w-4 h-4" />
@@ -364,12 +366,17 @@ export default function BlogCategoriesPage() {
         </div>
       )}
 
-      {/* Form dialog */}
-      <Dialog open={dialogOpen} size="md" handler={() => setDialogOpen(false)}>
+      {/* Form dialog (responsive) */}
+      <Dialog
+        open={dialogOpen}
+        size="md"
+        handler={() => setDialogOpen(false)}
+        className="!max-w-[95vw]"
+      >
         <DialogHeader>
           {form._id ? "Kategori Güncelle" : "Yeni Kategori"}
         </DialogHeader>
-        <DialogBody divider className="space-y-4">
+        <DialogBody divider className="space-y-4 max-h-[70svh] overflow-y-auto">
           {/* Ad */}
           <Input
             label="Ad *"
@@ -428,7 +435,7 @@ export default function BlogCategoriesPage() {
             </Typography>
           )}
         </DialogBody>
-        <DialogFooter>
+        <DialogFooter className="gap-2">
           <Button
             variant="text"
             onClick={() => setDialogOpen(false)}

@@ -2,12 +2,13 @@
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 const User = require("../models/User");
-
 const COOKIE_OPTIONS = {
   httpOnly: true,
   secure: process.env.NODE_ENV === "production",
-  sameSite: "lax",
-  maxAge: 7 * 24 * 60 * 60 * 1000, // 7 gün
+  sameSite: process.env.NODE_ENV === "production" ? "strict" : "lax",
+  maxAge: 7 * 24 * 60 * 60 * 1000,
+  // production’da subdomain varsa aç:
+  // domain: process.env.COOKIE_DOMAIN || undefined,
 };
 
 const createAccessToken = (user) => {

@@ -1,5 +1,4 @@
-// src/pages/admin/ProductListPage.jsx  → DEĞİL
-// src/pages/admin/OrdersPage.jsx       ← BU DOSYA
+// src/pages/admin/OrdersPage.jsx
 import React, { useState, useEffect } from "react";
 import api from "../../../api";
 import { Listbox } from "@headlessui/react";
@@ -13,6 +12,7 @@ import {
   FaBan,
 } from "react-icons/fa";
 import useUnseenOrders from "../../hooks/useUnseenOrders";
+
 const STATUS_LABELS = {
   pending: "Sipariş oluşturuldu",
   paid: "Ödeme alındı",
@@ -21,7 +21,6 @@ const STATUS_LABELS = {
   cancelled: "İptal edildi",
 };
 
-// (Yumuşak rozet renkleri)
 const STATUS_STYLES = {
   pending: "bg-amber-100 text-amber-800",
   paid: "bg-blue-100 text-blue-800",
@@ -44,6 +43,7 @@ export default function OrdersPage() {
   const [loading, setLoading] = useState(true);
   const [updatingId, setUpdatingId] = useState(null);
   const { markSeen } = useUnseenOrders();
+
   const [searchTerm, setSearchTerm] = useState("");
   const [sortOrder, setSortOrder] = useState("desc");
   const [statusFilter, setStatusFilter] = useState("");
@@ -88,9 +88,7 @@ export default function OrdersPage() {
 
   useEffect(() => {
     const doSeen = () => markSeen();
-    // sayfa ilk açılışında
     doSeen();
-    // pencere yeniden odaklanınca
     window.addEventListener("focus", doSeen);
     return () => window.removeEventListener("focus", doSeen);
   }, [markSeen]);
@@ -121,35 +119,43 @@ export default function OrdersPage() {
     })}`;
 
   if (loading) {
-    return <div className="p-8 text-lg text-dark1">Yükleniyor…</div>;
+    return (
+      <div className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-6 py-8 text-lg text-dark1">
+        Yükleniyor…
+      </div>
+    );
   }
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-6 py-6 space-y-6">
       {/* --- Üst Araçlar --- */}
-      <div className="sticky top-0 z-10 bg-white/80 backdrop-blur border border-light2 rounded-xl p-4 shadow-sm">
+      <div className="sticky top-0 z-10 bg-white/80 backdrop-blur supports-[backdrop-filter]:bg-white/60 border border-light2 rounded-xl p-4 shadow-sm">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-          <div className="flex items-center gap-2 text-dark2">
+          <div className="flex items-center gap-2 text-dark2 min-w-0">
             <FaBoxOpen />
-            <h1 className="text-xl font-semibold text-dark1">Siparişler</h1>
-            <span className="text-xs bg-light1 text-dark2 px-2 py-0.5 rounded">
+            <h1 className="text-xl font-semibold text-dark1 truncate">
+              Siparişler
+            </h1>
+            <span className="text-xs bg-light1 text-dark2 px-2 py-0.5 rounded shrink-0">
               {filteredOrders.length}
             </span>
           </div>
 
-          <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto">
+          <div className="flex w-full md:w-auto flex-col sm:flex-row gap-3">
             <input
               type="text"
               placeholder="Sipariş no ara…"
               className="border border-light2 rounded-lg px-3 py-2 bg-white text-sm w-full sm:w-64 focus:outline-none focus:ring-2 focus:ring-dark1"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
+              aria-label="Sipariş numarası ara"
             />
 
             <select
               className="border border-light2 rounded-lg px-3 py-2 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-dark1"
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
+              aria-label="Duruma göre filtrele"
             >
               <option value="">Tüm Durumlar</option>
               {Object.entries(STATUS_LABELS).map(([k, v]) => (
@@ -163,6 +169,7 @@ export default function OrdersPage() {
               className="border border-light2 rounded-lg px-3 py-2 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-dark1"
               value={sortOrder}
               onChange={(e) => setSortOrder(e.target.value)}
+              aria-label="Tarihe göre sırala"
             >
               <option value="desc">Yeni → Eski</option>
               <option value="asc">Eski → Yeni</option>
@@ -194,8 +201,8 @@ export default function OrdersPage() {
               >
                 {/* Üst şerit */}
                 <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 px-5 py-4 border-b border-light2">
-                  <div className="flex flex-col sm:flex-row sm:items-center gap-2">
-                    <div className="text-sm font-semibold text-dark1">
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-2 min-w-0">
+                    <div className="text-sm font-semibold text-dark1 truncate">
                       #{order.orderNumber}
                     </div>
                     <div className="text-xs text-dark2">
@@ -210,7 +217,7 @@ export default function OrdersPage() {
                     </span>
                   </div>
 
-                  <div className="flex items-center gap-3">
+                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
                     <span className="text-sm text-dark2">
                       Adet: <b className="text-dark1">{count}</b>
                     </span>
@@ -221,10 +228,10 @@ export default function OrdersPage() {
                   </div>
                 </div>
 
-                {/* Ürün listesi */}
+                {/* Ürün listesi (scrollable on mobile) */}
                 <div className="px-5 py-4">
-                  <div className="rounded-xl border border-light2 overflow-hidden">
-                    <table className="w-full text-sm">
+                  <div className="rounded-xl border border-light2 overflow-x-auto">
+                    <table className="w-full text-sm min-w-[680px]">
                       <thead className="bg-light1 text-dark2">
                         <tr>
                           <th className="text-left px-4 py-2 font-medium">
@@ -252,7 +259,7 @@ export default function OrdersPage() {
                               idx % 2 === 0 ? "bg-white" : "bg-light1/50"
                             }
                           >
-                            <td className="px-4 py-2 text-dark1">
+                            <td className="px-4 py-2 text-dark1 break-words">
                               {item.name}
                             </td>
                             <td className="px-4 py-2 text-dark2">
@@ -263,10 +270,10 @@ export default function OrdersPage() {
                             <td className="px-4 py-2 text-right text-dark1">
                               {item.qty}
                             </td>
-                            <td className="px-4 py-2 text-right text-dark1">
+                            <td className="px-4 py-2 text-right text-dark1 whitespace-nowrap">
                               {fmtPrice(item.price)}
                             </td>
-                            <td className="px-4 py-2 text-right text-dark1">
+                            <td className="px-4 py-2 text-right text-dark1 whitespace-nowrap">
                               {fmtPrice(item.qty * item.price)}
                             </td>
                           </tr>
@@ -285,13 +292,14 @@ export default function OrdersPage() {
                       >
                         <div className="relative">
                           <Listbox.Button
-                            className={`flex items-center gap-2 pr-9 pl-3 py-2 rounded-lg border border-light2 shadow-sm text-sm ${selectedClass}`}
+                            className={`flex items-center gap-2 pr-9 pl-3 py-2 rounded-lg border border-light2 shadow-sm text-sm focus:outline-none focus:ring-2 focus:ring-dark1 ${selectedClass}`}
+                            aria-label="Sipariş durumu seç"
                           >
                             {STATUS_ICON[order.selectedStatus]}
                             {STATUS_LABELS[order.selectedStatus]}
                             <FaChevronDown className="absolute right-2 opacity-60" />
                           </Listbox.Button>
-                          <Listbox.Options className="absolute mt-1 w-full bg-white border border-light2 rounded-lg shadow-lg z-10 text-sm overflow-hidden">
+                          <Listbox.Options className="absolute mt-1 w-56 sm:w-64 bg-white border border-light2 rounded-lg shadow-lg z-10 text-sm overflow-hidden">
                             {Object.entries(STATUS_LABELS).map(
                               ([key, label]) => {
                                 const cls =
@@ -333,18 +341,17 @@ export default function OrdersPage() {
                     </div>
 
                     <div className="flex items-center gap-2">
-                      {changed && (
+                      {changed ? (
                         <button
                           onClick={() => updateStatus(order._id)}
                           disabled={updatingId === order._id}
-                          className="px-4 py-2 rounded-lg bg-dark1 text-white hover:bg-dark2 transition disabled:opacity-60"
+                          className="px-4 py-2 rounded-lg bg-dark1 text-white hover:bg-dark2 transition disabled:opacity-60 w-full sm:w-auto"
                         >
                           {updatingId === order._id
                             ? "Kaydediliyor..."
                             : "Güncelle"}
                         </button>
-                      )}
-                      {!changed && (
+                      ) : (
                         <span className="text-xs text-dark2">
                           Güncel durumda
                         </span>

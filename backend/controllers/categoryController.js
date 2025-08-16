@@ -71,7 +71,8 @@ exports.createCategory = async (req, res) => {
 exports.updateCategory = async (req, res) => {
   try {
     const { name, children } = req.body;
-    const updates = { name };
+    const updates = {};
+    if (typeof name === "string") updates.name = name;
     if (req.file) updates.image = req.file.path;
 
     // 1) Ana kategoriyi güncelle
@@ -81,32 +82,91 @@ exports.updateCategory = async (req, res) => {
     if (!updated)
       return res.status(404).json({ message: "Kategori bulunamadı." });
 
-    // 2) Eğer form’dan 'children' alanı gelmişse:
+    // 2) Çocuk listesi geldiyse, ID'leri KORUYARAK güncelle
     if (children !== undefined) {
-      // a) Önce hepsini sil
-      await Category.deleteMany({ parent: updated._id });
-
-      // b) Sonra yeni listeyi oluştur
-      const names = children
+      // İstenen son liste (virgül -> isim)
+      const desiredNames = children
         .split(",")
         .map((c) => c.trim())
         .filter(Boolean);
 
-      await Promise.all(
-        names.map((nm) =>
-          Category.create({
-            name: nm,
-            image: updated.image,
-            parent: updated._id,
-          })
-        )
+      // Mevcut çocuklar
+      const existingChildren = await Category.find({ parent: updated._id });
+
+      // Hızlı erişim set & map'leri
+      const desiredSet = new Set(desiredNames.map((n) => n.toLowerCase()));
+      const existingByName = new Map(
+        existingChildren.map((c) => [c.name.toLowerCase(), c])
       );
+
+      // 2a) EKLENECEKLER: desired'ta olup mevcutta olmayanlar
+      const toCreate = desiredNames.filter(
+        (nm) => !existingByName.has(nm.toLowerCase())
+      );
+
+      // 2b) KALACAKLAR: desired'ta da mevcutta da olanlar (ID korunur)
+      const toKeep = existingChildren.filter((c) =>
+        desiredSet.has(c.name.toLowerCase())
+      );
+
+      // 2c) SİLİNECEKLER: mevcutta olup desired'ta olmayanlar
+      const toDelete = existingChildren.filter(
+        (c) => !desiredSet.has(c.name.toLowerCase())
+      );
+
+      // EKLE: yeni isimler için child oluştur
+      if (toCreate.length > 0) {
+        await Promise.all(
+          toCreate.map((nm) =>
+            Category.create({
+              name: nm,
+              image: updated.image, // aynı görseli kullan
+              parent: updated._id,
+            })
+          )
+        );
+      }
+
+      // SİL: yalnızca ürüne bağlı DEĞİLSE
+      const blocked = [];
+      for (const c of toDelete) {
+        const inUse = await Product.exists({ category: c._id });
+        if (inUse) {
+          blocked.push({ id: c._id.toString(), name: c.name });
+          continue; // bu çocuğu silemeyiz, referans var
+        }
+        await Category.findByIdAndDelete(c._id);
+      }
+
+      // İsteğe bağlı: kept çocukların görselini parent'ınkine eşitle
+      // (name değişimi desteklemiyoruz; sadece listedekiyle aynı isimler kalır)
+      if (req.file) {
+        await Category.updateMany(
+          { _id: { $in: toKeep.map((c) => c._id) } },
+          { $set: { image: updated.image } }
+        );
+      }
+
+      // Eğer silinemeyen (ürüne bağlı) çocuk varsa bilgi verelim (200 veya 409 tercihine göre)
+      if (blocked.length > 0) {
+        const populated = await Category.findById(updated._id)
+          .populate("children", "name image")
+          .populate("parent", "name");
+
+        return res.status(409).json({
+          message:
+            "Bazı alt kategoriler ürüne bağlı olduğu için silinmedi. Lütfen önce o ürünleri taşıyın veya alt kategorileri yeniden düzenleyin.",
+          blocked, // [{ id, name }]
+          category: populated,
+        });
+      }
     }
 
     // 3) Son halini dön
     const populated = await Category.findById(updated._id)
       .populate("children", "name image")
       .populate("parent", "name");
+
     res.json(populated);
   } catch (err) {
     console.error(err);

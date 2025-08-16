@@ -187,134 +187,152 @@ export default function DiscountsPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-semibold">İndirimler</h1>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="min-w-0">
+          <h1 className="text-xl md:text-2xl font-semibold">İndirimler</h1>
           <p className="text-sm text-gray-500">
             Ürün / kategori bazlı toplu indirimleri yönetin.
           </p>
         </div>
         <button
           onClick={openCreate}
-          className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-black text-white hover:bg-gray-800"
+          className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-black text-white hover:bg-gray-800"
         >
-          <FaPlus /> Yeni İndirim
+          <FaPlus /> <span className="hidden xs:inline">Yeni İndirim</span>
         </button>
       </div>
 
-      {/* List */}
+      {/* List (scrollable on mobile) */}
       <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
-        <table className="w-full text-sm">
-          <thead className="bg-gray-50 text-gray-600">
-            <tr>
-              <th className="text-left px-4 py-2">İndirim</th>
-              <th className="text-left px-4 py-2">Yüzde</th>
-              <th className="text-left px-4 py-2">Hedef</th>
-              <th className="text-left px-4 py-2">Durum</th>
-              <th className="text-right px-4 py-2">İşlem</th>
-            </tr>
-          </thead>
-          <tbody>
-            {loading ? (
+        <div className="w-full overflow-x-auto">
+          <table className="w-full text-sm min-w-[820px]">
+            <thead className="bg-gray-50 text-gray-600">
               <tr>
-                <td colSpan={5} className="px-4 py-6 text-center text-gray-500">
-                  Yükleniyor…
-                </td>
+                <th className="text-left px-4 py-2">İndirim</th>
+                <th className="text-left px-4 py-2">Yüzde</th>
+                <th className="text-left px-4 py-2">Hedef</th>
+                <th className="text-left px-4 py-2">Durum</th>
+                <th className="text-right px-4 py-2">İşlem</th>
               </tr>
-            ) : rules.length === 0 ? (
-              <tr>
-                <td colSpan={5} className="px-4 py-6 text-center text-gray-500">
-                  Kural bulunamadı.
-                </td>
-              </tr>
-            ) : (
-              rules.map((r, idx) => {
-                const activeNow = Boolean(r.isActive);
-                const targetBadge =
-                  r.selectionType === "product"
-                    ? "Ürün"
-                    : r.selectionType === "category"
-                    ? "Kategori + Altları"
-                    : "Alt Kategori";
-                return (
-                  <tr
-                    key={r._id}
-                    className={idx % 2 ? "bg-white" : "bg-gray-50/50"}
+            </thead>
+            <tbody>
+              {loading ? (
+                <tr>
+                  <td
+                    colSpan={5}
+                    className="px-4 py-6 text-center text-gray-500"
                   >
-                    <td className="px-4 py-3">
-                      <div className="font-medium">{r.title}</div>
-                      <div className="text-xs text-gray-500">
-                        Uygulanan ürün: {r.appliedProducts?.length || 0}
-                      </div>
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-blue-100 text-blue-800 text-xs">
-                        <FaPercent className="-mt-0.5" /> {r.discountRate}%
-                      </span>
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className="inline-flex items-center px-2 py-1 rounded-full bg-amber-100 text-amber-800 text-xs">
-                        {targetBadge}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3">
-                      <span
-                        className={cx(
-                          "inline-flex items-center px-2 py-1 rounded-full text-xs",
-                          activeNow
-                            ? "bg-green-100 text-green-800"
-                            : "bg-gray-200 text-gray-700"
-                        )}
-                      >
-                        {activeNow ? "Aktif" : "Pasif"}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center justify-end gap-2">
-                        <button
-                          onClick={() => openEdit(r)}
-                          className="inline-flex items-center gap-2 px-3 py-1.5 rounded-md bg-indigo-600 hover:bg-indigo-700 text-black"
-                          title="Düzenle"
-                        >
-                          <FaEdit className="text-xs" />
-                          Düzenle
-                        </button>
-                        <button
-                          onClick={() => toggleRule(r, !r.isActive)}
+                    Yükleniyor…
+                  </td>
+                </tr>
+              ) : rules.length === 0 ? (
+                <tr>
+                  <td
+                    colSpan={5}
+                    className="px-4 py-6 text-center text-gray-500"
+                  >
+                    Kural bulunamadı.
+                  </td>
+                </tr>
+              ) : (
+                rules.map((r, idx) => {
+                  const activeNow = Boolean(r.isActive);
+                  const targetBadge =
+                    r.selectionType === "product"
+                      ? "Ürün"
+                      : r.selectionType === "category"
+                      ? "Kategori + Altları"
+                      : "Alt Kategori";
+                  return (
+                    <tr
+                      key={r._id}
+                      className={idx % 2 ? "bg-white" : "bg-gray-50/50"}
+                    >
+                      <td className="px-4 py-3 align-top">
+                        <div className="font-medium break-words">{r.title}</div>
+                        <div className="text-xs text-gray-500">
+                          Uygulanan ürün: {r.appliedProducts?.length || 0}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 align-top">
+                        <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-blue-100 text-blue-800 text-xs">
+                          <FaPercent className="-mt-0.5" /> {r.discountRate}%
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 align-top">
+                        <span className="inline-flex items-center px-2 py-1 rounded-full bg-amber-100 text-amber-800 text-xs">
+                          {targetBadge}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 align-top">
+                        <span
                           className={cx(
-                            "inline-flex items-center gap-2 px-3 py-1.5 rounded-md text-black",
-                            r.isActive
-                              ? "bg-gray-700 hover:bg-gray-800"
-                              : "bg-emerald-600 hover:bg-emerald-700"
+                            "inline-flex items-center px-2 py-1 rounded-full text-xs",
+                            activeNow
+                              ? "bg-green-100 text-green-800"
+                              : "bg-gray-200 text-gray-700"
                           )}
-                          title={r.isActive ? "Pasifleştir" : "Aktifleştir"}
                         >
-                          <FaPowerOff className="text-xs" />
-                          {r.isActive ? "Kapat" : "Aç"}
-                        </button>
-                        <button
-                          onClick={() => deleteRule(r)}
-                          className="inline-flex items-center gap-2 px-3 py-1.5 rounded-md bg-red-600 hover:bg-red-700 text-white"
-                          title="Sil"
-                        >
-                          <FaTrash className="text-xs" /> Sil
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })
-            )}
-          </tbody>
-        </table>
+                          {activeNow ? "Aktif" : "Pasif"}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center justify-end gap-2">
+                          {/* Düzenle */}
+                          <button
+                            onClick={() => openEdit(r)}
+                            className="inline-flex items-center gap-2 px-3 py-1.5 rounded-md bg-indigo-600 hover:bg-indigo-700 text-white focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                            title="Düzenle"
+                          >
+                            <FaEdit className="text-xs" />
+                            <span className="hidden md:inline">Düzenle</span>
+                          </button>
+
+                          {/* Aç/Kapat */}
+                          <button
+                            onClick={() => toggleRule(r, !r.isActive)}
+                            className={cx(
+                              "inline-flex items-center gap-2 px-3 py-1.5 rounded-md focus:outline-none focus:ring-2",
+                              r.isActive
+                                ? "bg-gray-700 hover:bg-gray-800 text-white focus:ring-gray-400"
+                                : "bg-emerald-600 hover:bg-emerald-700 text-white focus:ring-emerald-400"
+                            )}
+                            title={r.isActive ? "Pasifleştir" : "Aktifleştir"}
+                          >
+                            <FaPowerOff className="text-xs" />
+                            <span className="hidden md:inline">
+                              {r.isActive ? "Kapat" : "Aç"}
+                            </span>
+                          </button>
+
+                          {/* Sil */}
+                          <button
+                            onClick={() => deleteRule(r)}
+                            className="inline-flex items-center gap-2 px-3 py-1.5 rounded-md bg-red-600 hover:bg-red-700 text-white focus:outline-none focus:ring-2 focus:ring-red-400"
+                            title="Sil"
+                          >
+                            <FaTrash className="text-xs" />
+                            <span className="hidden md:inline">Sil</span>
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
 
       {/* Create/Edit Modal */}
       {openForm && (
-        <div className="fixed inset-0 z-[999] flex items-center justify-center bg-black/40 p-4">
-          <div className="w-full max-w-3xl bg-white rounded-2xl shadow-xl overflow-hidden">
-            <div className="px-6 py-4 border-b flex items-center justify-between">
-              <h2 className="text-lg font-semibold">
+        <div className="fixed inset-0 z-[999] flex items-center justify-center bg-black/40 p-2 sm:p-4">
+          {/* Mobil neredeyse tam ekran, üstü köşeli kutu */}
+          <div className="w-full max-w-[1000px] sm:rounded-2xl bg-white shadow-xl overflow-hidden h-[95vh] sm:h-auto sm:max-h-[90vh] flex flex-col">
+            {/* Title Bar */}
+            <div className="px-4 sm:px-6 py-3 sm:py-4 border-b flex items-center justify-between">
+              <h2 className="text-base sm:text-lg font-semibold">
                 {mode === "create" ? "Yeni İndirim" : "İndirimi Düzenle"}
               </h2>
               <button
@@ -328,12 +346,13 @@ export default function DiscountsPage() {
               </button>
             </div>
 
+            {/* Form */}
             <form
               onSubmit={handleSubmit}
-              className="p-6 grid grid-cols-1 md:grid-cols-3 gap-5"
+              className="p-4 sm:p-6 grid grid-cols-1 lg:grid-cols-3 gap-5 overflow-auto"
             >
               {/* sol: temel */}
-              <div className="md:col-span-1 space-y-4">
+              <div className="lg:col-span-1 space-y-4">
                 <div>
                   <label className="block text-sm font-medium mb-1">
                     İndirim adı
@@ -406,7 +425,7 @@ export default function DiscountsPage() {
               </div>
 
               {/* sağ: hedef seçimi */}
-              <div className="md:col-span-2">
+              <div className="lg:col-span-2">
                 <label className="block text-sm font-medium mb-2">
                   {form.selectionType === "product"
                     ? "Ürün Seçimi"
@@ -417,7 +436,7 @@ export default function DiscountsPage() {
 
                 {/* search (ürün için) */}
                 {form.selectionType === "product" && (
-                  <div className="mb-2 flex items-center gap-2">
+                  <div className="mb-2 flex flex-col sm:flex-row sm:items-center gap-2">
                     <div className="relative flex-1">
                       <FaSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                       <input
@@ -427,29 +446,33 @@ export default function DiscountsPage() {
                         onChange={(e) => setSearch(e.target.value)}
                       />
                     </div>
-                    <button
-                      type="button"
-                      className="text-xs px-2 py-1 rounded border"
-                      onClick={() =>
-                        setForm((f) => ({
-                          ...f,
-                          targetIds: filteredProducts.map((p) => p._id),
-                        }))
-                      }
-                    >
-                      Tümünü Seç
-                    </button>
-                    <button
-                      type="button"
-                      className="text-xs px-2 py-1 rounded border"
-                      onClick={() => setForm((f) => ({ ...f, targetIds: [] }))}
-                    >
-                      Temizle
-                    </button>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        className="text-xs px-2 py-1 rounded border"
+                        onClick={() =>
+                          setForm((f) => ({
+                            ...f,
+                            targetIds: filteredProducts.map((p) => p._id),
+                          }))
+                        }
+                      >
+                        Tümünü Seç
+                      </button>
+                      <button
+                        type="button"
+                        className="text-xs px-2 py-1 rounded border"
+                        onClick={() =>
+                          setForm((f) => ({ ...f, targetIds: [] }))
+                        }
+                      >
+                        Temizle
+                      </button>
+                    </div>
                   </div>
                 )}
 
-                <div className="h-72 overflow-y-auto rounded-lg border p-3 space-y-1">
+                <div className="h-[52vh] sm:h-72 md:h-80 overflow-y-auto rounded-lg border p-3 space-y-1">
                   {form.selectionType === "product" &&
                     (filteredProducts.length ? (
                       filteredProducts.map((p) => (
@@ -462,8 +485,8 @@ export default function DiscountsPage() {
                             checked={form.targetIds.includes(p._id)}
                             onChange={() => toggleId(p._id)}
                           />
-                          <span className="text-sm">{p.name}</span>
-                          <span className="ml-auto text-xs text-gray-500">
+                          <span className="text-sm truncate">{p.name}</span>
+                          <span className="ml-auto text-xs text-gray-500 truncate">
                             {p.category?.name || ""}
                           </span>
                         </label>
@@ -486,7 +509,7 @@ export default function DiscountsPage() {
                             checked={form.targetIds.includes(c._id)}
                             onChange={() => toggleId(c._id)}
                           />
-                          <span className="text-sm">{c.name}</span>
+                          <span className="text-sm truncate">{c.name}</span>
                           <span className="ml-auto text-xs text-gray-500">
                             Alt: {c.children?.length || 0}
                           </span>
@@ -510,8 +533,8 @@ export default function DiscountsPage() {
                             checked={form.targetIds.includes(c._id)}
                             onChange={() => toggleId(c._id)}
                           />
-                          <span className="text-sm">{c.name}</span>
-                          <span className="ml-auto text-xs text-gray-500">
+                          <span className="text-sm truncate">{c.name}</span>
+                          <span className="ml-auto text-xs text-gray-500 truncate">
                             Üst: {c.parentName}
                           </span>
                         </label>
@@ -523,7 +546,7 @@ export default function DiscountsPage() {
                     ))}
                 </div>
 
-                <div className="mt-4 flex items-center justify-end gap-3">
+                <div className="mt-4 flex flex-col sm:flex-row items-stretch sm:items-center justify-end gap-3">
                   <button
                     type="button"
                     className="px-4 py-2 rounded-md border"

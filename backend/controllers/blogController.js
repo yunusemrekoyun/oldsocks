@@ -1,8 +1,8 @@
-// backend/controllers/blogController.js
 const Blog = require("../models/Blog");
 const BlogCategory = require("../models/BlogCategory");
 const BlogComment = require("../models/BlogComment");
 const BlogCommentReply = require("../models/BlogCommentReply");
+const { sendNewsletterNewBlog } = require("../utils/mailer"); // 🔥 EKLENDİ
 
 // Helper to parse JSON-array fields
 function parseArrayField(raw) {
@@ -43,12 +43,17 @@ exports.createBlog = async (req, res) => {
       excerpt,
       content,
       coverImageUrl: req.file.path,
-      author: req.body.author || req.user.id, // admin user ID
+      author: req.body.author || req.user?.id, // admin user ID
       categories,
       tags,
       status,
       publishedAt: status === "published" ? new Date() : undefined,
     });
+
+    // 🔔 Yeni blog → bülten abonelerine mail (fire-and-forget)
+    // Varsayılan link: FRONTEND_ORIGIN + /blog/:id
+    // Slug’ınız varsa 3. parametreye "/blog/:id" yerine uygun path verin.
+    sendNewsletterNewBlog(blog, process.env.FRONTEND_ORIGIN).catch(() => {});
 
     res.status(201).json(blog);
   } catch (err) {

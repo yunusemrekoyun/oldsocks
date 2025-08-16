@@ -182,8 +182,7 @@ export default function MiniCampaignsPage() {
     setDialogOpen(true);
   };
 
-  /* ---------------- kaydet (queue) ----------------
-     Not: Kaydet’e basınca form ANINDA kapanır (task list altta ilerler) */
+  /* ---------------- kaydet (queue) ---------------- */
   const handleSave = async () => {
     const fd = new FormData();
     fd.append("title", form.title);
@@ -270,17 +269,17 @@ export default function MiniCampaignsPage() {
     return list;
   }, [items, debouncedQuery, slotFilter]);
 
-  /* ---------------- render helpers ---------------- */
+  /* ---------------- render ---------------- */
   if (loading) {
     return (
-      <div className="space-y-6">
+      <div className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-6 space-y-6">
         <div className="flex justify-between items-center">
           <Typography variant="h4">Mini Kampanyalar</Typography>
           <Button color="blue" disabled>
             + Yeni Mini Kampanya
           </Button>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           {Array.from({ length: 6 }).map((_, i) => (
             <CardSkeleton key={i} />
           ))}
@@ -310,11 +309,13 @@ export default function MiniCampaignsPage() {
     (Boolean(form.imageUrl) || Boolean(form.imageFile) || Boolean(form._id));
 
   return (
-    <div className="space-y-6">
+    <div className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-6 space-y-6">
       {/* üst bar */}
       <div className="flex flex-col md:flex-row md:items-center gap-3 justify-between">
-        <div>
-          <Typography variant="h4">Mini Kampanyalar</Typography>
+        <div className="min-w-0">
+          <Typography variant="h4" className="text-2xl sm:text-3xl">
+            Mini Kampanyalar
+          </Typography>
           <Typography variant="small" className="text-gray-600">
             Başlığa göre arayın, slot’a göre filtreleyin.
           </Typography>
@@ -353,7 +354,7 @@ export default function MiniCampaignsPage() {
 
       {/* liste */}
       {filtered.length === 0 ? (
-        <div className="rounded-xl border border-dashed p-12 text-center">
+        <div className="rounded-xl border border-dashed p-10 sm:p-12 text-center">
           <Typography variant="h6" className="mb-2">
             Kayıt bulunamadı
           </Typography>
@@ -365,7 +366,7 @@ export default function MiniCampaignsPage() {
           </Button>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           {filtered.map((c) => (
             <Card
               key={c._id}
@@ -373,16 +374,17 @@ export default function MiniCampaignsPage() {
             >
               <div className="relative h-48">
                 <img
+                  loading="lazy"
                   src={c.imageUrl}
                   alt={c.title}
                   className="w-full h-full object-cover"
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-black/15 to-transparent pointer-events-none" />
 
-                {/* HOVER'DA ORTADA DÜZENLE */}
+                {/* HOVER'DA ORTADA DÜZENLE (md ve üstü) */}
                 <button
                   onClick={() => openEdit(c)}
-                  className="absolute inset-0 hidden group-hover:flex items-center justify-center bg-white/55 backdrop-blur-sm transition"
+                  className="absolute inset-0 hidden md:flex items-center justify-center bg-white/55 backdrop-blur-sm opacity-0 group-hover:opacity-100 transition"
                   title="Düzenle"
                 >
                   <span className="inline-flex items-center gap-2 px-3 py-2 bg-white border rounded-lg shadow-sm">
@@ -396,27 +398,49 @@ export default function MiniCampaignsPage() {
                   {Number(c.slot) === 2 && <Badge color="green">Slot 2</Badge>}
                 </div>
               </div>
+
               <CardBody>
-                <Typography variant="h6" className="line-clamp-1">
+                <Typography variant="h6" className="line-clamp-1 break-words">
                   {c.title}
                 </Typography>
 
-                                {/* aksiyon çubuğu: yalnızca sağ tarafta (hover overlay ile düzenleme kalır) */}
-                <div className="mt-4 flex items-center justify-end gap-2">
-                  <div className="flex items-center gap-2">
-                    <Tooltip content="Sil">
-                      <Button
-                        size="sm"
-                        color="red"
-                        variant="outlined"
-                        onClick={() => triggerDelete(c._id)}
-                        className="px-3"
-                        aria-label="Sil"
-                      >
-                        <TrashIcon className="w-4 h-4" />
-                      </Button>
-                    </Tooltip>
-                  </div>
+                {/* Mobil aksiyonlar: düzenle/sil (hover yok) */}
+                <div className="mt-3 flex items-center justify-end gap-2 md:hidden">
+                  <Button
+                    size="sm"
+                    variant="outlined"
+                    className="px-3"
+                    onClick={() => openEdit(c)}
+                    aria-label="Düzenle"
+                  >
+                    <PencilIcon className="w-4 h-4" />
+                  </Button>
+                  <Button
+                    size="sm"
+                    color="red"
+                    variant="outlined"
+                    onClick={() => triggerDelete(c._id)}
+                    className="px-3"
+                    aria-label="Sil"
+                  >
+                    <TrashIcon className="w-4 h-4" />
+                  </Button>
+                </div>
+
+                {/* Desktop aksiyon: sadece Sil (Düzenleme hover overlay’de) */}
+                <div className="mt-4 hidden md:flex items-center justify-end gap-2">
+                  <Tooltip content="Sil">
+                    <Button
+                      size="sm"
+                      color="red"
+                      variant="outlined"
+                      onClick={() => triggerDelete(c._id)}
+                      className="px-3"
+                      aria-label="Sil"
+                    >
+                      <TrashIcon className="w-4 h-4" />
+                    </Button>
+                  </Tooltip>
                 </div>
               </CardBody>
             </Card>
@@ -425,11 +449,16 @@ export default function MiniCampaignsPage() {
       )}
 
       {/* form dialog */}
-      <Dialog open={dialogOpen} size="xl" handler={() => setDialogOpen(false)}>
+      <Dialog
+        open={dialogOpen}
+        size="xl"
+        handler={() => setDialogOpen(false)}
+        className="mx-2 sm:mx-auto"
+      >
         <DialogHeader>
           {form._id ? "Mini Kampanyayı Güncelle" : "Yeni Mini Kampanya"}
         </DialogHeader>
-        <DialogBody divider className="overflow-auto max-h-[75vh] pr-4">
+        <DialogBody divider className="overflow-auto max-h-[75vh] pr-1 sm:pr-4">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* SOL: FORM */}
             <div className="space-y-4">
@@ -673,7 +702,7 @@ export default function MiniCampaignsPage() {
                   </div>
                 </div>
                 <div className="p-4">
-                  <Typography variant="h6" className="line-clamp-1">
+                  <Typography variant="h6" className="line-clamp-1 break-words">
                     {form.title || "Mini Kampanya Başlığı"}
                   </Typography>
                 </div>
@@ -681,14 +710,19 @@ export default function MiniCampaignsPage() {
             </div>
           </div>
         </DialogBody>
-        <DialogFooter>
-          <Button variant="text" onClick={() => setDialogOpen(false)}>
+        <DialogFooter className="flex flex-col-reverse sm:flex-row gap-2 sm:gap-3">
+          <Button
+            variant="text"
+            onClick={() => setDialogOpen(false)}
+            className="w-full sm:w-auto"
+          >
             İptal
           </Button>
           <Button
             disabled={!isValid || !dirty}
             onClick={handleSave}
             color="blue"
+            className="w-full sm:w-auto"
           >
             Kaydet
           </Button>

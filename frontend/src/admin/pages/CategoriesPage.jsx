@@ -220,7 +220,7 @@ export default function CategoriesPage() {
                 className="bg-white rounded-xl border border-gray-100 hover:shadow-xl transition-shadow overflow-hidden group"
               >
                 {/* Görsel */}
-                <div className="relative h-36">
+                <div className="relative h-32 sm:h-36">
                   <img
                     loading="lazy"
                     src={
@@ -232,11 +232,12 @@ export default function CategoriesPage() {
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-black/15 to-transparent pointer-events-none" />
 
-                  {/* HOVER'DA ORTADA DÜZENLE */}
+                  {/* HOVER'DA ORTADA DÜZENLE — sadece md+ */}
                   <button
                     onClick={() => openEdit(c)}
-                    className="absolute inset-0 hidden group-hover:flex items-center justify-center bg-white/55 backdrop-blur-sm transition"
+                    className="absolute inset-0 hidden md:flex items-center justify-center bg-white/55 backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity"
                     title="Düzenle"
+                    aria-label={`${c.name} kategorisini düzenle`}
                   >
                     <span className="inline-flex items-center gap-2 px-3 py-2 bg-white border rounded-lg shadow-sm">
                       <FaPen className="w-4 h-4" />
@@ -281,11 +282,32 @@ export default function CategoriesPage() {
                     </div>
                   )}
 
-                  {/* Aksiyonlar (Düzenle kaldırıldı, sağa Sil) */}
-                  <div className="mt-4 flex items-center justify-end">
+                  {/* Aksiyonlar */}
+                  <div className="mt-4 flex items-center justify-end gap-2">
+                    {/* Mobil aksiyonlar (md'den küçük ekranlar) */}
+                    <div className="flex md:hidden w-full gap-2">
+                      <button
+                        onClick={() => openEdit(c)}
+                        className="flex-1 inline-flex items-center justify-center gap-2 px-3 py-1.5 rounded border text-xs hover:bg-gray-50"
+                        aria-label={`${c.name} kategorisini düzenle`}
+                      >
+                        <FaPen className="w-3.5 h-3.5" />
+                        Düzenle
+                      </button>
+                      <button
+                        onClick={() => setDeleteId(c._id)}
+                        className="flex-1 inline-flex items-center justify-center gap-2 px-3 py-1.5 rounded border border-red-200 text-red-600 text-xs hover:bg-red-50"
+                        aria-label={`${c.name} kategorisini sil`}
+                      >
+                        <FaTrashAlt className="w-3.5 h-3.5" />
+                        Sil
+                      </button>
+                    </div>
+
+                    {/* Desktop: yalnız Sil (Düzenle overlay’de) */}
                     <button
                       onClick={() => setDeleteId(c._id)}
-                      className="text-sm inline-flex items-center gap-2 px-3 py-1 rounded border border-red-200 text-red-600 hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-400"
+                      className="hidden md:inline-flex text-sm items-center gap-2 px-3 py-1 rounded border border-red-200 text-red-600 hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-400"
                       aria-label={`${c.name} kategorisini sil`}
                     >
                       <FaTrashAlt />

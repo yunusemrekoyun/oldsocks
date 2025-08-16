@@ -331,31 +331,32 @@ export default function CampaignsPage() {
     <div className="space-y-6">
       {/* üst bar */}
       <div className="flex flex-col md:flex-row md:items-center gap-3 justify-between">
-        <div>
+        <div className="min-w-0">
           <Typography variant="h4">Kampanyalar</Typography>
           <Typography variant="small" className="text-gray-600">
             Listeden arayın, filtreleyin ve düzenleyin.
           </Typography>
         </div>
 
-        <div className="flex flex-col md:flex-row gap-3 md:items-center">
+        <div className="flex flex-col md:flex-row gap-3 md:items-center w-full md:w-auto">
           {/* search */}
-          <div className="relative">
+          <div className="relative w-full md:w-72">
             <Input
               inputRef={searchRef}
               icon={<MagnifyingGlassIcon className="h-5 w-5" />}
               label="Ara (başlık, alt başlık)"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && searchRef.current?.blur()}
               crossOrigin=""
             />
           </div>
 
           {/* status filter */}
           <div className="flex items-center gap-2">
-            <FunnelIcon className="w-5 h-5 text-gray-500" />
+            <FunnelIcon className="w-5 h-5 text-gray-500 hidden md:block" />
             <select
-              className="border rounded-lg p-2 text-sm"
+              className="border rounded-lg p-2 text-sm w-full md:w-auto"
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
             >
@@ -367,7 +368,7 @@ export default function CampaignsPage() {
 
           {/* sort */}
           <select
-            className="border rounded-lg p-2 text-sm"
+            className="border rounded-lg p-2 text-sm w-full md:w-auto"
             value={sortBy}
             onChange={(e) => setSortBy(e.target.value)}
           >
@@ -375,7 +376,7 @@ export default function CampaignsPage() {
             <option value="oldest">En Eski</option>
           </select>
 
-          <Button color="blue" onClick={openNew}>
+          <Button color="blue" onClick={openNew} className="w-full md:w-auto">
             + Yeni Kampanya
           </Button>
         </div>
@@ -383,7 +384,7 @@ export default function CampaignsPage() {
 
       {/* liste */}
       {loading ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           {Array.from({ length: 6 }).map((_, i) => (
             <CardSkeleton key={i} />
           ))}
@@ -396,18 +397,18 @@ export default function CampaignsPage() {
           <Typography className="text-gray-600 mb-4">
             Filtreleri temizleyin veya yeni bir kampanya ekleyin.
           </Typography>
-          <Button color="blue" onClick={openNew}>
+          <Button color="blue" onClick={openNew} className="w-full md:w-auto">
             Kampanya Oluştur
           </Button>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           {filtered.map((c) => (
             <Card
               key={c._id}
               className="relative overflow-hidden group border border-gray-100 hover:shadow-xl transition-shadow"
             >
-              <div className="relative h-48">
+              <div className="relative h-40 sm:h-48">
                 <img
                   src={c.imageUrl}
                   alt={c.title}
@@ -416,10 +417,10 @@ export default function CampaignsPage() {
                 {/* gradient overlay */}
                 <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-black/15 to-transparent pointer-events-none" />
 
-                {/* HOVER'DA ORTADA DÜZENLE */}
+                {/* HOVER'DA ORTADA DÜZENLE (desktop) */}
                 <button
                   onClick={() => openEdit(c)}
-                  className="absolute inset-0 hidden group-hover:flex items-center justify-center bg-white/55 backdrop-blur-sm transition"
+                  className="absolute inset-0 hidden md:flex items-center justify-center bg-white/55 backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity"
                   title="Düzenle"
                 >
                   <span className="inline-flex items-center gap-2 px-3 py-2 bg-white border rounded-lg shadow-sm">
@@ -445,9 +446,10 @@ export default function CampaignsPage() {
                   {c.subtitle}
                 </Typography>
 
-                {/* Aksiyon Çubuğu: yalnızca sağ tarafta aksiyonlar (hover overlay ile düzenleme kalır) */}
+                {/* Aksiyonlar */}
                 <div className="mt-4 flex items-center justify-end gap-2">
-                  <div className="flex items-center gap-2">
+                  {/* Desktop aksiyonları */}
+                  <div className="hidden md:flex items-center gap-2">
                     <Tooltip content="Aktif Yap">
                       <Button
                         size="sm"
@@ -473,6 +475,34 @@ export default function CampaignsPage() {
                       </Button>
                     </Tooltip>
                   </div>
+
+                  {/* Mobil aksiyonları */}
+                  <div className="flex md:hidden w-full gap-2">
+                    <button
+                      onClick={() => openEdit(c)}
+                      className="flex-1 inline-flex items-center justify-center gap-1 px-2.5 py-1.5 rounded border text-xs hover:bg-gray-50"
+                      title="Düzenle"
+                    >
+                      <PencilIcon className="w-4 h-4" />
+                      Düzenle
+                    </button>
+                    <button
+                      onClick={() => handleActivate(c._id)}
+                      className="flex-1 inline-flex items-center justify-center gap-1 px-2.5 py-1.5 rounded border text-xs hover:bg-gray-50"
+                      title="Aktif Yap"
+                    >
+                      <CheckIcon className="w-4 h-4" />
+                      Aktif
+                    </button>
+                    <button
+                      onClick={() => triggerDelete(c._id)}
+                      className="flex-1 inline-flex items-center justify-center gap-1 px-2.5 py-1.5 rounded border border-red-200 text-red-600 text-xs hover:bg-red-50"
+                      title="Sil"
+                    >
+                      <TrashIcon className="w-4 h-4" />
+                      Sil
+                    </button>
+                  </div>
                 </div>
               </CardBody>
             </Card>
@@ -481,11 +511,16 @@ export default function CampaignsPage() {
       )}
 
       {/* form dialog */}
-      <Dialog open={dialogOpen} size="xl" handler={closeDialog}>
+      <Dialog
+        open={dialogOpen}
+        size="xl"
+        handler={closeDialog}
+        className="!max-w-[95vw]"
+      >
         <DialogHeader>
           {form._id ? "Kampanyayı Güncelle" : "Yeni Kampanya"}
         </DialogHeader>
-        <DialogBody divider className="overflow-auto max-h-[75vh] pr-4">
+        <DialogBody divider className="overflow-auto max-h-[70svh] pr-4">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* SOL: FORM */}
             <div className="space-y-4">
@@ -677,7 +712,7 @@ export default function CampaignsPage() {
                 Canlı Önizleme
               </Typography>
               <div className="rounded-xl border overflow-hidden">
-                <div className="relative h-48">
+                <div className="relative h-40 sm:h-48">
                   {form.imageUrl ? (
                     <img
                       src={form.imageUrl}
@@ -717,7 +752,7 @@ export default function CampaignsPage() {
             </div>
           </div>
         </DialogBody>
-        <DialogFooter>
+        <DialogFooter className="gap-2">
           <Button variant="text" onClick={closeDialog}>
             İptal
           </Button>
