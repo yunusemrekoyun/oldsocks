@@ -6,18 +6,15 @@ import ProductGrid from "../components/products/ProductGrid"; // Ürün ızgaras
 import SecondHero from "../components/hero/SecondHero"; // İkinci hero bileşenini ekle
 import Campaigns from "../components/campaigns/Campaigns";
 import Services from "../components/services/Services";
-import NewProducts from "../components/products/NewProducts"; 
+import NewProducts from "../components/products/NewProducts";
 const HomePage = () => (
   <>
     <Hero />
-     <NewProducts />
+    <NewProducts />
     <Categories />
-
     <ProductGrid />
-    
     <SecondHero />
     <ProductGrid />
-
     <Campaigns />
     <Services />
   </>
