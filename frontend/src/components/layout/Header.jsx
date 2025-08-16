@@ -16,7 +16,7 @@ import { AuthContext } from "../../context/AuthContext";
 import { useCart } from "../../context/useCart";
 import SearchModal from "../search/SearchModal";
 import api from "../../../api";
-
+import logo from "../../assets/logo/logo.png";
 const Header = () => {
   const { isLoggedIn } = useContext(AuthContext);
   const { items } = useCart();
@@ -131,7 +131,7 @@ const Header = () => {
 
             <Link to="/" className="flex items-center">
               <img
-                src="../src/assets/logo/logo.png"
+                src={logo}
                 alt="Oldsocks Logo"
                 className="h-16 w-auto object-contain"
               />
@@ -337,7 +337,7 @@ const Header = () => {
                 className="flex items-center"
               >
                 <img
-                  src="../src/assets/logo/logo.png"
+                  src={logo}
                   alt="Oldsocks Logo"
                   className="h-10 w-auto object-contain"
                 />
