@@ -1,8 +1,8 @@
 // src/components/products/ProductItem.jsx
-import React, { useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import PropTypes from "prop-types";
 import { Link } from "react-router-dom";
-import { FaVolumeMute, FaVolumeUp } from "react-icons/fa";
+import { FaVolumeMute, FaVolumeUp, FaPlay } from "react-icons/fa";
 
 const ProductItem = ({
   id,
@@ -15,34 +15,95 @@ const ProductItem = ({
   stock,
 }) => {
   const videoRef = useRef(null);
+
+  // Cihaz yetenekleri
+  const [isHoverCapable, setIsHoverCapable] = useState(false);
+  const [isTouch, setIsTouch] = useState(false);
+
+  // Desktop’ta hover state’i, mobilde “oynat”a basıldı mı?
   const [isHovered, setIsHovered] = useState(false);
+  const [mobileWantsPlay, setMobileWantsPlay] = useState(false);
+
+  // Ses durumu (sadece desktop’ta ikon gösterilecek)
   const [isMuted, setIsMuted] = useState(true);
 
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const hoverQuery =
+        window.matchMedia &&
+        window.matchMedia("(hover: hover)").matches === true;
+      const touchCapable =
+        "ontouchstart" in window ||
+        (typeof navigator !== "undefined" &&
+          Number(navigator.maxTouchPoints) > 0);
+
+      setIsHoverCapable(hoverQuery);
+      setIsTouch(touchCapable);
+    }
+  }, []);
+
+  const showDiscount = useMemo(
+    () => discountedPrice != null && discountedPrice < price,
+    [discountedPrice, price]
+  );
+
+  /* ---------- Desktop (hover) davranışı ---------- */
   const handleMouseEnter = () => {
+    if (!isHoverCapable) return;
     setIsHovered(true);
     if (videoRef.current && video) {
-      videoRef.current.play().catch(() => {});
+      videoRef.current
+        .play()
+        .catch((e) => console.debug("Video play blocked (hover):", e?.message));
     }
   };
 
   const handleMouseLeave = () => {
+    if (!isHoverCapable) return;
     setIsHovered(false);
     if (videoRef.current) {
-      videoRef.current.pause();
-      videoRef.current.currentTime = 0;
+      try {
+        videoRef.current.pause();
+        videoRef.current.currentTime = 0;
+      } catch (e) {
+        console.debug("Video reset error:", e?.message);
+      }
     }
   };
 
+  /* ---------- Mobile: “oynat” overlay ---------- */
+  const handleMobilePlay = (e) => {
+    // Ürüne gitmeyi engelle
+    e.preventDefault();
+    e.stopPropagation();
+
+    setMobileWantsPlay(true);
+
+    // Dokunuş geldiği için çoğu mobil tarayıcı play’e izin verir
+    requestAnimationFrame(() => {
+      if (videoRef.current) {
+        videoRef.current
+          .play()
+          .catch((err) => console.debug("Mobile play blocked:", err?.message));
+      }
+    });
+  };
+
+  /* ---------- Ses toggle (sadece desktop) ---------- */
   const toggleMute = (e) => {
     e.preventDefault();
     e.stopPropagation();
-    if (videoRef.current) {
-      videoRef.current.muted = !videoRef.current.muted;
-      setIsMuted(videoRef.current.muted);
-    }
+    const v = videoRef.current;
+    if (!v) return;
+    v.muted = !v.muted;
+    setIsMuted(v.muted);
   };
 
-  const showDiscount = discountedPrice != null && discountedPrice < price;
+  // Hangi durumda video elementi gösterilmeli?
+  // - Desktop’ta (hover-capable) video elementi her zaman görünür; hover’da oynar.
+  // - Mobilde varsayılan poster; kullanıcı oynatmak isterse video görünür.
+  const shouldShowVideo =
+    !!video && (isHoverCapable || (isTouch && mobileWantsPlay));
 
   return (
     <Link
@@ -58,11 +119,12 @@ const ProductItem = ({
         </div>
       )}
 
-      {/* Ses butonu */}
-      {isHovered && video && (
+      {/* Ses butonu — sadece desktop’ta ve video görünürken + hover aktifken */}
+      {shouldShowVideo && isHoverCapable && isHovered && (
         <button
           onClick={toggleMute}
-          className="absolute top-3 right-3 bg-white border border-gray-200 p-1 rounded-full z-10 shadow-md hover:border-purple-500 transition"
+          className="hidden md:flex absolute top-3 right-3 bg-white border border-gray-200 p-1 rounded-full z-10 shadow-md hover:border-purple-500 transition"
+          aria-label={isMuted ? "Sesi aç" : "Sesi kapat"}
         >
           {isMuted ? (
             <FaVolumeMute className="text-dark2 text-sm" />
@@ -72,7 +134,7 @@ const ProductItem = ({
         </button>
       )}
 
-      {/* İndirim rozeti (sol-alt, hafif yukarı çekilmiş) */}
+      {/* İndirim rozeti */}
       {showDiscount && (
         <div className="absolute left-3 bottom-3 z-10">
           <div className="bg-red-600 text-white w-10 h-10 rounded-full flex items-center justify-center text-xs font-bold shadow-md translate-y-[-4px]">
@@ -82,30 +144,50 @@ const ProductItem = ({
       )}
 
       <div className="relative h-64 overflow-hidden bg-light1">
-        {video ? (
+        {shouldShowVideo ? (
           <video
             ref={videoRef}
             src={video}
-            // poster sadece varsa verelim; yoksa tarayıcı ilk kareyi çizsin
             poster={poster || undefined}
             muted
             playsInline
-            preload="auto" // ← metadata yerine auto
+            // Desktop: metadata ile küçük bir ön yükleme (hover anında hızlı başlasın)
+            // Mobil: none — kullanıcı oynatmak isteyene kadar ağ kullanma
+            preload={isHoverCapable ? "metadata" : "none"}
+            className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
             onLoadedMetadata={() => {
               try {
                 if (videoRef.current) videoRef.current.currentTime = 0;
-              } catch {
-                console.error("Video oynatılırken hata");
+              } catch (e) {
+                console.debug("onLoadedMetadata reset failed:", e?.message);
               }
             }}
-            className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
           />
         ) : (
           <img
-            src={poster}
+            src={poster || ""}
             alt={name}
-            className="h-full w-full object-contain transition-transform duration-300 group-hover:scale-105"
+            loading="lazy"
+            className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+            onError={(e) => {
+              // poster yok/kırıksa siyah kare yerine sade bir arka plan kalsın
+              e.currentTarget.style.background = "#f3f4f6";
+              e.currentTarget.src = "";
+            }}
           />
+        )}
+
+        {/* Mobilde “Oynat” katmanı (video varsa & henüz oynatılmıyorsa) */}
+        {isTouch && !!video && !mobileWantsPlay && (
+          <button
+            onClick={handleMobilePlay}
+            className="absolute inset-0 flex items-center justify-center bg-black/20"
+            aria-label="Videoyu oynat"
+          >
+            <span className="flex items-center justify-center w-12 h-12 rounded-full bg-white/90 shadow">
+              <FaPlay className="text-dark2" />
+            </span>
+          </button>
         )}
       </div>
 
