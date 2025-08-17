@@ -1,3 +1,4 @@
+// src/components/products/product-details/SimilarProducts.jsx
 import React, { useState, useEffect } from "react";
 import api from "../../../../api";
 import SimilarProductsItem from "./SimilarProductsItem";
@@ -45,14 +46,9 @@ export default function SimilarProducts({ categoryId, currentProductId }) {
         });
 
         let result = [];
-
-        if (sameSub.length > 0) {
-          result = sameSub;
-        } else if (sameParent.length > 0) {
-          result = sameParent;
-        } else {
-          result = filtered;
-        }
+        if (sameSub.length > 0) result = sameSub;
+        else if (sameParent.length > 0) result = sameParent;
+        else result = filtered;
 
         // Basit shuffle
         for (let i = result.length - 1; i > 0; i--) {
@@ -84,22 +80,40 @@ export default function SimilarProducts({ categoryId, currentProductId }) {
         spaceBetween={16}
         slidesPerView={2}
         autoplay={{ delay: 3000 }}
-        loop={true}
-        grabCursor={true}
-        freeMode={true}
+        loop
+        grabCursor
+        freeMode
         className="!px-2"
       >
-        {items.map((p) => (
-          <SwiperSlide key={p._id}>
-            <SimilarProductsItem
-              id={p._id}
-              video={p.video}
-              name={p.name}
-              price={p.price}
-              discountedPrice={p.discountedPrice} // ✅ Artık doğru geçiyor
-            />
-          </SwiperSlide>
-        ))}
+        {items.map((p) => {
+          const poster =
+            p.poster || (Array.isArray(p.images) ? p.images[0] : null);
+          // discountedPrice backend’den gelmiyorsa türet:
+          const discounted =
+            typeof p.discountedPrice === "number"
+              ? p.discountedPrice
+              : Number(p.discount || 0) > 0
+              ? Math.max(
+                  0,
+                  (Number(p.price || 0) * (100 - Number(p.discount))) / 100
+                )
+              : undefined;
+
+          return (
+            <SwiperSlide key={p._id}>
+              <SimilarProductsItem
+                id={p._id}
+                video={p.video}
+                poster={poster}
+                name={p.name}
+                price={Number(p.price || 0)}
+                discountedPrice={
+                  typeof discounted === "number" ? discounted : undefined
+                }
+              />
+            </SwiperSlide>
+          );
+        })}
       </Swiper>
     </div>
   );
