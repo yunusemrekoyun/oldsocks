@@ -1,46 +1,145 @@
-import React, { useRef, useState } from "react";
+// src/components/products/SimilarProductItem.jsx
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import PropTypes from "prop-types";
-import { FaVolumeMute, FaVolumeUp } from "react-icons/fa";
+import { FaVolumeMute, FaVolumeUp, FaPlay } from "react-icons/fa";
+
+const MOBILE_VIDEO_EVENT = "product-mobile-play";
 
 export default function SimilarProductItem({
   id,
   video,
+  poster,
   name,
   price,
   discountedPrice,
 }) {
   const videoRef = useRef(null);
-  const [hovered, setHovered] = useState(false);
-  const [muted, setMuted] = useState(true);
 
-  const onEnter = () => {
-    setHovered(true);
-    videoRef.current?.play();
-  };
+  // Cihaz yetenekleri
+  const [isHoverCapable, setIsHoverCapable] = useState(false);
+  const [isTouch, setIsTouch] = useState(false);
 
-  const onLeave = () => {
-    setHovered(false);
-    if (videoRef.current) {
-      videoRef.current.pause();
-      videoRef.current.currentTime = 0;
+  // Desktop: hover; Mobil: kullanıcı “oynat”a bastı mı?
+  const [isHovered, setIsHovered] = useState(false);
+  const [mobileWantsPlay, setMobileWantsPlay] = useState(false);
+
+  // Ses (yalnız desktop’ta ikon)
+  const [isMuted, setIsMuted] = useState(true);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const hoverQuery =
+        window.matchMedia &&
+        window.matchMedia("(hover: hover)").matches === true;
+      const touchCapable =
+        "ontouchstart" in window ||
+        (typeof navigator !== "undefined" &&
+          Number(navigator.maxTouchPoints) > 0);
+
+      setIsHoverCapable(hoverQuery);
+      setIsTouch(touchCapable);
     }
-  };
-
-  const toggleMute = (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (videoRef.current) {
-      videoRef.current.muted = !videoRef.current.muted;
-      setMuted(videoRef.current.muted);
-    }
-  };
+  }, []);
 
   const hasDiscount =
     typeof discountedPrice === "number" && discountedPrice < price;
-  const pct = hasDiscount
-    ? Math.max(1, Math.round(100 - (discountedPrice / price) * 100))
-    : 0;
+
+  const pct = useMemo(() => {
+    if (!hasDiscount) return 0;
+    const val = Math.round(100 - (discountedPrice / price) * 100);
+    return Math.max(1, val);
+  }, [hasDiscount, discountedPrice, price]);
+
+  /* ---------- Desktop (hover) ---------- */
+  const onEnter = () => {
+    if (!isHoverCapable) return;
+    setIsHovered(true);
+    if (videoRef.current && video) {
+      videoRef.current
+        .play()
+        .catch((e) => console.debug("Video play blocked (hover):", e?.message));
+    }
+  };
+
+  const onLeave = () => {
+    if (!isHoverCapable) return;
+    setIsHovered(false);
+    if (videoRef.current) {
+      try {
+        videoRef.current.pause();
+        videoRef.current.currentTime = 0;
+      } catch (e) {
+        console.debug("Video reset error:", e?.message);
+      }
+    }
+  };
+
+  /* ---------- Mobil: “oynat” ---------- */
+  const handleMobilePlay = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    // Diğer kartlara “dur” sinyali
+    window.dispatchEvent(new CustomEvent(MOBILE_VIDEO_EVENT, { detail: id }));
+
+    setMobileWantsPlay(true);
+
+    requestAnimationFrame(() => {
+      if (videoRef.current) {
+        videoRef.current
+          .play()
+          .catch((err) => console.debug("Mobile play blocked:", err?.message));
+      }
+    });
+  };
+
+  // Başka kart oynarsa bunu durdur
+  useEffect(() => {
+    const handler = (ev) => {
+      if (ev.detail !== id && videoRef.current) {
+        try {
+          videoRef.current.pause();
+          videoRef.current.currentTime = 0;
+        } catch (err) {
+          console.debug("Pause/reset on external event failed:", err?.message);
+        }
+        setMobileWantsPlay(false);
+      }
+    };
+    window.addEventListener(MOBILE_VIDEO_EVENT, handler);
+    return () => window.removeEventListener(MOBILE_VIDEO_EVENT, handler);
+  }, [id]);
+
+  // Unmount’ta durdur
+  useEffect(() => {
+    return () => {
+      if (videoRef.current) {
+        try {
+          // eslint-disable-next-line react-hooks/exhaustive-deps
+          videoRef.current.pause();
+        } catch (e) {
+          console.debug("Pause on unmount failed:", e?.message);
+        }
+      }
+    };
+  }, []);
+
+  /* ---------- Ses toggle (sadece desktop) ---------- */
+  const toggleMute = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const v = videoRef.current;
+    if (!v) return;
+    v.muted = !v.muted;
+    setIsMuted(v.muted);
+  };
+
+  // Ne gösterelim?
+  // Desktop: video elemanı (hover’da oynar)
+  // Mobil: poster, “oynat”a basılırsa video
+  const shouldShowVideo =
+    !!video && (isHoverCapable || (isTouch && mobileWantsPlay));
 
   return (
     <Link
@@ -51,28 +150,68 @@ export default function SimilarProductItem({
       onMouseEnter={onEnter}
       onMouseLeave={onLeave}
     >
-      {/* Video Alanı */}
+      {/* Görsel/Video Alanı */}
       <div className="relative h-64 overflow-hidden bg-light1">
-        <video
-          ref={videoRef}
-          src={video}
-          muted
-          playsInline
-          preload="metadata"
-          className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
-          draggable={false}
-          onDragStart={(e) => e.preventDefault()}
-        />
-        {hovered && (
+        {shouldShowVideo ? (
+          <video
+            ref={videoRef}
+            src={video || undefined}
+            poster={poster || undefined}
+            muted
+            playsInline
+            preload={isHoverCapable ? "metadata" : "none"}
+            className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+            draggable={false}
+            onDragStart={(e) => e.preventDefault()}
+            onLoadedMetadata={() => {
+              try {
+                if (videoRef.current) videoRef.current.currentTime = 0;
+              } catch (e) {
+                console.debug("onLoadedMetadata reset failed:", e?.message);
+              }
+            }}
+          />
+        ) : (
+          <img
+            src={poster || ""}
+            alt={name}
+            loading="lazy"
+            className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+            onError={(e) => {
+              // poster yok/kırıksa siyah kare yerine nötr arka plan
+              e.currentTarget.style.background = "#f3f4f6";
+              e.currentTarget.src = "";
+            }}
+            draggable={false}
+            onDragStart={(e) => e.preventDefault()}
+          />
+        )}
+
+        {/* Ses butonu — sadece desktop + hover sırasında */}
+        {shouldShowVideo && isHoverCapable && isHovered && (
           <button
             onClick={toggleMute}
-            className="absolute top-2 right-2 bg-white/90 p-2 rounded-full shadow-md z-10 hover:scale-110 transition"
+            className="hidden md:flex absolute top-2 right-2 bg-white/90 p-2 rounded-full shadow-md z-10 hover:scale-110 transition"
+            aria-label={isMuted ? "Sesi aç" : "Sesi kapat"}
           >
-            {muted ? (
+            {isMuted ? (
               <FaVolumeMute className="text-dark2" />
             ) : (
               <FaVolumeUp className="text-dark2" />
             )}
+          </button>
+        )}
+
+        {/* Mobil “oynat” katmanı */}
+        {isTouch && !!video && !mobileWantsPlay && (
+          <button
+            onClick={handleMobilePlay}
+            className="absolute inset-0 flex items-center justify-center bg-black/20"
+            aria-label="Videoyu oynat"
+          >
+            <span className="flex items-center justify-center w-11 h-11 rounded-full bg-white/90 shadow">
+              <FaPlay className="text-dark2" />
+            </span>
           </button>
         )}
 
@@ -111,6 +250,7 @@ export default function SimilarProductItem({
 SimilarProductItem.propTypes = {
   id: PropTypes.string.isRequired,
   video: PropTypes.string.isRequired,
+  poster: PropTypes.string, // opsiyonel
   name: PropTypes.string.isRequired,
   price: PropTypes.number.isRequired,
   discountedPrice: PropTypes.number,

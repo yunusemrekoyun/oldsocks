@@ -115,6 +115,7 @@ const ProductItem = ({
     return () => {
       if (videoRef.current) {
         try {
+          // eslint-disable-next-line react-hooks/exhaustive-deps
           videoRef.current.pause();
         } catch (e) {
           console.debug("Pause on unmount failed:", e?.message);
