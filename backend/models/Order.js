@@ -40,6 +40,7 @@ const OrderSchema = new mongoose.Schema(
     },
     stockUpdated: { type: Boolean, default: false },
     adminSeenAt: { type: Date, default: null },
+    iyzInit: { type: Object, default: null },
   },
   { timestamps: true }
 );
