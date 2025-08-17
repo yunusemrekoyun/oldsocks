@@ -1,8 +1,11 @@
+
 // src/components/products/ProductItem.jsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import PropTypes from "prop-types";
 import { Link } from "react-router-dom";
 import { FaVolumeMute, FaVolumeUp, FaPlay } from "react-icons/fa";
+
+const MOBILE_VIDEO_EVENT = "product-mobile-play";
 
 const ProductItem = ({
   id,
@@ -73,13 +76,14 @@ const ProductItem = ({
 
   /* ---------- Mobile: “oynat” overlay ---------- */
   const handleMobilePlay = (e) => {
-    // Ürüne gitmeyi engelle
     e.preventDefault();
     e.stopPropagation();
 
+    // diğer kartlara "dur" sinyali gönder
+    window.dispatchEvent(new CustomEvent(MOBILE_VIDEO_EVENT, { detail: id }));
+
     setMobileWantsPlay(true);
 
-    // Dokunuş geldiği için çoğu mobil tarayıcı play’e izin verir
     requestAnimationFrame(() => {
       if (videoRef.current) {
         videoRef.current
@@ -88,6 +92,36 @@ const ProductItem = ({
       }
     });
   };
+
+  // Başka ürün oynatılınca kendini durdur
+  useEffect(() => {
+    const handler = (e) => {
+      if (e.detail !== id && videoRef.current) {
+        try {
+          videoRef.current.pause();
+          videoRef.current.currentTime = 0;
+        } catch (err) {
+          console.debug("Pause/reset on external event failed:", err?.message);
+        }
+        setMobileWantsPlay(false);
+      }
+    };
+    window.addEventListener(MOBILE_VIDEO_EVENT, handler);
+    return () => window.removeEventListener(MOBILE_VIDEO_EVENT, handler);
+  }, [id]);
+
+  // Unmount olduğunda oynuyorsa durdur (sayfa değişimi vb.)
+  useEffect(() => {
+    return () => {
+      if (videoRef.current) {
+        try {
+          videoRef.current.pause();
+        } catch (e) {
+          console.debug("Pause on unmount failed:", e?.message);
+        }
+      }
+    };
+  }, []);
 
   /* ---------- Ses toggle (sadece desktop) ---------- */
   const toggleMute = (e) => {
@@ -99,9 +133,7 @@ const ProductItem = ({
     setIsMuted(v.muted);
   };
 
-  // Hangi durumda video elementi gösterilmeli?
-  // - Desktop’ta (hover-capable) video elementi her zaman görünür; hover’da oynar.
-  // - Mobilde varsayılan poster; kullanıcı oynatmak isterse video görünür.
+  // Video mu gösterelim, poster mı?
   const shouldShowVideo =
     !!video && (isHoverCapable || (isTouch && mobileWantsPlay));
 
@@ -151,8 +183,6 @@ const ProductItem = ({
             poster={poster || undefined}
             muted
             playsInline
-            // Desktop: metadata ile küçük bir ön yükleme (hover anında hızlı başlasın)
-            // Mobil: none — kullanıcı oynatmak isteyene kadar ağ kullanma
             preload={isHoverCapable ? "metadata" : "none"}
             className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
             onLoadedMetadata={() => {
@@ -170,14 +200,13 @@ const ProductItem = ({
             loading="lazy"
             className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
             onError={(e) => {
-              // poster yok/kırıksa siyah kare yerine sade bir arka plan kalsın
               e.currentTarget.style.background = "#f3f4f6";
               e.currentTarget.src = "";
             }}
           />
         )}
 
-        {/* Mobilde “Oynat” katmanı (video varsa & henüz oynatılmıyorsa) */}
+        {/* Mobilde “Oynat” butonu (video varsa & henüz oynatılmıyorsa) */}
         {isTouch && !!video && !mobileWantsPlay && (
           <button
             onClick={handleMobilePlay}
