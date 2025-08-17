@@ -23,27 +23,37 @@ app.set("trust proxy", 1);
 app.disable("x-powered-by");
 
 /* 3) CORS (çoklu origin whitelist) */
+/* 3) CORS (çoklu origin whitelist) */
 const ALLOWED_ORIGINS = (process.env.FRONTEND_ORIGIN || "")
   .split(",")
   .map((s) => s.trim())
   .filter(Boolean);
 
-app.use(
-  cors({
-    origin: (origin, cb) => {
-      // health-check/SSR gibi originsiz istekleri izinli yap
-      if (!origin) return cb(null, true);
+// Delegate ile path + origin’e göre karar verelim
+const corsOptionsDelegate = (req, cb) => {
+  const origin = req.header("Origin");
+  const path = req.path || "";
 
-      // whitelist boşsa uyarı verip yine izin ver (dev kolaylığı)
-      if (ALLOWED_ORIGINS.length === 0) return cb(null, true);
+  // Payment rotaları → her zaman izin ver
+  const isPaymentRoute = path.startsWith("/api/v1/payment/");
 
-      if (ALLOWED_ORIGINS.includes(origin)) return cb(null, true);
+  // Varsayılan seçenekler
+  const opts = { credentials: true, origin: true };
 
-      return cb(new Error(`CORS blocked for origin: ${origin}`), false);
-    },
-    credentials: true,
-  })
-);
+  // Origin yoksa (null) → izin ver (iyzico callback bu şekilde gelir)
+  if (!origin) return cb(null, opts);
+
+  // Payment rotaları → izin ver
+  if (isPaymentRoute) return cb(null, opts);
+
+  // Whitelist kontrolü
+  if (ALLOWED_ORIGINS.includes(origin)) return cb(null, opts);
+
+  // Diğer her şey → engelle
+  return cb(new Error(`CORS blocked for origin: ${origin}`));
+};
+
+app.use(cors(corsOptionsDelegate));
 
 /* 4) Güvenlik başlıkları (CSP koymadık—SPA/Cloudinary kırmasın) */
 app.use(

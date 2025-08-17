@@ -1,4 +1,3 @@
-// src/pages/PaymentPage.jsx
 import React, { useEffect, useRef, useState, useMemo } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useCart } from "../context/useCart";
@@ -12,14 +11,12 @@ export default function PaymentPage() {
   const location = useLocation();
   const navigate = useNavigate();
 
-  // Sepet
   const { items } = useCart();
   const totalPrice = useMemo(
     () => items.reduce((sum, i) => sum + i.price * i.qty, 0),
     [items]
   );
 
-  // Adresler
   const [addresses, setAddresses] = useState([]);
   const [addrLoading, setAddrLoading] = useState(true);
   const selectedAddressIdFromState = location.state?.selectedAddress || null;
@@ -31,35 +28,39 @@ export default function PaymentPage() {
     );
   }, [addresses, selectedAddressIdFromState]);
 
-  // HTML
   const [html, setHtml] = useState("");
   const [nonce, setNonce] = useState(0);
 
-  // HTML kaynağını topla (state > query > session)
+  const conversationId = location.state?.conversationId;
+
+  // HTML getir (backend’den inline endpoint)
   useEffect(() => {
-    let h = location.state?.html;
-
-    if (!h) {
-      const params = new URLSearchParams(location.search);
-      const q = params.get("html");
-      if (q) {
-        try {
-          h = decodeURIComponent(q);
-        } catch {
-          h = q;
-        }
-      }
-    }
-    if (!h) h = sessionStorage.getItem(SESSION_KEY) || "";
-
-    if (!h) {
+    if (!conversationId) {
       navigate("/cart", { replace: true });
       return;
     }
 
-    setHtml(h);
-    sessionStorage.setItem(SESSION_KEY, h);
-  }, [location, navigate]);
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const { data } = await api.get(`/payment/inline/${conversationId}`, {
+          responseType: "text",
+        });
+        if (cancelled) return;
+        setHtml(data);
+        sessionStorage.setItem(SESSION_KEY, data);
+      } catch (e) {
+        console.error("Ödeme formu yüklenemedi:", e);
+        alert("Ödeme başlatılamadı. Lütfen tekrar deneyin.");
+        navigate("/cart", { replace: true });
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [conversationId, navigate]);
 
   // Adresleri getir
   useEffect(() => {
@@ -87,10 +88,8 @@ export default function PaymentPage() {
       old.parentNode?.replaceChild(s, old);
     });
 
-    // 1 sn sonra form/iframe yoksa tek seferlik refresh
     const t = setTimeout(() => {
-      const hasForm =
-        el.querySelector("form") || el.querySelector("iframe") || null;
+      const hasForm = el.querySelector("form") || el.querySelector("iframe");
       const already = sessionStorage.getItem(RELOAD_FLAG);
       if (!hasForm && !already) {
         sessionStorage.setItem(RELOAD_FLAG, "1");
@@ -103,7 +102,7 @@ export default function PaymentPage() {
     return () => clearTimeout(t);
   }, [html, nonce]);
 
-  // Geri gelince (bfcache) bir kere yenile / yeniden enjekte et
+  // Geri gelince tekrar inject et
   useEffect(() => {
     const onPageShow = (e) => {
       const el = containerRef.current;
@@ -128,7 +127,7 @@ export default function PaymentPage() {
   return (
     <div className="min-h-screen bg-light1 text-dark1 py-8 px-4">
       <div className="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* SOL: Ödeme Formu (kapsayıcı daraltıldı, form responsive ise kendini sığdırır) */}
+        {/* SOL: Ödeme Formu */}
         <section className="lg:col-span-2">
           <div className="bg-white rounded-2xl shadow-md p-4 sm:p-6">
             <header className="mb-4 sm:mb-6">
@@ -138,18 +137,8 @@ export default function PaymentPage() {
               </p>
             </header>
 
-            {/* Dar kapsayıcı — formu küçültmüyoruz, sadece konteyner genişliğini kısıtlıyoruz */}
             <div className="w-full flex justify-start">
-              <div
-                className="
-                  w-full
-                  max-w-[640px]   /* kapsayıcıyı daralt */
-                  rounded-xl
-                  border border-gray-200
-                  p-3 sm:p-4
-                  bg-white
-                "
-              >
+              <div className="w-full max-w-[640px] rounded-xl border border-gray-200 p-3 sm:p-4 bg-white">
                 <div
                   ref={containerRef}
                   id="iyzipay-checkout-form"

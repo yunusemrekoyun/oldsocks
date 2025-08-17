@@ -6,27 +6,21 @@ import AuthRequiredModal from "../components/auth/AuthRequireModal";
 import api from "../../api";
 
 export default function CheckoutPage() {
-  /* ─────────── State / context ─────────── */
   const { items } = useCart();
   const { isLoggedIn, loading: authLoading } = useAuth();
   const navigate = useNavigate();
 
   const [loading, setLoading] = useState(false);
-
   const [addresses, setAddresses] = useState([]);
   const [addrLoading, setAddrLoading] = useState(true);
   const [selectedAddress, setSelectedAddress] = useState(null);
-
   const [showLoginModal, setShowLoginModal] = useState(false);
 
-  /* ─────────── Hesaplamalar ─────────── */
   const totalPrice = useMemo(
     () => items.reduce((sum, i) => sum + i.price * i.qty, 0),
     [items]
   );
 
-  /* ─────────── Etkiler ─────────── */
-  // 1) Kullanıcının adreslerini getir
   useEffect(() => {
     api
       .get("/users/me/addresses")
@@ -37,28 +31,24 @@ export default function CheckoutPage() {
       .finally(() => setAddrLoading(false));
   }, []);
 
-  /* ─────────── Erken dönüş kontrolleri ─────────── */
   if (authLoading) return <div className="p-4">Yükleniyor…</div>;
 
-  // Kullanıcı login değil → modal
   if (!isLoggedIn) {
     return (
       <AuthRequiredModal
         open
-        onClose={() => navigate(-1)} // çarpı → önceki sayfa
-        onLogin={() => navigate("/profile")} // giriş → /profile
+        onClose={() => navigate(-1)}
+        onLogin={() => navigate("/profile")}
       />
     );
   }
 
-  // Sepet boşsa
   if (items.length === 0) {
     return <Navigate to="/cart" replace />;
   }
 
   if (addrLoading) return <div className="p-4">Adresler yükleniyor…</div>;
 
-  // Kullanıcının hiç adresi yok
   if (addresses.length === 0) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center p-6">
@@ -75,37 +65,33 @@ export default function CheckoutPage() {
     );
   }
 
-  /* ─────────── Ödeme denemesi ─────────── */
   const attemptPayment = async (useFallback = false) => {
     if (!selectedAddress) {
       alert("Lütfen bir adres seçin.");
       return;
     }
-
     setLoading(true);
     try {
-      const response = await api.post(
-        "/payment/create-redirect",
-        {
-          cartItems: items,
-          totalPrice,
-          addressId: selectedAddress,
-          useFallback,
-        },
-        { responseType: "text" }
-      );
+      const { data } = await api.post("/payment/start", {
+        cartItems: items,
+        totalPrice,
+        addressId: selectedAddress,
+        useFallback,
+      });
 
-      // Eksik bilgi varsa otomatik fallback
-      if (response.status === 206) {
-        console.warn(
-          "Eksik müşteri bilgisi bulundu, fallback ile tekrar deneniyor…"
-        );
+      if (data?.missing && !useFallback) {
         return attemptPayment(true);
       }
 
-      // 200 → form HTML’i geldi → PaymentPage'e state ile gönder
-      const html = response.data;
-      navigate("/payment", { state: { html } });
+      if (data?.conversationId) {
+        // ✅ PaymentPage’e yönlendiriyoruz, orada embed edilecek
+        navigate("/payment", {
+          state: { conversationId: data.conversationId },
+        });
+        return;
+      }
+
+      alert("Ödeme başlatılamadı.");
     } catch (err) {
       console.error("Ödeme başlatılamadı:", err);
       if (err.response?.status === 401) {
@@ -117,13 +103,12 @@ export default function CheckoutPage() {
       setLoading(false);
     }
   };
-  /* ─────────── Normal ödeme sayfası ─────────── */
+
   return (
     <div className="min-h-screen bg-light1 text-dark1 py-10 px-4">
       <div className="max-w-3xl mx-auto bg-white rounded-xl shadow-md p-6">
         <h2 className="text-2xl font-semibold mb-4">Ödeme Özeti</h2>
 
-        {/* Adres seçimi */}
         <div className="mb-6">
           <h3 className="font-medium mb-2">Gönderim Adresi</h3>
           <fieldset className="space-y-2">
@@ -145,7 +130,6 @@ export default function CheckoutPage() {
           </fieldset>
         </div>
 
-        {/* Ürünler */}
         <ul className="space-y-3 mb-6">
           {items.map((it, i) => (
             <li
@@ -168,13 +152,11 @@ export default function CheckoutPage() {
           ))}
         </ul>
 
-        {/* Toplam */}
         <div className="flex justify-between text-lg font-semibold border-t pt-4">
           <span>Toplam:</span>
           <span>₺{totalPrice.toFixed(2)}</span>
         </div>
 
-        {/* Öde */}
         <button
           onClick={() => attemptPayment(false)}
           disabled={loading}
@@ -186,7 +168,6 @@ export default function CheckoutPage() {
         </button>
       </div>
 
-      {/* 401 durumunda açılan modal */}
       {showLoginModal && (
         <AuthRequiredModal
           open
