@@ -76,7 +76,7 @@ export default function NewProducts() {
 
     // 4 haftada da hiç yoksa boş bırak (ya da en yenilerden 4'e çevirebilirsin)
     return [];
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [all, now]);
 
   if (loading) {
@@ -101,12 +101,14 @@ export default function NewProducts() {
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-6">
           {items.map((p) => {
             const discountPercentage = computeDiscountPct(p);
+            const posterUrl =
+              p.poster || (Array.isArray(p.images) ? p.images[0] : null);
             return (
               <NewProductItem
                 key={p._id}
                 id={p._id}
                 video={p.video}
-                poster={p.poster}
+                poster={posterUrl}
                 name={p.name}
                 price={p.price}
                 originalPrice={p.originalPrice}

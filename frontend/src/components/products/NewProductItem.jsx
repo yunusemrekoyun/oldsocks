@@ -203,16 +203,22 @@ export default function NewProductItem({
             }}
           />
         ) : (
-          <img
-            src={poster || ""}
-            alt={name}
-            loading="lazy"
-            className="absolute inset-0 w-full h-full object-cover transition duration-300 group-hover:scale-105"
-            onError={(e) => {
-              e.currentTarget.style.background = "#f3f4f6";
-              e.currentTarget.src = "";
-            }}
-          />
+          <>
+            {poster ? (
+              <img
+                src={poster}
+                alt={name}
+                loading="lazy"
+                className="absolute inset-0 w-full h-full object-cover transition duration-300 group-hover:scale-105"
+                onError={(e) => {
+                  e.currentTarget.style.background = "#f3f4f6";
+                  e.currentTarget.src = "";
+                }}
+              />
+            ) : (
+              <div className="absolute inset-0 w-full h-full bg-light1" />
+            )}
+          </>
         )}
 
         {/* Mobil “oynat” katmanı */}
