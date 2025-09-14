@@ -9,6 +9,7 @@ import {
   FaSearch,
   FaEdit,
 } from "react-icons/fa";
+import ToastAlert from "../../components/ui/ToastAlert";
 
 const cx = (...cls) => cls.filter(Boolean).join(" ");
 
@@ -16,6 +17,10 @@ export default function DiscountsPage() {
   /* -------- list state -------- */
   const [loading, setLoading] = useState(true);
   const [rules, setRules] = useState([]);
+
+  /* -------- toast -------- */
+  const [toast, setToast] = useState(null);
+  const notify = (msg, type = "info") => setToast({ msg, type });
 
   /* -------- form state -------- */
   const [openForm, setOpenForm] = useState(false);
@@ -50,7 +55,7 @@ export default function DiscountsPage() {
       setRules(Array.isArray(data) ? data : []);
     } catch (e) {
       console.error(e);
-      alert("İndirimler alınamadı.");
+      notify("İndirimler alınamadı.", "error");
     } finally {
       setLoading(false);
     }
@@ -69,6 +74,7 @@ export default function DiscountsPage() {
       .catch((e) => console.error("categories fetch", e));
 
     fetchRules();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const allSubCats = useMemo(
@@ -119,11 +125,11 @@ export default function DiscountsPage() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!form.title.trim()) return alert("İndirim adı zorunlu.");
+    if (!form.title.trim()) return notify("İndirim adı zorunlu.", "error");
     if (form.discountRate < 0 || form.discountRate > 100)
-      return alert("İndirim yüzdesi 0-100 olmalı.");
+      return notify("İndirim yüzdesi 0-100 olmalı.", "error");
     if (form.targetIds.length === 0)
-      return alert("En az bir hedef seçmelisiniz.");
+      return notify("En az bir hedef seçmelisiniz.", "error");
 
     const payload = {
       title: form.title.trim(),
@@ -136,8 +142,10 @@ export default function DiscountsPage() {
     try {
       if (mode === "create") {
         await api.post("/discounts", payload);
+        notify("İndirim kuralı oluşturuldu.", "success");
       } else {
         await api.put(`/discounts/${editingId}`, payload);
+        notify("İndirim kuralı güncellendi.", "success");
       }
       setOpenForm(false);
       resetForm();
@@ -146,11 +154,12 @@ export default function DiscountsPage() {
       console.error(err);
       if (err?.response?.status === 409) {
         const ids = err?.response?.data?.conflictingProductIds || [];
-        alert(
-          `Çakışan aktif indirim(ler) var. Etkilenen ürün sayısı: ${ids.length}`
+        notify(
+          `Çakışan aktif indirim(ler) var. Etkilenen ürün sayısı: ${ids.length}`,
+          "error"
         );
       } else {
-        alert("İşlem tamamlanamadı.");
+        notify("İşlem tamamlanamadı.", "error");
       }
     }
   };
@@ -158,28 +167,33 @@ export default function DiscountsPage() {
   const toggleRule = async (r, next) => {
     try {
       await api.put(`/discounts/${r._id}/toggle`, { isActive: next });
+      notify(
+        next ? "İndirim aktif edildi." : "İndirim pasifleştirildi.",
+        "success"
+      );
       await fetchRules();
     } catch (err) {
       console.error(err);
       if (err?.response?.status === 409) {
-        alert(
-          "Çakışan aktif indirim(ler) var. Önce diğerlerini kapatın ya da kapsamı değiştirin."
+        notify(
+          "Çakışan aktif indirim(ler) var. Önce diğerlerini kapatın ya da kapsamı değiştirin.",
+          "error"
         );
       } else {
-        alert("İndirim güncellenemedi.");
+        notify("İndirim güncellenemedi.", "error");
       }
     }
   };
 
   const deleteRule = async (r) => {
-    if (!window.confirm(`"${r.title}" kuralını silmek istiyor musunuz?`))
-      return;
+    if (!window.confirm(`"${r.title}" kuralını silmek istiyor musunuz?`)) return;
     try {
       await api.delete(`/discounts/${r._id}`);
+      notify("İndirim silindi.", "success");
       await fetchRules();
     } catch (e) {
       console.error(e);
-      alert("İndirim silinemedi.");
+      notify("İndirim silinemedi.", "error");
     }
   };
 
@@ -568,6 +582,16 @@ export default function DiscountsPage() {
             </form>
           </div>
         </div>
+      )}
+
+      {/* Toast */}
+      {toast && (
+        <ToastAlert
+          msg={toast.msg}
+          type={toast.type}
+          onClose={() => setToast(null)}
+          duration={4000}
+        />
       )}
     </div>
   );
