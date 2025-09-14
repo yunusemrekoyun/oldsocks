@@ -3,8 +3,50 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import PropTypes from "prop-types";
 import { FaVolumeMute, FaVolumeUp, FaPlay } from "react-icons/fa";
+import api from "../../../../api";
 
 const MOBILE_VIDEO_EVENT = "product-mobile-play";
+
+/* TR/EN renk adlarını güvenli CSS rengine çevir */
+const colorMap = {
+  siyah: "#000000",
+  black: "#000000",
+  beyaz: "#ffffff",
+  white: "#ffffff",
+  kırmızı: "#ff0000",
+  kirmizi: "#ff0000",
+  red: "#ff0000",
+  mavi: "#0000ff",
+  blue: "#0000ff",
+  lacivert: "#001a4d",
+  navy: "#001a4d",
+  yeşil: "#008000",
+  yesil: "#008000",
+  green: "#008000",
+  sarı: "#ffd100",
+  sari: "#ffd100",
+  yellow: "#ffd100",
+  pembe: "#ff69b4",
+  pink: "#ff69b4",
+  mor: "#6a0dad",
+  purple: "#6a0dad",
+  gri: "#808080",
+  gray: "#808080",
+  grey: "#808080",
+  kahverengi: "#8b4513",
+  brown: "#8b4513",
+  turuncu: "#ff7f00",
+  orange: "#ff7f00",
+  bej: "#f5f5dc",
+  beige: "#f5f5dc",
+};
+const toCssColor = (val) => {
+  if (!val) return "#ddd";
+  const k = String(val).trim().toLowerCase();
+  if (/^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(k)) return k;
+  if (/^rgba?\(/i.test(k)) return k;
+  return colorMap[k] || k;
+};
 
 export default function SimilarProductItem({
   id,
@@ -27,6 +69,10 @@ export default function SimilarProductItem({
   // Ses (yalnız desktop’ta ikon)
   const [isMuted, setIsMuted] = useState(true);
 
+  // renk varyantları
+  const [variants, setVariants] = useState([]); // [{_id, color}]
+  const [loadingColors, setLoadingColors] = useState(true);
+
   useEffect(() => {
     if (typeof window !== "undefined") {
       const hoverQuery =
@@ -42,6 +88,7 @@ export default function SimilarProductItem({
     }
   }, []);
 
+  // İndirim var mı?
   const hasDiscount =
     typeof discountedPrice === "number" && discountedPrice < price;
 
@@ -50,6 +97,34 @@ export default function SimilarProductItem({
     const val = Math.round(100 - (discountedPrice / price) * 100);
     return Math.max(1, val);
   }, [hasDiscount, discountedPrice, price]);
+
+  /* ----- Varyant renklerini çek ----- */
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        setLoadingColors(true);
+        const { data: prod } = await api.get(`/products/${id}`);
+        const baseId = prod?.parentProductId || prod?._id;
+        if (!baseId) {
+          if (alive) setVariants(prod?.color ? [{ _id: id, color: prod.color }] : []);
+          return;
+        }
+        const { data: group } = await api.get(`/products?varyantsOf=${baseId}`);
+        const normalized = Array.isArray(group)
+          ? group.filter((v) => !!v.color)
+          : [];
+        if (alive) setVariants(normalized);
+      } catch {
+        if (alive) setVariants([]);
+      } finally {
+        if (alive) setLoadingColors(false);
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [id]);
 
   /* ---------- Desktop (hover) ---------- */
   const onEnter = () => {
@@ -79,18 +154,10 @@ export default function SimilarProductItem({
   const handleMobilePlay = (e) => {
     e.preventDefault();
     e.stopPropagation();
-
-    // Diğer kartlara “dur” sinyali
     window.dispatchEvent(new CustomEvent(MOBILE_VIDEO_EVENT, { detail: id }));
-
     setMobileWantsPlay(true);
-
     requestAnimationFrame(() => {
-      if (videoRef.current) {
-        videoRef.current
-          .play()
-          .catch((err) => console.debug("Mobile play blocked:", err?.message));
-      }
+      videoRef.current?.play().catch(() => {});
     });
   };
 
@@ -114,14 +181,9 @@ export default function SimilarProductItem({
   // Unmount’ta durdur
   useEffect(() => {
     return () => {
-      if (videoRef.current) {
-        try {
-          // eslint-disable-next-line react-hooks/exhaustive-deps
-          videoRef.current.pause();
-        } catch (e) {
-          console.debug("Pause on unmount failed:", e?.message);
-        }
-      }
+      try {
+        videoRef.current?.pause();
+      } catch {}
     };
   }, []);
 
@@ -136,10 +198,10 @@ export default function SimilarProductItem({
   };
 
   // Ne gösterelim?
-  // Desktop: video elemanı (hover’da oynar)
-  // Mobil: poster, “oynat”a basılırsa video
   const shouldShowVideo =
     !!video && (isHoverCapable || (isTouch && mobileWantsPlay));
+
+  const colorDots = variants.length ? variants : [];
 
   return (
     <Link
@@ -178,7 +240,6 @@ export default function SimilarProductItem({
             loading="lazy"
             className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
             onError={(e) => {
-              // poster yok/kırıksa siyah kare yerine nötr arka plan
               e.currentTarget.style.background = "#f3f4f6";
               e.currentTarget.src = "";
             }}
@@ -221,6 +282,28 @@ export default function SimilarProductItem({
             -{pct}%
           </span>
         )}
+
+        {/* ► DİKEY RENK NOKTALARI */}
+        {loadingColors ? (
+          <div className="absolute bottom-2 right-2 z-10 pointer-events-none">
+            <span className="block w-5 h-10 bg-white/50 rounded-md shadow-sm animate-pulse" />
+          </div>
+        ) : colorDots.length > 0 ? (
+          <div className="absolute bottom-2 right-2 z-10 pointer-events-none flex flex-col gap-1">
+            {colorDots.map((v) => (
+              <span
+                key={v._id}
+                className="inline-block w-2.5 h-2.5 rounded-full border shadow-sm"
+                style={{
+                  background: toCssColor(v.color),
+                  borderColor: "rgba(255,255,255,.95)",
+                }}
+                title={v.color}
+                aria-label={v.color}
+              />
+            ))}
+          </div>
+        ) : null}
       </div>
 
       {/* İçerik */}

@@ -1,11 +1,52 @@
-
 // src/components/products/ProductItem.jsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import PropTypes from "prop-types";
 import { Link } from "react-router-dom";
 import { FaVolumeMute, FaVolumeUp, FaPlay } from "react-icons/fa";
+import api from "../../../api";
 
 const MOBILE_VIDEO_EVENT = "product-mobile-play";
+
+/* TR/EN renk adlarını güvenli CSS rengine çevir */
+const colorMap = {
+  siyah: "#000000",
+  black: "#000000",
+  beyaz: "#ffffff",
+  white: "#ffffff",
+  kırmızı: "#ff0000",
+  kirmizi: "#ff0000",
+  red: "#ff0000",
+  mavi: "#0000ff",
+  blue: "#0000ff",
+  lacivert: "#001a4d",
+  navy: "#001a4d",
+  yeşil: "#008000",
+  yesil: "#008000",
+  green: "#008000",
+  sarı: "#ffd100",
+  sari: "#ffd100",
+  yellow: "#ffd100",
+  pembe: "#ff69b4",
+  pink: "#ff69b4",
+  mor: "#6a0dad",
+  purple: "#6a0dad",
+  gri: "#808080",
+  gray: "#808080",
+  grey: "#808080",
+  kahverengi: "#8b4513",
+  brown: "#8b4513",
+  turuncu: "#ff7f00",
+  orange: "#ff7f00",
+  bej: "#f5f5dc",
+  beige: "#f5f5dc",
+};
+const toCssColor = (val) => {
+  if (!val) return "#ddd";
+  const k = String(val).trim().toLowerCase();
+  if (/^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(k)) return k;
+  if (/^rgba?\(/i.test(k)) return k;
+  return colorMap[k] || k;
+};
 
 const ProductItem = ({
   id,
@@ -19,16 +60,16 @@ const ProductItem = ({
 }) => {
   const videoRef = useRef(null);
 
-  // Cihaz yetenekleri
+  // cihaz / etkileşim
   const [isHoverCapable, setIsHoverCapable] = useState(false);
   const [isTouch, setIsTouch] = useState(false);
-
-  // Desktop’ta hover state’i, mobilde “oynat”a basıldı mı?
   const [isHovered, setIsHovered] = useState(false);
   const [mobileWantsPlay, setMobileWantsPlay] = useState(false);
-
-  // Ses durumu (sadece desktop’ta ikon gösterilecek)
   const [isMuted, setIsMuted] = useState(true);
+
+  // renk varyantları
+  const [variants, setVariants] = useState([]); // [{_id, color}]
+  const [loadingColors, setLoadingColors] = useState(true);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -39,7 +80,6 @@ const ProductItem = ({
         "ontouchstart" in window ||
         (typeof navigator !== "undefined" &&
           Number(navigator.maxTouchPoints) > 0);
-
       setIsHoverCapable(hoverQuery);
       setIsTouch(touchCapable);
     }
@@ -50,17 +90,42 @@ const ProductItem = ({
     [discountedPrice, price]
   );
 
-  /* ---------- Desktop (hover) davranışı ---------- */
+  /* ----- Varyant renklerini çek ----- */
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        setLoadingColors(true);
+        const { data: prod } = await api.get(`/products/${id}`);
+        const baseId = prod?.parentProductId || prod?._id;
+        if (!baseId) {
+          if (alive) setVariants(prod?.color ? [{ _id: id, color: prod.color }] : []);
+          return;
+        }
+        const { data: group } = await api.get(`/products?varyantsOf=${baseId}`);
+        const normalized = Array.isArray(group)
+          ? group.filter((v) => !!v.color)
+          : [];
+        if (alive) setVariants(normalized);
+      } catch {
+        if (alive) setVariants([]);
+      } finally {
+        if (alive) setLoadingColors(false);
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [id]);
+
+  /* ---------- hover davranışı ---------- */
   const handleMouseEnter = () => {
     if (!isHoverCapable) return;
     setIsHovered(true);
     if (videoRef.current && video) {
-      videoRef.current
-        .play()
-        .catch((e) => console.debug("Video play blocked (hover):", e?.message));
+      videoRef.current.play().catch(() => {});
     }
   };
-
   const handleMouseLeave = () => {
     if (!isHoverCapable) return;
     setIsHovered(false);
@@ -68,9 +133,7 @@ const ProductItem = ({
       try {
         videoRef.current.pause();
         videoRef.current.currentTime = 0;
-      } catch (e) {
-        console.debug("Video reset error:", e?.message);
-      }
+      } catch {}
     }
   };
 
@@ -78,31 +141,19 @@ const ProductItem = ({
   const handleMobilePlay = (e) => {
     e.preventDefault();
     e.stopPropagation();
-
-    // diğer kartlara "dur" sinyali gönder
     window.dispatchEvent(new CustomEvent(MOBILE_VIDEO_EVENT, { detail: id }));
-
     setMobileWantsPlay(true);
-
     requestAnimationFrame(() => {
-      if (videoRef.current) {
-        videoRef.current
-          .play()
-          .catch((err) => console.debug("Mobile play blocked:", err?.message));
-      }
+      videoRef.current?.play().catch(() => {});
     });
   };
-
-  // Başka ürün oynatılınca kendini durdur
   useEffect(() => {
     const handler = (e) => {
       if (e.detail !== id && videoRef.current) {
         try {
           videoRef.current.pause();
           videoRef.current.currentTime = 0;
-        } catch (err) {
-          console.debug("Pause/reset on external event failed:", err?.message);
-        }
+        } catch {}
         setMobileWantsPlay(false);
       }
     };
@@ -110,33 +161,27 @@ const ProductItem = ({
     return () => window.removeEventListener(MOBILE_VIDEO_EVENT, handler);
   }, [id]);
 
-  // Unmount olduğunda oynuyorsa durdur (sayfa değişimi vb.)
   useEffect(() => {
     return () => {
-      if (videoRef.current) {
-        try {
-          // eslint-disable-next-line react-hooks/exhaustive-deps
-          videoRef.current.pause();
-        } catch (e) {
-          console.debug("Pause on unmount failed:", e?.message);
-        }
-      }
+      try {
+        videoRef.current?.pause();
+      } catch {}
     };
   }, []);
 
-  /* ---------- Ses toggle (sadece desktop) ---------- */
   const toggleMute = (e) => {
     e.preventDefault();
     e.stopPropagation();
-    const v = videoRef.current;
-    if (!v) return;
-    v.muted = !v.muted;
-    setIsMuted(v.muted);
+    if (!videoRef.current) return;
+    videoRef.current.muted = !videoRef.current.muted;
+    setIsMuted(videoRef.current.muted);
   };
 
-  // Video mu gösterelim, poster mı?
   const shouldShowVideo =
     !!video && (isHoverCapable || (isTouch && mobileWantsPlay));
+
+  // gösterilecek renk noktaları
+  const colorDots = useMemo(() => (variants.length ? variants : []), [variants]);
 
   return (
     <Link
@@ -145,14 +190,14 @@ const ProductItem = ({
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
     >
-      {/* Stok etiketi */}
+      {/* stok etiketi */}
       {stock === 0 && (
         <div className="absolute top-2 left-2 bg-red-600 text-white text-xs px-2 py-1 rounded shadow z-20">
           TÜKENDİ
         </div>
       )}
 
-      {/* Ses butonu — sadece desktop’ta ve video görünürken + hover aktifken */}
+      {/* ses butonu */}
       {shouldShowVideo && isHoverCapable && isHovered && (
         <button
           onClick={toggleMute}
@@ -167,15 +212,16 @@ const ProductItem = ({
         </button>
       )}
 
-      {/* İndirim rozeti */}
+      {/* indirim rozeti */}
       {showDiscount && (
         <div className="absolute left-3 bottom-3 z-10">
-          <div className="bg-red-600 text-white w-10 h-10 rounded-full flex items-center justify-center text-xs font-bold shadow-md translate-y-[-4px]">
+          <div className="bg-red-600 text-white w-10 h-10 rounded-full flex items-center justify-center text-xs font-bold shadow-md -translate-y-1">
             %{discountRate}
           </div>
         </div>
       )}
 
+      {/* MEDYA ALANI */}
       <div className="relative h-64 overflow-hidden bg-light1">
         {shouldShowVideo ? (
           <video
@@ -189,9 +235,7 @@ const ProductItem = ({
             onLoadedMetadata={() => {
               try {
                 if (videoRef.current) videoRef.current.currentTime = 0;
-              } catch (e) {
-                console.debug("onLoadedMetadata reset failed:", e?.message);
-              }
+              } catch {}
             }}
           />
         ) : (
@@ -207,7 +251,29 @@ const ProductItem = ({
           />
         )}
 
-        {/* Mobilde “Oynat” butonu (video varsa & henüz oynatılmıyorsa) */}
+        {/* ► DİKEY RENK NOKTALARI — SAĞ ALT, MEDYA İÇİ */}
+        {loadingColors ? (
+          <div className="absolute bottom-2 right-2 z-10 pointer-events-none">
+            <span className="block w-6 h-12 bg-white/50 rounded-md shadow-sm animate-pulse" />
+          </div>
+        ) : colorDots.length > 0 ? (
+          <div className="absolute bottom-2 right-2 z-10 pointer-events-none flex flex-col gap-1">
+            {colorDots.map((v) => (
+              <span
+                key={v._id}
+                className="inline-block w-2.5 h-2.5 rounded-full border shadow-sm"
+                style={{
+                  background: toCssColor(v.color),
+                  borderColor: "rgba(255,255,255,.95)",
+                }}
+                title={v.color}
+                aria-label={v.color}
+              />
+            ))}
+          </div>
+        ) : null}
+
+        {/* Mobil “Oynat” */}
         {isTouch && !!video && !mobileWantsPlay && (
           <button
             onClick={handleMobilePlay}
@@ -221,7 +287,7 @@ const ProductItem = ({
         )}
       </div>
 
-      {/* Metin / Fiyat */}
+      {/* METİN / FİYAT */}
       <div className="p-4 text-center">
         <h3 className="text-sm font-medium text-dark1 mb-2">{name}</h3>
 
@@ -254,7 +320,6 @@ ProductItem.propTypes = {
   discountRate: PropTypes.number,
   stock: PropTypes.number,
 };
-
 ProductItem.defaultProps = {
   video: null,
   poster: null,
