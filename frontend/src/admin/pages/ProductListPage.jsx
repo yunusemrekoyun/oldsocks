@@ -1,6 +1,14 @@
 // src/pages/admin/ProductListPage.jsx
 import React, { useState, useEffect, useMemo, useRef } from "react";
-import { FaTrashAlt, FaPen, FaPalette, FaPlus, FaSearch } from "react-icons/fa";
+import {
+  FaTrashAlt,
+  FaPen,
+  FaPalette,
+  FaPlus,
+  FaSearch,
+  FaTh,
+  FaList,
+} from "react-icons/fa";
 import api from "../../../api";
 import ToastAlert from "../../components/ui/ToastAlert";
 import ProductFormModal from "../modals/ProductFormModal";
@@ -8,7 +16,7 @@ import Window from "../../components/ui/Window";
 import EditProductForm from "../forms/EditProductForm";
 import AddNewColorForm from "../forms/AddNewColorForm";
 
-/* ─── Skeleton ─── */
+/* ─── Skeletons ─── */
 const CardSkeleton = () => (
   <div className="animate-pulse rounded-xl border border-gray-100 overflow-hidden">
     <div className="h-48 bg-gray-200" />
@@ -17,6 +25,13 @@ const CardSkeleton = () => (
       <div className="h-3 bg-gray-200 rounded w-1/2" />
       <div className="h-8 bg-gray-200 rounded w-24 mt-3" />
     </div>
+  </div>
+);
+
+const RowSkeleton = () => (
+  <div className="animate-pulse p-3 sm:p-4 border-b flex flex-col gap-2">
+    <div className="h-4 bg-gray-200 rounded w-2/3" />
+    <div className="h-3 bg-gray-200 rounded w-1/3" />
   </div>
 );
 
@@ -37,6 +52,8 @@ const Badge = ({ children, color = "gray" }) => {
   );
 };
 
+const VIEW_KEY = "adminProductsView"; // 'grid' | 'list'
+
 export default function ProductListPage() {
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
@@ -54,6 +71,9 @@ export default function ProductListPage() {
   const [debouncedQ, setDebouncedQ] = useState("");
   const [catFilter, setCatFilter] = useState("all");
   const [sortBy, setSortBy] = useState("newest"); // newest | priceAsc | priceDesc | stockAsc | stockDesc
+  const [view, setView] = useState(
+    localStorage.getItem(VIEW_KEY) === "list" ? "list" : "grid"
+  );
   const searchRef = useRef(null);
 
   /* ---------------- Fetch ---------------- */
@@ -82,6 +102,11 @@ export default function ProductListPage() {
     const t = setTimeout(() => setDebouncedQ(q.trim().toLowerCase()), 250);
     return () => clearTimeout(t);
   }, [q]);
+
+  // view persist
+  useEffect(() => {
+    localStorage.setItem(VIEW_KEY, view);
+  }, [view]);
 
   /* ---------------- CRUD Handlers ---------------- */
   const handleDelete = async () => {
@@ -158,6 +183,29 @@ export default function ProductListPage() {
   const imgOrPlaceholder = (src) =>
     src || "https://via.placeholder.com/640x480?text=Product";
 
+  const renderPrice = (p) => {
+    const discountPct = Number(p.discount || 0);
+    const hasDiscount = discountPct > 0;
+    const original = Number(p.originalPrice || 0);
+    const discounted =
+      p.price != null
+        ? Number(p.price)
+        : Math.max(0, Math.round(original * (1 - discountPct / 100)));
+
+    return hasDiscount ? (
+      <div className="flex items-baseline gap-2">
+        <span className="text-xs line-through text-gray-400">
+          {fmt(original)}
+        </span>
+        <span className="text-blue-700 font-semibold">{fmt(discounted)}</span>
+      </div>
+    ) : (
+      <span className="text-blue-700 font-semibold">
+        {fmt(original || p.price)}
+      </span>
+    );
+  };
+
   /* ---------------- Render ---------------- */
   return (
     <div className="max-w-7xl mx-auto p-4 sm:p-6 space-y-6 sm:space-y-8">
@@ -219,6 +267,32 @@ export default function ProductListPage() {
             <option value="stockAsc">Stok (Düşük → Yüksek)</option>
           </select>
 
+          {/* görünüm seçici */}
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setView("grid")}
+              className={`inline-flex items-center justify-center w-10 h-10 rounded-lg border transition ${
+                view === "grid"
+                  ? "bg-gray-900 text-white border-gray-900"
+                  : "bg-white text-gray-700 hover:bg-gray-50"
+              }`}
+              title="Grid görünüm"
+            >
+              <FaTh />
+            </button>
+            <button
+              onClick={() => setView("list")}
+              className={`inline-flex items-center justify-center w-10 h-10 rounded-lg border transition ${
+                view === "list"
+                  ? "bg-gray-900 text-white border-gray-900"
+                  : "bg-white text-gray-700 hover:bg-gray-50"
+              }`}
+              title="Liste görünüm"
+            >
+              <FaList />
+            </button>
+          </div>
+
           <button
             onClick={openNewForm}
             className="w-full sm:w-auto inline-flex justify-center items-center gap-2 px-4 py-2 text-white bg-blue-600 hover:bg-blue-700 rounded-lg text-sm shadow transition-all"
@@ -230,13 +304,21 @@ export default function ProductListPage() {
 
       {/* Yükleniyor / Liste */}
       {loading ? (
-        <div className="grid gap-4 sm:gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
-          {Array.from({ length: 10 }).map((_, i) => (
-            <CardSkeleton key={i} />
-          ))}
-        </div>
+        view === "grid" ? (
+          <div className="grid gap-4 sm:gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
+            {Array.from({ length: 10 }).map((_, i) => (
+              <CardSkeleton key={i} />
+            ))}
+          </div>
+        ) : (
+          <div className="rounded-xl border overflow-hidden bg-white">
+            {Array.from({ length: 8 }).map((_, i) => (
+              <RowSkeleton key={i} />
+            ))}
+          </div>
+        )
       ) : filtered.length === 0 ? (
-        <div className="rounded-xl border border-dashed p-10 sm:p-12 text-center">
+        <div className="rounded-xl border border-dashed p-10 sm:p-12 text-center bg-white">
           <p className="text-lg font-medium mb-2">Kayıt bulunamadı</p>
           <p className="text-gray-600 mb-4">
             Filtreleri temizleyin veya yeni bir ürün ekleyin.
@@ -248,25 +330,16 @@ export default function ProductListPage() {
             Ürün Ekle
           </button>
         </div>
-      ) : (
+      ) : view === "grid" ? (
+        /* -------- GRID GÖRÜNÜM -------- */
         <div className="grid gap-4 sm:gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
           {filtered.map((p) => {
             const stock = (p.sizes || []).reduce(
               (t, s) => t + (s.stock || 0),
               0
             );
-
-            // Yeni mantık: indirim görünümü discount > 0 ise
             const discountPct = Number(p.discount || 0);
             const hasDiscount = discountPct > 0;
-
-            // Gösterimde indirimli fiyatı p.price'tan al (backend öyle saklıyor),
-            // fallback: original * (1 - discount/100)
-            const original = Number(p.originalPrice || 0);
-            const discounted =
-              p.price != null
-                ? Number(p.price)
-                : Math.max(0, Math.round(original * (1 - discountPct / 100)));
 
             return (
               <div
@@ -316,20 +389,7 @@ export default function ProductListPage() {
 
                   {/* Fiyat bölümü */}
                   <div className="mt-2 flex items-baseline gap-2">
-                    {hasDiscount ? (
-                      <>
-                        <p className="text-xs line-through text-gray-400">
-                          {fmt(original)}
-                        </p>
-                        <p className="text-blue-700 font-semibold">
-                          {fmt(discounted)}
-                        </p>
-                      </>
-                    ) : (
-                      <p className="text-blue-700 font-semibold">
-                        {fmt(original || p.price)}
-                      </p>
-                    )}
+                    {renderPrice(p)}
                     {p.color && (
                       <span className="ml-auto text-xs px-2 py-0.5 bg-gray-100 rounded">
                         {p.color}
@@ -362,6 +422,113 @@ export default function ProductListPage() {
               </div>
             );
           })}
+        </div>
+      ) : (
+        /* -------- LİSTE GÖRÜNÜM (resimsiz, mobile-first) -------- */
+        <div className="rounded-xl border overflow-hidden bg-white">
+          {/* masaüstü başlık satırı */}
+          <div className="hidden md:grid grid-cols-12 gap-4 px-4 py-3 bg-gray-50 border-b text-xs font-semibold text-gray-600">
+            <div className="col-span-4">Ürün</div>
+            <div className="col-span-2">Kategori</div>
+            <div className="col-span-2">Fiyat</div>
+            <div className="col-span-2">Stok</div>
+            <div className="col-span-2 text-right">Aksiyon</div>
+          </div>
+
+          {/* satırlar */}
+          <div className="divide-y">
+            {filtered.map((p) => {
+              const stock = (p.sizes || []).reduce(
+                (t, s) => t + (s.stock || 0),
+                0
+              );
+              const discountPct = Number(p.discount || 0);
+              const hasDiscount = discountPct > 0;
+
+              return (
+                <div
+                  key={p._id}
+                  className="p-3 sm:p-4 md:grid md:grid-cols-12 md:items-center gap-4"
+                >
+                  {/* Ürün adı + rozetler (md: col-span-4) */}
+                  <div className="flex flex-col gap-1 md:col-span-4">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="font-medium text-gray-900">
+                        {p.name}
+                      </span>
+                      <div className="flex items-center gap-2">
+                        {hasDiscount && (
+                          <Badge color="amber">{discountPct}% indirim</Badge>
+                        )}
+                        <Badge color={stock > 0 ? "green" : "red"}>
+                          Stok: {stock}
+                        </Badge>
+                      </div>
+                    </div>
+
+                    {/* mobilde ek bilgiler */}
+                    <div className="md:hidden text-xs text-gray-500">
+                      <div className="flex justify-between">
+                        <span>Kategori</span>
+                        <span className="text-gray-700">
+                          {p.category?.name || "-"}
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Fiyat</span>
+                        <span className="text-gray-700">{renderPrice(p)}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Kategori (md: col-span-2) */}
+                  <div className="hidden md:block md:col-span-2 text-sm text-gray-700 truncate">
+                    {p.category?.name || "-"}
+                  </div>
+
+                  {/* Fiyat (md: col-span-2) */}
+                  <div className="hidden md:block md:col-span-2">
+                    {renderPrice(p)}
+                  </div>
+
+                  {/* Stok (md: col-span-2) */}
+                  <div className="hidden md:flex md:col-span-2 items-center">
+                    <Badge color={stock > 0 ? "green" : "red"}> {stock} </Badge>
+                  </div>
+
+                  {/* Aksiyonlar (md: col-span-2) */}
+                  <div className="mt-3 md:mt-0 md:col-span-2 flex items-center justify-end gap-2">
+                    {!p.parentProductId && (
+                      <button
+                        onClick={() => openNewColorForm(p)}
+                        className="inline-flex items-center gap-2 px-3 py-1 rounded border hover:bg-gray-50 text-sm"
+                        title="Yeni Renk Ekle"
+                      >
+                        <FaPalette />
+                        <span className="hidden xl:inline">Yeni Renk</span>
+                      </button>
+                    )}
+                    <button
+                      onClick={() => openEditForm(p)}
+                      className="inline-flex items-center gap-2 px-3 py-1 rounded border hover:bg-gray-50 text-sm"
+                      title="Düzenle"
+                    >
+                      <FaPen />
+                      <span className="hidden xl:inline">Düzenle</span>
+                    </button>
+                    <button
+                      onClick={() => setDeleteId(p._id)}
+                      className="inline-flex items-center gap-2 px-3 py-1 rounded border border-red-200 text-red-600 hover:bg-red-50 text-sm"
+                      title="Sil"
+                    >
+                      <FaTrashAlt />
+                      <span className="hidden xl:inline">Sil</span>
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </div>
       )}
 

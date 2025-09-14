@@ -27,8 +27,11 @@ export default function EditProductForm({ product, onClose, onSaved }) {
 
   const [videoPreview, setVideoPreview] = useState(null);
   const [imagePreviews, setImagePreviews] = useState([]);
+
   const [newVideo, setNewVideo] = useState(null);
+  const [newVideoUrl, setNewVideoUrl] = useState(null);
   const [newImages, setNewImages] = useState([]);
+  const [newImageUrls, setNewImageUrls] = useState([]);
 
   const [hasChanged, setHasChanged] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -36,6 +39,7 @@ export default function EditProductForm({ product, onClose, onSaved }) {
 
   const { addTask, updateTask, removeTask } = useUploadQueue();
 
+  /* ---------------- Fetch + form doldurma ---------------- */
   useEffect(() => {
     const fetchCats = api.get("/categories");
     const fetchProd = api.get(`/products/${product._id}`);
@@ -62,6 +66,25 @@ export default function EditProductForm({ product, onClose, onSaved }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  /* ---------------- Yeni seçilen medya için URL yönetimi ---------------- */
+  useEffect(() => {
+    // images
+    const urls = newImages.map((f) => URL.createObjectURL(f));
+    setNewImageUrls(urls);
+    return () => urls.forEach((u) => URL.revokeObjectURL(u));
+  }, [newImages]);
+
+  useEffect(() => {
+    if (!newVideo) {
+      setNewVideoUrl(null);
+      return;
+    }
+    const url = URL.createObjectURL(newVideo);
+    setNewVideoUrl(url);
+    return () => URL.revokeObjectURL(url);
+  }, [newVideo]);
+
+  /* ---------------- Alt kategori listesi ---------------- */
   const subOptions = useMemo(() => {
     const root = cats.find((c) => c._id === mainCat);
     if (root?.children?.length) return root.children;
@@ -86,6 +109,7 @@ export default function EditProductForm({ product, onClose, onSaved }) {
     return Number(discounted.toFixed(2));
   }, [original, discountPct]);
 
+  /* ---------------- Handlers ---------------- */
   const handleInput = (e) => {
     const { name, value } = e.target;
     setFormData((p) => ({ ...p, [name]: value }));
@@ -187,14 +211,17 @@ export default function EditProductForm({ product, onClose, onSaved }) {
       maximumFractionDigits: 2,
     })}`;
 
+  /* ---------------- UI ---------------- */
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      {/* iki kolon: mobile 1, xl 2 */}
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
         {/* SOL: FORM */}
-        <div className="space-y-4 bg-white p-6 rounded-lg shadow-md">
-          <div className="grid md:grid-cols-2 gap-5">
+        <div className="space-y-4 bg-white p-4 sm:p-6 rounded-lg shadow-md">
+          {/* üst alanlar */}
+          <div className="grid sm:grid-cols-2 gap-4">
             {/* Ürün Adı */}
-            <div className="space-y-1">
+            <div className="space-y-1 min-w-0">
               <label className="text-sm font-medium">Ürün Adı</label>
               <input
                 name="name"
@@ -205,49 +232,8 @@ export default function EditProductForm({ product, onClose, onSaved }) {
               />
             </div>
 
-            {/* Fiyatlar (Yeni Mantık) */}
-            <div className="md:col-span-2 grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <div className="space-y-1">
-                <label className="text-sm font-medium">Orijinal Fiyat *</label>
-                <input
-                  type="number"
-                  name="originalPrice"
-                  min="0"
-                  step="0.01"
-                  value={formData.originalPrice}
-                  onChange={handleInput}
-                  className="w-full px-4 py-2 border rounded-lg"
-                  placeholder="Örn. 799.90"
-                />
-              </div>
-              <div className="space-y-1">
-                <label className="text-sm font-medium">İndirim (%)</label>
-                <input
-                  type="number"
-                  name="discount"
-                  min="0"
-                  max="100"
-                  step="1"
-                  value={formData.discount}
-                  onChange={handleInput}
-                  className="w-full px-4 py-2 border rounded-lg"
-                  placeholder="Örn. 25"
-                />
-              </div>
-              <div className="space-y-1">
-                <label className="text-sm font-medium">
-                  Hesaplanan Fiyat (otomatik)
-                </label>
-                <input
-                  readOnly
-                  value={hasDiscount ? computedPrice : original}
-                  className="w-full px-4 py-2 border rounded-lg bg-gray-50 text-gray-700"
-                />
-              </div>
-            </div>
-
             {/* Renk */}
-            <div className="space-y-1">
+            <div className="space-y-1 min-w-0">
               <label className="text-sm font-medium">Renk</label>
               <input
                 name="color"
@@ -258,8 +244,52 @@ export default function EditProductForm({ product, onClose, onSaved }) {
               />
             </div>
 
+            {/* Fiyatlar */}
+            <div className="sm:col-span-2 grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="space-y-1 min-w-0">
+                <label className="text-sm font-medium">Orijinal Fiyat *</label>
+                <input
+                  type="number"
+                  inputMode="decimal"
+                  name="originalPrice"
+                  min="0"
+                  step="0.01"
+                  value={formData.originalPrice}
+                  onChange={handleInput}
+                  className="w-full px-4 py-2 border rounded-lg"
+                  placeholder="Örn. 799.90"
+                />
+              </div>
+              <div className="space-y-1 min-w-0">
+                <label className="text-sm font-medium">İndirim (%)</label>
+                <input
+                  type="number"
+                  inputMode="numeric"
+                  name="discount"
+                  min="0"
+                  max="100"
+                  step="1"
+                  value={formData.discount}
+                  onChange={handleInput}
+                  className="w-full px-4 py-2 border rounded-lg"
+                  placeholder="Örn. 25"
+                />
+              </div>
+              <div className="space-y-1 min-w-0">
+                <label className="text-sm font-medium">
+                  Hesaplanan Fiyat (otomatik)
+                </label>
+                <input
+                  readOnly
+                  value={hasDiscount ? computedPrice : original}
+                  className="w-full px-4 py-2 border rounded-lg bg-gray-50 text-gray-700"
+                  aria-readonly="true"
+                />
+              </div>
+            </div>
+
             {/* Kategori */}
-            <div className="space-y-1">
+            <div className="space-y-1 min-w-0">
               <label className="text-sm font-medium">Kategori</label>
               <select
                 value={mainCat}
@@ -294,52 +324,67 @@ export default function EditProductForm({ product, onClose, onSaved }) {
           </div>
 
           {/* Açıklama */}
-          <textarea
-            name="description"
-            value={formData.description}
-            onChange={handleInput}
-            rows={4}
-            className="w-full px-4 py-3 border rounded-lg"
-            placeholder="Açıklama"
-          />
+          <div className="min-w-0">
+            <textarea
+              name="description"
+              value={formData.description}
+              onChange={handleInput}
+              rows={4}
+              className="w-full px-4 py-3 border rounded-lg"
+              placeholder="Açıklama"
+            />
+          </div>
 
-          {/* Beden & Stok */}
+          {/* Beden & Stok — mobile-first */}
           <div className="space-y-3">
-            <div className="flex justify-between items-center">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
               <label className="font-medium">Beden & Stok Satırları</label>
               <button
                 type="button"
-                className="text-blue-600 text-sm"
+                className="text-blue-600 text-sm self-start sm:self-auto"
                 onClick={addSizeRow}
               >
                 + Satır Ekle
               </button>
             </div>
-            {formData.sizes.map(({ id, size, stock }, i) => (
-              <div key={id} className="flex items-center gap-3">
-                <input
-                  value={size}
-                  placeholder="Beden"
-                  onChange={(e) => handleSizeChange(i, "size", e.target.value)}
-                  className="flex-1 px-3 py-2 border rounded-lg"
-                />
-                <input
-                  value={stock}
-                  type="number"
-                  placeholder="Stok"
-                  onChange={(e) => handleSizeChange(i, "stock", e.target.value)}
-                  className="w-32 px-3 py-2 border rounded-lg"
-                />
-                <button
-                  type="button"
-                  onClick={() => removeSizeRow(id)}
-                  className="text-red-500"
-                  title="Satırı sil"
+
+            <div className="space-y-2">
+              {formData.sizes.map(({ id, size, stock }, i) => (
+                <div
+                  key={id}
+                  className="grid grid-cols-4 gap-2 sm:gap-3 items-center"
                 >
-                  ✕
-                </button>
-              </div>
-            ))}
+                  {/* mobil: 2 kolon — Beden(2) Stok(1) Sil(1) */}
+                  <input
+                    value={size}
+                    placeholder="Beden"
+                    onChange={(e) =>
+                      handleSizeChange(i, "size", e.target.value)
+                    }
+                    className="col-span-2 px-3 py-2 border rounded-lg"
+                  />
+                  <input
+                    value={stock}
+                    type="number"
+                    inputMode="numeric"
+                    placeholder="Stok"
+                    onChange={(e) =>
+                      handleSizeChange(i, "stock", e.target.value)
+                    }
+                    className="col-span-1 px-3 py-2 border rounded-lg"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => removeSizeRow(id)}
+                    className="col-span-1 text-red-500 justify-self-end px-3 py-2 rounded hover:bg-red-50"
+                    title="Satırı sil"
+                    aria-label="Satırı sil"
+                  >
+                    ✕
+                  </button>
+                </div>
+              ))}
+            </div>
           </div>
 
           {/* Yeni Medya */}
@@ -352,9 +397,10 @@ export default function EditProductForm({ product, onClose, onSaved }) {
                 type="file"
                 accept="video/*"
                 onChange={(e) => {
-                  setNewVideo(e.target.files[0]);
+                  setNewVideo(e.target.files[0] || null);
                   setHasChanged(true);
                 }}
+                className="block w-full text-sm"
               />
             </div>
             <div>
@@ -366,26 +412,27 @@ export default function EditProductForm({ product, onClose, onSaved }) {
                 multiple
                 accept="image/*"
                 onChange={(e) => {
-                  setNewImages(Array.from(e.target.files));
+                  setNewImages(Array.from(e.target.files || []));
                   setHasChanged(true);
                 }}
+                className="block w-full text-sm"
               />
             </div>
           </div>
 
           {/* Butonlar */}
-          <div className="flex justify-end gap-4">
+          <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 sm:justify-end pt-2">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 border rounded-lg hover:bg-gray-100"
+              className="px-4 py-2 border rounded-lg hover:bg-gray-100 w-full sm:w-auto"
             >
               Vazgeç
             </button>
             <button
               type="submit"
               disabled={!hasChanged || submitting || !original}
-              className={`px-4 py-2 rounded-lg text-white ${
+              className={`px-4 py-2 rounded-lg text-white w-full sm:w-auto ${
                 !hasChanged || submitting || !original
                   ? "bg-gray-300 cursor-not-allowed"
                   : "bg-blue-600 hover:bg-blue-700"
@@ -400,37 +447,40 @@ export default function EditProductForm({ product, onClose, onSaved }) {
 
         {/* SAĞ: ÖNİZLEME */}
         <div className="space-y-4">
-          {(imagePreviews.length > 0 || newImages.length > 0) && (
-            <section>
-              <label className="block mb-1 font-medium">Görsel Önizleme</label>
-              <div className="grid grid-cols-3 gap-3">
-                {(newImages.length
-                  ? newImages.map((f) => URL.createObjectURL(f))
-                  : imagePreviews
-                ).map((src, i) => (
-                  <img
-                    key={i}
-                    src={src}
-                    alt=""
-                    className="w-full aspect-square object-cover rounded-lg"
-                  />
-                ))}
+          {/* Görsel Önizleme */}
+          {(imagePreviews.length > 0 || newImageUrls.length > 0) && (
+            <section className="bg-white p-4 sm:p-6 rounded-lg shadow-md">
+              <label className="block mb-2 font-medium">Görsel Önizleme</label>
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+                {(newImageUrls.length ? newImageUrls : imagePreviews).map(
+                  (src, i) => (
+                    <img
+                      key={i}
+                      src={src}
+                      alt=""
+                      className="w-full aspect-square object-cover rounded-lg"
+                      loading="lazy"
+                    />
+                  )
+                )}
               </div>
             </section>
           )}
 
-          {(videoPreview || newVideo) && (
-            <section>
-              <label className="block mb-1 font-medium">Video Önizleme</label>
+          {/* Video Önizleme */}
+          {(videoPreview || newVideoUrl) && (
+            <section className="bg-white p-4 sm:p-6 rounded-lg shadow-md">
+              <label className="block mb-2 font-medium">Video Önizleme</label>
               <video
-                src={newVideo ? URL.createObjectURL(newVideo) : videoPreview}
+                src={newVideoUrl || videoPreview}
                 controls
                 className="w-full rounded-lg shadow h-56 object-cover"
               />
             </section>
           )}
 
-          <div className="rounded-xl border overflow-hidden">
+          {/* Kart Önizleme */}
+          <div className="bg-white rounded-xl border overflow-hidden">
             <div className="p-4">
               <p className="font-medium line-clamp-1">
                 {formData.name || "Ürün adı"}
