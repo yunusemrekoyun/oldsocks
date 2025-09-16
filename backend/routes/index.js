@@ -44,6 +44,9 @@ router.use("/payment", require("./payment"));
 // profil resmi
 router.use("/profile-pictures", require("./userProfilePictures"));
 
+// hero videolar (yeni) 👇
+router.use("/hero-videos", require("./heroVideo"));
+
 // Instagram postları
 router.use("/instagram-posts", require("./instagramPostRoutes"));
 

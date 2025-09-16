@@ -1,4 +1,3 @@
-// backend/middleware/upload.js
 const multer = require("multer");
 const { CloudinaryStorage } = require("multer-storage-cloudinary");
 const cloudinary = require("../config/cloudinary");
@@ -74,6 +73,18 @@ const profilePictureStorage = new CloudinaryStorage({
 });
 const uploadProfilePicture = multer({ storage: profilePictureStorage });
 
+// — Hero video upload (yeni) —
+const heroVideoStorage = new CloudinaryStorage({
+  cloudinary,
+  params: {
+    folder: "hero-videos",
+    resource_type: "video",
+    format: async () => "mp4",
+    public_id: () => `hero_${Date.now()}`,
+  },
+});
+const uploadHeroVideo = multer({ storage: heroVideoStorage });
+
 // Hepsini export ediyoruz
 module.exports = {
   uploadProductFiles,
@@ -82,4 +93,5 @@ module.exports = {
   uploadMiniCampaignImage,
   uploadBlogCover,
   uploadProfilePicture,
+  uploadHeroVideo,
 };
