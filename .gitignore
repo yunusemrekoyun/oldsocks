@@ -1,6 +1,6 @@
 # === Node Modules (Hem frontend hem backend) ===
 **/node_modules
-
+**/prod
 # === Build ve Output ===
 **/dist
 **/build
