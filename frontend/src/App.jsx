@@ -42,7 +42,7 @@ import OrdersPage from "./admin/pages/OrdersPage";
 import ProductListPage from "./admin/pages/ProductListPage";
 import AdminUsersPage from "./admin/pages/UsersPage";
 import DiscountsPage from "./admin/pages/DiscountsPage";
-
+import HeroVideoPage from "./admin/pages/HeroVideoPage";
 export default function App() {
   return (
     <BrowserRouter>
@@ -113,6 +113,7 @@ export default function App() {
             <Route path="comments" element={<CommentsPage />} />
             <Route path="replies" element={<CommentRepliesPage />} />
             <Route path="instagram-posts" element={<InstagramPostsPage />} />
+            <Route path="hero-videos" element={<HeroVideoPage />} />
 
             {/* Admin için 404 */}
 
