@@ -12,7 +12,6 @@ const OrderItemSchema = new mongoose.Schema({
 
 const OrderSchema = new mongoose.Schema(
   {
-    // ★ 10 haneli, benzersiz bir sipariş numarası:
     orderNumber: { type: String, required: true, unique: true },
 
     user: { type: mongoose.Types.ObjectId, ref: "User", required: true },
@@ -28,11 +27,8 @@ const OrderSchema = new mongoose.Schema(
       postalCode: { type: String },
     },
 
-    // paymentId artık “pending” aşamasında boş olabilir
-    paymentId: { type: String },
-
-    conversationId: { type: String, required: true, unique: true },
-
+    paymentId: { type: String }, // PayTR'de "payment_id" zorunlu değil, opsiyonel
+    conversationId: { type: String, required: true, unique: true }, // == merchant_oid
     status: {
       type: String,
       enum: ["pending", "paid", "shipped", "completed", "cancelled"],
@@ -40,9 +36,15 @@ const OrderSchema = new mongoose.Schema(
     },
     stockUpdated: { type: Boolean, default: false },
     adminSeenAt: { type: Date, default: null },
+
+    // ── YENİ: PayTR için hazırlanan pre-init veri (get-token için)
+    paytrInit: { type: Object, default: null },
+
+    // ── eski Iyzico alanı bırakılabilir (read-only)
     iyzInit: { type: Object, default: null },
   },
   { timestamps: true }
 );
+
 OrderSchema.index({ status: 1, adminSeenAt: 1, createdAt: -1 });
 module.exports = mongoose.model("Order", OrderSchema);

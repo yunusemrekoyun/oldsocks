@@ -2,7 +2,7 @@ import React, { useMemo } from "react";
 import { FaWhatsapp } from "react-icons/fa";
 
 export default function WhatsAppButton() {
-  const phone = import.meta.env.VITE_WHATSAPP_NUMBER || "905551112233";
+  const phone = import.meta.env.VITE_WHATSAPP_NUMBER || "+905414282989";
   const pre = import.meta.env.VITE_WHATSAPP_PRETEXT || "Merhaba!";
   const text = encodeURIComponent(pre);
 

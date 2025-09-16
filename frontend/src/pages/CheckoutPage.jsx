@@ -164,7 +164,7 @@ export default function CheckoutPage() {
             loading ? "bg-gray-400" : "bg-dark1 hover:bg-dark2"
           }`}
         >
-          {loading ? "Yönlendiriliyor…" : "Iyzico ile Öde"}
+          {loading ? "Yönlendiriliyor…" : "Öde"}
         </button>
       </div>
 

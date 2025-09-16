@@ -63,9 +63,11 @@ const Footer = () => (
       {/* İletişim */}
       <div>
         <h4 className="text-white font-semibold mb-3">İletişim</h4>
-        <p className="text-sm">+90 262 279 385</p>
+        <p className="text-sm">+90 541 428 29 89</p>
         <p className="text-sm">destek@oldsocks.com</p>
-        <p className="text-sm">6512 Oakdale Greenway, İstanbul</p>
+        <p className="text-sm">
+          Alipaşa mahallesi üçbey sokak no7/A Kütahya Merkez
+        </p>
       </div>
     </div>
 

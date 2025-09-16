@@ -1,40 +1,106 @@
-import React, { useEffect, useState } from "react";
+// src/pages/PaymentResultPage.jsx
+import React, { useEffect, useState, useRef } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import { useCart } from "../context/useCart";
 import api from "../../api";
 
 export default function PaymentResultPage() {
   const [searchParams] = useSearchParams();
-  const status = searchParams.get("status"); // "success" veya "failure"
-  const paymentId = searchParams.get("paymentId");
-  const conversationId =
-    searchParams.get("conversationId") || searchParams.get("conversation_id");
   const navigate = useNavigate();
-  const { clearCart } = useCart(); // sepete erişim
+  const { clearCart } = useCart();
+
+  // PayTR -> merchant_oid | Geriye dönük: conversationId / conversation_id
+  const status = searchParams.get("status"); // "success" veya "failure"
+  const merchantOid = searchParams.get("merchant_oid");
+  const conversationId =
+    merchantOid ||
+    searchParams.get("conversationId") ||
+    searchParams.get("conversation_id");
+
+  // PayTR genelde paymentId göndermez; varsa gösteririz (opsiyonel)
+  const paymentId = searchParams.get("paymentId");
 
   const [loaded, setLoaded] = useState(false);
   const [message, setMessage] = useState("");
   const [orderNumber, setOrderNumber] = useState("");
 
+  const unmounted = useRef(false);
   useEffect(() => {
-    if (status === "success" && paymentId && conversationId) {
-      api
-        .post("/orders/confirm", { conversationId, paymentId })
-        .then((res) => {
-          setOrderNumber(res.data.orderNumber);
-          setMessage("Siparişiniz başarıyla kaydedildi!");
-          clearCart(); // 🗑︎ yalnızca gerçek başarıyı görür görmez temizle
-        })
-        .catch(() => {
-          setMessage("Sipariş kaydı sırasında bir hata oluştu.");
-        });
-    } else if (status === "failure") {
-      const rawMsg = searchParams.get("message") || "";
-      setMessage(decodeURIComponent(rawMsg));
-      // sepet zaten temizlenmediği için burada hiçbir şey yapmıyoruz
+    return () => {
+      unmounted.current = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    const decode = (s) => {
+      try {
+        return decodeURIComponent(s || "");
+      } catch {
+        return s || "";
+      }
+    };
+
+    // Başarısız sonuç — sadece mesaj göster
+    if (status === "failure") {
+      const rawMsg = searchParams.get("message") || "Ödeme başarısız.";
+      setMessage(decode(rawMsg));
+      setLoaded(true);
+      return;
     }
+
+    // Başarılı dönüş — PayTR callback server’a düşmüş mü kontrol et
+    if (status === "success" && conversationId) {
+      (async () => {
+        // 1) MOCK ise önce backend'e "tamamla" de (paid'e çek)
+        if (paymentId && paymentId.startsWith("mock_")) {
+          try {
+            await api.post("/payment/mock-complete", { conversationId });
+          } catch (e) {
+            // Önemli değil; aşağıdaki confirm retry mekanizması zaten devrede
+            console.warn("mock-complete çağrısı başarısız (önemsiz):", e);
+          }
+        }
+
+        // 2) Ardından mevcut confirm retry akışı
+        let attempts = 0;
+        const maxAttempts = 7; // ~10-11 sn
+        const delayMs = 1500;
+
+        const tryConfirm = async () => {
+          try {
+            const res = await api.post("/orders/confirm", { conversationId });
+            if (unmounted.current) return;
+            setOrderNumber(res.data.orderNumber);
+            setMessage("Siparişiniz başarıyla kaydedildi!");
+            clearCart(); // yalnızca onay gerçekten alındığında temizle
+            setLoaded(true);
+          } catch (err) {
+            const code = err?.response?.status;
+
+            // 409 => callback henüz gelmedi; kısa bekleyip tekrar dene
+            if (code === 409 && attempts < maxAttempts) {
+              attempts += 1;
+              setTimeout(tryConfirm, delayMs);
+              return;
+            }
+
+            // Diğer hatalar
+            if (unmounted.current) return;
+            setMessage("Sipariş kaydı sırasında bir hata oluştu.");
+            setLoaded(true);
+          }
+        };
+
+        tryConfirm();
+      })();
+
+      return;
+    }
+
+    // Beklenmedik durum
+    setMessage("Geçersiz geri dönüş parametreleri.");
     setLoaded(true);
-  }, [status, paymentId, conversationId, searchParams, clearCart]);
+  }, [status, conversationId, clearCart, searchParams, paymentId]);
 
   if (!loaded) {
     return <div className="text-center p-10">Sonuç alınıyor…</div>;
@@ -47,7 +113,7 @@ export default function PaymentResultPage() {
           <h2 className="text-3xl font-bold text-green-600 mb-4">
             Ödeme Başarılı 🎉
           </h2>
-          <p className="mb-2">Ödeme Numaranız: {paymentId}</p>
+          {paymentId && <p className="mb-2">Ödeme Numaranız: {paymentId}</p>}
           {orderNumber && (
             <p className="mb-4">
               Sipariş Numaranız: <strong>{orderNumber}</strong>

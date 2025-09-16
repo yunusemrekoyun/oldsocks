@@ -97,36 +97,18 @@ exports.getOrderById = async (req, res) => {
 
 // — Ödeme sonrası: status=paid, paymentId varsa güncelle
 exports.confirmOrderPayment = async (req, res) => {
-  const { conversationId, paymentId } = req.body;
-  if (!conversationId || !paymentId) {
+  const { conversationId } = req.body;
+  if (!conversationId)
     return res.status(400).json({ message: "Eksik parametre." });
-  }
 
-  // Bu query sadece İLK kez düşer (stockUpdated:false koşulu nedeniyle)
-  const order = await Order.findOneAndUpdate(
-    { conversationId, stockUpdated: false },
-    { paymentId, status: "paid", stockUpdated: true, adminSeenAt: null },
-    { new: true }
+  const order = await Order.findOne({ conversationId }).select(
+    "orderNumber status"
   );
+  if (!order) return res.status(404).json({ message: "Sipariş bulunamadı." });
 
-  if (order) {
-    await applyStockChanges(order);
-
-    // ✅ BURADA admin’e mail gönder: yalnızca ilk kez paid olduğunda tetiklenir
-    sendOrderPlacedMail(order).catch((err) => {
-      console.error("Sipariş maili gönderilemedi:", err);
-      // not: mail hatası sipariş akışını bozmaz
-    });
-
-    return res.json({ orderNumber: order.orderNumber });
+  if (order.status !== "paid") {
+    // callback henüz ulaşmadıysa 409
+    return res.status(409).json({ message: "Ödeme henüz onaylanmadı." });
   }
-
-  // İkinci/tekrar çağrılarda buraya düşer (mail tekrar gönderilmez)
-  const existing = await Order.findOne({ conversationId }).select(
-    "orderNumber"
-  );
-  if (!existing) {
-    return res.status(404).json({ message: "Sipariş bulunamadı." });
-  }
-  res.json({ orderNumber: existing.orderNumber });
+  return res.json({ orderNumber: order.orderNumber });
 };
