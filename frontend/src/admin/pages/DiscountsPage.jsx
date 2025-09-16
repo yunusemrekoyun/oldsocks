@@ -10,6 +10,7 @@ import {
   FaEdit,
 } from "react-icons/fa";
 import ToastAlert from "../../components/ui/ToastAlert";
+import Window from "../../components/ui/Window"; // ✅ EKLENDİ
 
 const cx = (...cls) => cls.filter(Boolean).join(" ");
 
@@ -39,6 +40,9 @@ export default function DiscountsPage() {
   const [products, setProducts] = useState([]);
   const [rootCats, setRootCats] = useState([]); // children populated
   const [search, setSearch] = useState("");
+
+  /* -------- delete confirm (modal) -------- */
+  const [confirmRule, setConfirmRule] = useState(null); // ✅ EKLENDİ
 
   const resetForm = () => {
     setForm(emptyForm);
@@ -164,6 +168,7 @@ export default function DiscountsPage() {
     }
   };
 
+  /* -------- activate/deactivate -------- */
   const toggleRule = async (r, next) => {
     try {
       await api.put(`/discounts/${r._id}/toggle`, { isActive: next });
@@ -185,15 +190,20 @@ export default function DiscountsPage() {
     }
   };
 
-  const deleteRule = async (r) => {
-    if (!window.confirm(`"${r.title}" kuralını silmek istiyor musunuz?`)) return;
+  /* -------- delete flow (modal + toast) -------- */
+  const askDelete = (rule) => setConfirmRule(rule); // ✅ native confirm yerine modal tetikler
+
+  const actuallyDelete = async () => {
+    if (!confirmRule) return;
     try {
-      await api.delete(`/discounts/${r._id}`);
+      await api.delete(`/discounts/${confirmRule._id}`);
       notify("İndirim silindi.", "success");
       await fetchRules();
     } catch (e) {
       console.error(e);
       notify("İndirim silinemedi.", "error");
+    } finally {
+      setConfirmRule(null);
     }
   };
 
@@ -321,7 +331,7 @@ export default function DiscountsPage() {
 
                           {/* Sil */}
                           <button
-                            onClick={() => deleteRule(r)}
+                            onClick={() => askDelete(r)} // ✅ modal aç
                             className="inline-flex items-center gap-2 px-3 py-1.5 rounded-md bg-red-600 hover:bg-red-700 text-white focus:outline-none focus:ring-2 focus:ring-red-400"
                             title="Sil"
                           >
@@ -342,9 +352,7 @@ export default function DiscountsPage() {
       {/* Create/Edit Modal */}
       {openForm && (
         <div className="fixed inset-0 z-[999] flex items-center justify-center bg-black/40 p-2 sm:p-4">
-          {/* Mobil neredeyse tam ekran, üstü köşeli kutu */}
           <div className="w-full max-w-[1000px] sm:rounded-2xl bg-white shadow-xl overflow-hidden h-[95vh] sm:h-auto sm:max-h-[90vh] flex flex-col">
-            {/* Title Bar */}
             <div className="px-4 sm:px-6 py-3 sm:py-4 border-b flex items-center justify-between">
               <h2 className="text-base sm:text-lg font-semibold">
                 {mode === "create" ? "Yeni İndirim" : "İndirimi Düzenle"}
@@ -360,7 +368,6 @@ export default function DiscountsPage() {
               </button>
             </div>
 
-            {/* Form */}
             <form
               onSubmit={handleSubmit}
               className="p-4 sm:p-6 grid grid-cols-1 lg:grid-cols-3 gap-5 overflow-auto"
@@ -582,6 +589,33 @@ export default function DiscountsPage() {
             </form>
           </div>
         </div>
+      )}
+
+      {/* Delete Confirm Modal (Window ile, CategoriesPage ile tutarlı) */}
+      {confirmRule && (
+        <Window title="Onayla" onClose={() => setConfirmRule(null)}>
+          <div className="space-y-5 text-sm">
+            <p>
+              Bu indirimi silmek istediğinize emin misiniz?
+              <br />
+              <span className="font-medium">“{confirmRule.title}”</span>
+            </p>
+            <div className="flex flex-col sm:flex-row justify-end gap-3">
+              <button
+                onClick={() => setConfirmRule(null)}
+                className="px-4 py-2 border rounded hover:bg-gray-100"
+              >
+                Vazgeç
+              </button>
+              <button
+                onClick={actuallyDelete}
+                className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
+              >
+                Sil
+              </button>
+            </div>
+          </div>
+        </Window>
       )}
 
       {/* Toast */}
