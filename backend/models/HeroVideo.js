@@ -1,9 +1,15 @@
-// backend/models/HeroVideo.js
 const mongoose = require("mongoose");
 
 const HeroVideoSchema = new mongoose.Schema(
   {
     url: { type: String, required: true },
+    // yeni: medya türü (geri uyum için varsayılan 'video')
+    kind: {
+      type: String,
+      enum: ["video", "image"],
+      default: "video",
+      index: true,
+    },
   },
   { timestamps: true }
 );

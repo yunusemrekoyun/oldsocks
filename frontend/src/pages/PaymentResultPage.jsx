@@ -9,15 +9,13 @@ export default function PaymentResultPage() {
   const navigate = useNavigate();
   const { clearCart } = useCart();
 
-  // PayTR -> merchant_oid | Geriye dönük: conversationId / conversation_id
-  const status = searchParams.get("status"); // "success" veya "failure"
+  const status = searchParams.get("status"); // "success" | "failure"
   const merchantOid = searchParams.get("merchant_oid");
   const conversationId =
     merchantOid ||
     searchParams.get("conversationId") ||
     searchParams.get("conversation_id");
 
-  // PayTR genelde paymentId göndermez; varsa gösteririz (opsiyonel)
   const paymentId = searchParams.get("paymentId");
 
   const [loaded, setLoaded] = useState(false);
@@ -25,12 +23,16 @@ export default function PaymentResultPage() {
   const [orderNumber, setOrderNumber] = useState("");
 
   const unmounted = useRef(false);
+  const timers = useRef([]);
+
   useEffect(() => {
+    // StrictMode'da ikinci mount'a girerken resetle
+    unmounted.current = false;
     return () => {
       unmounted.current = true;
+      timers.current.forEach(clearTimeout);
     };
   }, []);
-
   useEffect(() => {
     const decode = (s) => {
       try {
@@ -40,7 +42,6 @@ export default function PaymentResultPage() {
       }
     };
 
-    // Başarısız sonuç — sadece mesaj göster
     if (status === "failure") {
       const rawMsg = searchParams.get("message") || "Ödeme başarısız.";
       setMessage(decode(rawMsg));
@@ -48,48 +49,61 @@ export default function PaymentResultPage() {
       return;
     }
 
-    // Başarılı dönüş — PayTR callback server’a düşmüş mü kontrol et
     if (status === "success" && conversationId) {
+      let attempts = 0;
+      const maxAttempts = 7;
+      const delayMs = 1500;
+
+      const finishAsSuccess = (maybeOrderNo) => {
+        if (unmounted.current) return;
+        if (maybeOrderNo) setOrderNumber(maybeOrderNo);
+        setMessage("Siparişiniz başarıyla kaydedildi!");
+        clearCart();
+        setLoaded(true);
+      };
+
+      const finishAsError = (msg) => {
+        if (unmounted.current) return;
+        setMessage(msg || "Sipariş kaydı sırasında bir hata oluştu.");
+        setLoaded(true);
+      };
+
+      const tryConfirm = async () => {
+        try {
+          const res = await api.post("/orders/confirm", { conversationId });
+          // Başarı: orderNumber olsa da olmasa da başarı ekranına geç
+          const no = res?.data?.orderNumber;
+          finishAsSuccess(no);
+        } catch (err) {
+          const code = err?.response?.status;
+          if (code === 409 && attempts < maxAttempts) {
+            attempts += 1;
+            const t = setTimeout(tryConfirm, delayMs);
+            timers.current.push(t);
+            return;
+          }
+          // Diğer hatalarda hata ekranı
+          finishAsError();
+        }
+      };
+
       (async () => {
-        // 1) MOCK ise önce backend'e "tamamla" de (paid'e çek)
+        // MOCK ise önce backend’e tek sefer “paid” dedirtip sonra confirm et
         if (paymentId && paymentId.startsWith("mock_")) {
           try {
             await api.post("/payment/mock-complete", { conversationId });
-          } catch (e) {
-            // Önemli değil; aşağıdaki confirm retry mekanizması zaten devrede
-            console.warn("mock-complete çağrısı başarısız (önemsiz):", e);
+          } catch {
+            // önemli değil; confirm polling yine deneyecek
           }
         }
 
-        // 2) Ardından mevcut confirm retry akışı
-        let attempts = 0;
-        const maxAttempts = 7; // ~10-11 sn
-        const delayMs = 1500;
-
-        const tryConfirm = async () => {
-          try {
-            const res = await api.post("/orders/confirm", { conversationId });
-            if (unmounted.current) return;
-            setOrderNumber(res.data.orderNumber);
-            setMessage("Siparişiniz başarıyla kaydedildi!");
-            clearCart(); // yalnızca onay gerçekten alındığında temizle
-            setLoaded(true);
-          } catch (err) {
-            const code = err?.response?.status;
-
-            // 409 => callback henüz gelmedi; kısa bekleyip tekrar dene
-            if (code === 409 && attempts < maxAttempts) {
-              attempts += 1;
-              setTimeout(tryConfirm, delayMs);
-              return;
-            }
-
-            // Diğer hatalar
-            if (unmounted.current) return;
-            setMessage("Sipariş kaydı sırasında bir hata oluştu.");
-            setLoaded(true);
-          }
-        };
+        // 12 sn watchdog: hiçbir şeye düşemezse spinner’ı sonlandır
+        const watchdog = setTimeout(() => {
+          finishAsError(
+            "Onay beklenenden uzun sürdü. Siparişiniz oluşturulduysa 'Hesabım → Siparişlerim'den görebilirsiniz."
+          );
+        }, 12000);
+        timers.current.push(watchdog);
 
         tryConfirm();
       })();

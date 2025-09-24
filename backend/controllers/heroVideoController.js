@@ -1,51 +1,66 @@
-// backend/controllers/heroVideoController.js
 const HeroVideo = require("../models/HeroVideo");
 
-// Create new video (upload)
+// Create new media (upload)
 exports.uploadVideo = async (req, res) => {
   try {
-    if (!req.file?.path) {
-      return res.status(400).json({ message: "Video dosyası gerekli." });
+    const file = req.file;
+    if (!file?.path) {
+      return res.status(400).json({ message: "Dosya yüklenmedi." });
     }
 
-    // 3'ten fazla videoya izin verme
+    // 3'ten fazla öğeye izin verme
     const count = await HeroVideo.countDocuments();
     if (count >= 3) {
       return res
         .status(400)
-        .json({ message: "En fazla 3 hero videosu yükleyebilirsiniz." });
+        .json({ message: "En fazla 3 hero medyası yükleyebilirsiniz." });
     }
 
-    const video = await HeroVideo.create({ url: req.file.path });
-    res.status(201).json(video);
+    // türü tespit et
+    const mime = file.mimetype || "";
+    const isImage = mime.startsWith("image/");
+    const isVideo = mime.startsWith("video/");
+
+    if (!isImage && !isVideo) {
+      return res
+        .status(400)
+        .json({ message: "Sadece video veya görsel yükleyebilirsiniz." });
+    }
+
+    const media = await HeroVideo.create({
+      url: file.path,
+      kind: isImage ? "image" : "video",
+    });
+
+    res.status(201).json(media);
   } catch (err) {
-    console.error("Hero video yükleme hatası:", err);
+    console.error("Hero media upload error:", err);
     res.status(500).json({ message: "Sunucu hatası." });
   }
 };
 
-// Get all videos
+// Get all media
 exports.getHeroVideos = async (req, res) => {
   try {
-    const videos = await HeroVideo.find().sort({ createdAt: -1 });
-    res.json(videos);
+    const items = await HeroVideo.find().sort({ createdAt: -1 });
+    res.json(items);
   } catch (err) {
-    console.error("Hero video listeleme hatası:", err);
+    console.error("Hero media list error:", err);
     res.status(500).json({ message: "Sunucu hatası." });
   }
 };
 
-// Delete video
+// Delete media
 exports.deleteHeroVideo = async (req, res) => {
   try {
     const { id } = req.params;
     const deleted = await HeroVideo.findByIdAndDelete(id);
     if (!deleted) {
-      return res.status(404).json({ message: "Video bulunamadı." });
+      return res.status(404).json({ message: "Kayıt bulunamadı." });
     }
-    res.json({ message: "Video silindi." });
+    res.json({ message: "Silindi." });
   } catch (err) {
-    console.error("Hero video silme hatası:", err);
+    console.error("Hero media delete error:", err);
     res.status(500).json({ message: "Sunucu hatası." });
   }
 };

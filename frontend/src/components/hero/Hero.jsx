@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import api from "../../../api";
 import { Swiper, SwiperSlide } from "swiper/react";
@@ -6,31 +6,104 @@ import { Autoplay, Pagination } from "swiper/modules";
 import "swiper/css";
 import "swiper/css/pagination";
 
-export default function Hero() {
-  const [videos, setVideos] = useState([]);
+/** Ortak yükseklik limiti: videoHeight || naturalHeight üzerinden hesaplar */
+function useHeroHeightLimit(elRef) {
+  const [pxHeight, setPxHeight] = useState(null);
 
   useEffect(() => {
-    api.get("/hero-videos")
-      .then((res) => setVideos(res.data))
-      .catch((err) => console.error("Video alınamadı:", err));
+    if (!elRef?.current) return;
+    const el = elRef.current;
+
+    function getNaturalHeight(node) {
+      // video ise videoHeight, image ise naturalHeight
+      return node.videoHeight || node.naturalHeight || 0;
+    }
+
+    function compute() {
+      const dpr = window.devicePixelRatio || 1;
+      const needPx = Math.round(window.innerHeight * dpr);
+      const natural = getNaturalHeight(el);
+
+      if (natural > 0 && natural < needPx) {
+        const cssPx = Math.round(natural / dpr);
+        setPxHeight(cssPx);
+      } else {
+        setPxHeight(null); // 100vh
+      }
+    }
+
+    const onMetaOrLoad = () => compute();
+
+    // video -> loadedmetadata, image -> load
+    el.addEventListener("loadedmetadata", onMetaOrLoad);
+    el.addEventListener("load", onMetaOrLoad);
+    window.addEventListener("resize", compute);
+
+    // İlk deneme (bazı tarayıcılarda event gecikebilir)
+    setTimeout(compute, 0);
+
+    return () => {
+      el.removeEventListener("loadedmetadata", onMetaOrLoad);
+      el.removeEventListener("load", onMetaOrLoad);
+      window.removeEventListener("resize", compute);
+    };
+  }, [elRef]);
+
+  return pxHeight;
+}
+
+export default function Hero() {
+  const [items, setItems] = useState([]);
+  const singleRef = useRef(null);
+  const singleHeightPx = useHeroHeightLimit(singleRef);
+
+  useEffect(() => {
+    api
+      .get("/hero-videos")
+      .then((res) => setItems(res.data || []))
+      .catch((err) => console.error("Hero media alınamadı:", err));
   }, []);
 
-  if (videos.length === 0) return null;
+  if (!items.length) return null;
 
-  // Tek video varsa
-  if (videos.length === 1) {
-    return (
-      <section className="relative w-full h-screen overflow-hidden">
-        <video
-          src={videos[0].url}
-          autoPlay
-          loop
-          muted
-          playsInline
-          className="w-full h-full object-cover"
+  const renderMedia = (item, refIfSingle = null) => {
+    if (item.kind === "image") {
+      return (
+        <img
+          ref={refIfSingle || null}
+          src={item.url}
+          alt="Hero"
+          className="w-full h-full object-cover object-center block"
+          // poster ihtiyacı yok; img için yok.
         />
+      );
+    }
+    return (
+      <video
+        ref={refIfSingle || null}
+        src={item.url}
+        autoPlay
+        loop
+        muted
+        playsInline
+        preload="auto"
+        className="w-full h-full object-cover object-center block"
+      />
+    );
+  };
 
-        {/* Buton */}
+  // Tek medya
+  if (items.length === 1) {
+    const style =
+      singleHeightPx != null
+        ? { height: `${singleHeightPx}px` }
+        : { height: "100vh" };
+
+    return (
+      <section className="relative w-full overflow-hidden" style={style}>
+        {renderMedia(items[0], singleRef)}
+
+        {/* CTA */}
         <Link
           to="/shop"
           className="absolute bottom-16 left-1/2 -translate-x-1/2 px-6 py-3 text-white border border-white rounded-full bg-black/30 backdrop-blur-sm hover:bg-white hover:text-black transition z-20"
@@ -41,31 +114,24 @@ export default function Hero() {
     );
   }
 
-  // 2+ video varsa slider
+  // 2+ medya -> slider
   return (
-    <section className="relative w-full h-screen overflow-hidden">
+    <section className="relative w-full h-[100vh] overflow-hidden">
       <Swiper
         modules={[Autoplay, Pagination]}
         loop={true}
-        autoplay={{ delay: 5000 }}
+        autoplay={{ delay: 5000, disableOnInteraction: false }}
         pagination={{ clickable: true }}
         className="w-full h-full"
       >
-        {videos.map((vid) => (
-          <SwiperSlide key={vid._id}>
-            <video
-              src={vid.url}
-              autoPlay
-              loop
-              muted
-              playsInline
-              className="w-full h-full object-cover"
-            />
+        {items.map((it) => (
+          <SwiperSlide key={it._id} className="!flex">
+            {renderMedia(it)}
           </SwiperSlide>
         ))}
       </Swiper>
 
-      {/* Buton */}
+      {/* CTA */}
       <Link
         to="/shop"
         className="absolute bottom-16 left-1/2 -translate-x-1/2 px-6 py-3 text-white border border-white rounded-full bg-black/30 backdrop-blur-sm hover:bg-white hover:text-black transition z-20"
@@ -85,7 +151,6 @@ export default function Hero() {
           gap: 10px;
           z-index: 20;
         }
-
         .swiper-pagination-bullet {
           width: 12px;
           height: 12px;
@@ -94,7 +159,6 @@ export default function Hero() {
           opacity: 1;
           transition: background 0.3s ease;
         }
-
         .swiper-pagination-bullet-active {
           background: white;
           box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.4);

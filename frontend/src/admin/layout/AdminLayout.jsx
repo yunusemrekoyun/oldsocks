@@ -93,7 +93,7 @@ export default function AdminLayout({ children }) {
         path: "/admin/users",
       },
       {
-        label: "Video Ayarları",
+        label: "Banner Ayarları",
         icon: <CameraIcon className="w-5 h-5" />,
         path: "/admin/hero-videos",
       },

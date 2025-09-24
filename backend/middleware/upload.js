@@ -74,16 +74,27 @@ const profilePictureStorage = new CloudinaryStorage({
 const uploadProfilePicture = multer({ storage: profilePictureStorage });
 
 // — Hero video upload (yeni) —
-const heroVideoStorage = new CloudinaryStorage({
+const heroMediaStorage = new CloudinaryStorage({
   cloudinary,
-  params: {
-    folder: "hero-videos",
-    resource_type: "video",
-    format: async () => "mp4",
-    public_id: () => `hero_${Date.now()}`,
+  params: async (req, file) => {
+    const mime = file.mimetype || "";
+    const isImage = mime.startsWith("image/");
+    const isVideo = mime.startsWith("video/");
+
+    if (!isImage && !isVideo) {
+      throw new Error("Sadece video veya görsel yükleyin.");
+    }
+
+    return {
+      folder: isImage ? "hero/images" : "hero/videos",
+      resource_type: isImage ? "image" : "video",
+      // Görsellerde orijinal formatı koru (jpg/png/webp vs.), videoda mp4’e sabitle
+      format: isImage ? undefined : "mp4",
+      public_id: `${isImage ? "hero_img" : "hero_vid"}_${Date.now()}`,
+    };
   },
 });
-const uploadHeroVideo = multer({ storage: heroVideoStorage });
+const uploadHeroVideo = multer({ storage: heroMediaStorage });
 
 // Hepsini export ediyoruz
 module.exports = {
