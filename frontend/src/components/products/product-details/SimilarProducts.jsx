@@ -31,7 +31,7 @@ export default function SimilarProducts({ categoryId, currentProductId }) {
           return totalStock > 0;
         };
 
-        const filtered = data.filter(
+        const filtered = (Array.isArray(data) ? data : []).filter(
           (p) => p._id !== currentProductId && isInStock(p)
         );
 
@@ -72,6 +72,19 @@ export default function SimilarProducts({ categoryId, currentProductId }) {
       <div className="text-center py-4">Stokta benzer ürün bulunamadı.</div>
     );
 
+  // Kart için fiyat normalize edici
+  const toCardPricing = (p) => {
+    const final = Number(p.price ?? 0); // backend final fiyat
+    const original = Number(p.originalPrice ?? 0);
+    const hasDiscount = original > 0 && final > 0 && final < original;
+
+    return {
+      price: hasDiscount ? original : final, // üstü çizilecek (orijinal) ya da final
+      discountedPrice: hasDiscount ? final : null, // indirimli fiyat varsa gönder
+      // gerekiyorsa: discountRate: hasDiscount ? Math.round(100 - (final / original) * 100) : 0
+    };
+  };
+
   return (
     <div className="space-y-4">
       <h3 className="text-xl font-semibold">Benzer Ürünler</h3>
@@ -88,16 +101,8 @@ export default function SimilarProducts({ categoryId, currentProductId }) {
         {items.map((p) => {
           const poster =
             p.poster || (Array.isArray(p.images) ? p.images[0] : null);
-          // discountedPrice backend’den gelmiyorsa türet:
-          const discounted =
-            typeof p.discountedPrice === "number"
-              ? p.discountedPrice
-              : Number(p.discount || 0) > 0
-              ? Math.max(
-                  0,
-                  (Number(p.price || 0) * (100 - Number(p.discount))) / 100
-                )
-              : undefined;
+
+          const { price, discountedPrice } = toCardPricing(p);
 
           return (
             <SwiperSlide key={p._id}>
@@ -106,10 +111,8 @@ export default function SimilarProducts({ categoryId, currentProductId }) {
                 video={p.video}
                 poster={poster}
                 name={p.name}
-                price={Number(p.price || 0)}
-                discountedPrice={
-                  typeof discounted === "number" ? discounted : undefined
-                }
+                price={price}
+                discountedPrice={discountedPrice ?? undefined}
               />
             </SwiperSlide>
           );

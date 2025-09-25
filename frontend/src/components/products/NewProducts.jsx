@@ -1,3 +1,4 @@
+// src/components/products/NewProducts.jsx
 import React, { useEffect, useMemo, useState } from "react";
 import api from "../../../api";
 import NewProductItem from "./NewProductItem";
@@ -15,17 +16,21 @@ const getCreatedMs = (p) => {
   return 0;
 };
 
-// discount yüzdesini belirle: p.discount varsa onu kullan; yoksa price-originalPrice'tan türet
-const computeDiscountPct = (p) => {
-  const direct = Number(p?.discount || 0);
-  if (direct > 0) return direct;
-  const op = Number(p?.originalPrice ?? 0);
-  const pr = Number(p?.price ?? 0);
-  if (op > pr && op > 0) {
-    const pct = Math.round(((op - pr) / op) * 100);
-    return pct > 0 ? pct : 0;
-  }
-  return 0;
+// Kart için fiyat normalize edici (tek kaynak)
+const toCardPricing = (p) => {
+  const final = Number(p.price ?? 0); // backend final fiyat
+  const original = Number(p.originalPrice ?? 0);
+
+  const hasDiscount = original > 0 && final > 0 && final < original;
+  const discountRate = hasDiscount
+    ? Math.round(100 - (final / original) * 100)
+    : 0;
+
+  return {
+    price: hasDiscount ? original : final, // üstü çizilecek (orijinal) ya da final
+    discountedPrice: hasDiscount ? final : null, // indirimli fiyat varsa gönder
+    discountRate, // rozet için yüzde
+  };
 };
 
 export default function NewProducts() {
@@ -100,9 +105,15 @@ export default function NewProducts() {
 
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-6">
           {items.map((p) => {
-            const discountPercentage = computeDiscountPct(p);
             const posterUrl =
               p.poster || (Array.isArray(p.images) ? p.images[0] : null);
+
+            const { price, discountedPrice, discountRate } = toCardPricing(p);
+
+            const stock = Array.isArray(p.sizes)
+              ? p.sizes.reduce((sum, s) => sum + (s.stock || 0), 0)
+              : 0;
+
             return (
               <NewProductItem
                 key={p._id}
@@ -110,14 +121,10 @@ export default function NewProducts() {
                 video={p.video}
                 poster={posterUrl}
                 name={p.name}
-                price={p.price}
-                originalPrice={p.originalPrice}
-                discountPercentage={discountPercentage}
-                stock={
-                  Array.isArray(p.sizes)
-                    ? p.sizes.reduce((sum, s) => sum + (s.stock || 0), 0)
-                    : 0
-                }
+                price={price}
+                discountedPrice={discountedPrice}
+                discountRate={discountRate}
+                stock={stock}
               />
             );
           })}

@@ -20,7 +20,6 @@ export default function Campaigns() {
   const handleSlotClick = async (slot) => {
     try {
       const { data } = await api.get(`/mini-campaigns/active?slot=${slot}`);
-      console.log(`Slot ${slot} ürünleri:`, data.items);
       // ShopPage'e yönlendir:
       navigate("/shop", {
         state: {

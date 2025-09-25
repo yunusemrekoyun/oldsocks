@@ -4,6 +4,7 @@ const { v4: uuidv4 } = require("uuid");
 const User = require("../models/User");
 const Order = require("../models/Order");
 const fallbackData = require("../config/fallback.json");
+const { applyStockChanges } = require("../utils/updateStock");
 
 /* Frontend base (ilk origin) */
 const FRONTEND_BASE = (() => {
@@ -16,11 +17,6 @@ const FRONTEND_BASE = (() => {
 })();
 
 /* helpers */
-function getClientIp(req) {
-  const xff = (req.headers["x-forwarded-for"] || "").split(",")[0].trim();
-  const ip = xff || req.ip || req.connection?.remoteAddress || "127.0.0.1";
-  return ip === "::1" ? "127.0.0.1" : ip;
-}
 function tlToKurus(n) {
   return Math.round(Number(n || 0) * 100);
 }
@@ -28,10 +24,31 @@ function asTL(n) {
   const v = Number(n || 0);
   return "₺" + v.toFixed(2);
 }
+function getClientIp(req) {
+  const xff = (req.headers["x-forwarded-for"] || "").split(",")[0].trim();
+  let ip = xff || req.ip || req.connection?.remoteAddress || "127.0.0.1";
+  if (ip === "::1") ip = "127.0.0.1"; // IPv6 loopback -> IPv4
+  if (ip.startsWith("::ffff:")) ip = ip.replace("::ffff:", ""); // IPv4-mapped
+  ip = ip.split(":").slice(-1)[0]; // son parçayı al (port vs)
+  return ip;
+}
+function safeLogPaytrInput(inp) {
+  try {
+    const copy = { ...inp };
+    if (copy.user_basket && copy.user_basket.length > 30) {
+      copy.user_basket_preview =
+        copy.user_basket.slice(0, 30) + "...(" + copy.user_basket.length + ")";
+      delete copy.user_basket;
+    }
+    console.log("[PAYTR][debug]", copy);
+  } catch {}
+}
 
 /** 1) Ödeme oturumunu başlat (pending Order) */
 exports.startPaymentSession = async (req, res) => {
   try {
+    console.log("[PAYMENT][start] user:", req.user?.userId, "body:", req.body);
+
     const { cartItems, totalPrice, addressId, useFallback } = req.body;
     const userId = req.user.userId;
     const userDoc = await User.findById(userId).lean();
@@ -49,7 +66,7 @@ exports.startPaymentSession = async (req, res) => {
         postalCode: "",
       };
 
-    // Eksik müşteri bilgilerini kontrol et
+    // Eksik müşteri verisi kontrolü
     const missing = [];
     const firstName =
       userDoc?.firstName ||
@@ -76,8 +93,11 @@ exports.startPaymentSession = async (req, res) => {
       });
     }
 
-    // Benzersiz ID’ler
-    const conversationId = uuidv4();
+    // PayTR merchant_oid şartına uygun benzersiz ID (alfanümerik, 64 max)
+    const conversationId = uuidv4()
+      .replace(/-/g, "")
+      .toUpperCase()
+      .slice(0, 64);
     const orderNumber = Math.floor(1e9 + Math.random() * 9e9).toString();
 
     // Pending Order
@@ -116,13 +136,29 @@ exports.startPaymentSession = async (req, res) => {
   }
 };
 
-/** 2) INLINE HTML: PayTR ya da MOCK iframe döner */
+/** 2) INLINE: PayTR token ya da MOCK HTML döner (JSON) */
 exports.inlineCheckoutHtml = async (req, res) => {
   try {
+    console.log(
+      "[PAYTR][inline] çağrıldı convId:",
+      req.params.conversationId,
+      "ip:",
+      getClientIp(req)
+    );
+
+    // cache kesin kapalı — tekrar kullanım/yeniden yükleme olmasın
+    res.set(
+      "Cache-Control",
+      "no-store, no-cache, must-revalidate, proxy-revalidate"
+    );
+    res.set("Pragma", "no-cache");
+    res.set("Expires", "0");
+    res.set("Surrogate-Control", "no-store");
+
     const { conversationId } = req.params;
     const order = await Order.findOne({ conversationId }).lean();
     if (!order || order.status !== "pending") {
-      return res.status(404).send("Geçersiz sipariş.");
+      return res.status(404).json({ message: "Geçersiz sipariş." });
     }
 
     const useMock =
@@ -183,19 +219,27 @@ exports.inlineCheckoutHtml = async (req, res) => {
     </p>
   </div>
 </body></html>`;
-      return res.type("text/html").send(html);
+
+      // ÖNEMLİ: Artık HTML'i direkt dönmüyoruz; JSON ile gönderiyoruz
+      return res.json({ mode: "mock", html });
     }
 
     // ---- GERÇEK PAYTR AKIŞI ----
     const user = await User.findById(order.user).lean();
 
-    const MERCHANT_ID = process.env.PAYTR_MERCHANT_ID;
-    const MERCHANT_KEY = process.env.PAYTR_MERCHANT_KEY;
-    const MERCHANT_SALT = process.env.PAYTR_MERCHANT_SALT;
-    const TEST_MODE = Number(process.env.PAYTR_TEST_MODE || 1);
+    // ENV'leri trimleyerek al
+    const MERCHANT_ID = (process.env.PAYTR_MERCHANT_ID || "").trim();
+    const MERCHANT_KEY = (process.env.PAYTR_MERCHANT_KEY || "").trim();
+    const MERCHANT_SALT = (process.env.PAYTR_MERCHANT_SALT || "").trim();
+    const TEST_MODE = (process.env.PAYTR_TEST_MODE || "1").trim(); // "1"/"0"
 
     const user_ip = getClientIp(req);
-    const merchant_oid = order.conversationId;
+
+    // PayTR zorunluluğu: sadece alfanümerik, makul uzunluk
+    const merchant_oid = String(order.conversationId || "")
+      .replace(/[^A-Za-z0-9]/g, "")
+      .slice(0, 64);
+
     const email = user?.email || "fallback@example.com";
     const payment_amount = tlToKurus(order.totalPrice);
 
@@ -206,10 +250,10 @@ exports.inlineCheckoutHtml = async (req, res) => {
     ]);
     const user_basket = Buffer.from(JSON.stringify(basket)).toString("base64");
 
-    const no_installment = 0;
-    const max_installment = 0;
+    const no_installment = "0";
+    const max_installment = "0";
     const currency = "TL";
-    const non_3d = 0;
+    const non_3d = "0"; // Hash’e DAHİL değil
 
     const user_name = `${user?.firstName || "Müşteri"} ${
       user?.lastName || ""
@@ -219,18 +263,19 @@ exports.inlineCheckoutHtml = async (req, res) => {
     }`.trim();
     const user_phone = user?.phone || "0000000000";
 
+    // Hash (non_3d DAHİL değil)
     const hashStr =
       MERCHANT_ID +
       user_ip +
       merchant_oid +
       email +
-      payment_amount +
+      String(payment_amount) +
       user_basket +
       no_installment +
       max_installment +
       currency +
       TEST_MODE +
-      non_3d;
+      MERCHANT_SALT;
 
     const paytr_token = crypto
       .createHmac("sha256", MERCHANT_KEY)
@@ -240,18 +285,22 @@ exports.inlineCheckoutHtml = async (req, res) => {
     const okUrl = `${FRONTEND_BASE}/payment-result?status=success&conversationId=${merchant_oid}&paymentId=${merchant_oid}`;
     const failUrl = `${FRONTEND_BASE}/payment-result?status=failure&conversationId=${merchant_oid}`;
 
+    // Form body
     const body = new URLSearchParams({
       merchant_id: MERCHANT_ID,
+      merchant_key: MERCHANT_KEY, // opsiyonel ama sorun çıkarmaz
+      merchant_salt: MERCHANT_SALT, // opsiyonel ama sorun çıkarmaz
+
       user_ip,
       merchant_oid,
       email,
       payment_amount: String(payment_amount),
       user_basket,
-      no_installment: String(no_installment),
-      max_installment: String(max_installment),
+      no_installment,
+      max_installment,
       currency,
-      test_mode: String(TEST_MODE),
-      non_3d: String(non_3d),
+      test_mode: TEST_MODE,
+      non_3d,
       user_name,
       user_address,
       user_phone,
@@ -262,39 +311,71 @@ exports.inlineCheckoutHtml = async (req, res) => {
       lang: "tr",
       paytr_token,
     });
+    console.log(
+      "[PAYTR][get-token] convId:",
+      conversationId,
+      "merchant_oid:",
+      merchant_oid,
+      "amount:",
+      payment_amount
+    );
 
-    const r = await fetch("https://www.paytr.com/odeme/api/get-token", {
+    const resp = await fetch("https://www.paytr.com/odeme/api/get-token", {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body: body.toString(),
     });
 
-    const data = await r.json().catch(() => ({}));
-    if (data?.status !== "success" || !data?.token) {
-      console.error("[PAYTR][get-token] Hata:", data);
-      return res
-        .status(500)
-        .send(data?.reason || "Ödeme başlatılamadı (PayTR).");
+    const rawText = await resp.text();
+    console.log("[PAYTR][get-token][resp]", rawText.slice(0, 200));
+
+    let data = null;
+    try {
+      data = JSON.parse(rawText);
+    } catch {
+      data = null;
+    }
+    if (!resp.ok || !data) {
+      console.error(
+        "[PAYTR][raw-response]",
+        resp.status,
+        rawText.slice(0, 600)
+      );
     }
 
-    const token = data.token;
-    const html = `<!doctype html>
-<html lang="tr"><head>
-  <meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <script src="https://www.paytr.com/js/iframeResizer.min.js"></script>
-  <style>html,body{margin:0;padding:0}</style>
-</head><body>
-  <iframe src="https://www.paytr.com/odeme/guvenli/${token}"
-          id="paytriframe" frameborder="0" scrolling="no"
-          style="width:100%;min-height:700px;"></iframe>
-  <script>try{ iFrameResize({}, '#paytriframe'); }catch(e){}</script>
-</body></html>`;
-    return res.type("text/html").send(html);
+    if (!data || data.status !== "success" || !data.token) {
+      safeLogPaytrInput({
+        reason: (data && data.reason) || "unknown",
+        merchant_id: MERCHANT_ID,
+        user_ip,
+        merchant_oid,
+        email,
+        payment_amount: String(payment_amount),
+        test_mode: TEST_MODE === "1" ? 1 : 0,
+        non_3d,
+        currency,
+        okUrl,
+        failUrl,
+        user_name,
+        user_basket: user_basket,
+        paytr_token_len: paytr_token?.length || 0,
+      });
+
+      console.error("[PAYTR][get-token] Hata:", data || rawText);
+      return res.status(500).json({
+        message: (data && data.reason) || "Ödeme başlatılamadı (PayTR).",
+      });
+    }
+
+    // ÖNEMLİ: Artık HTML döndürmüyoruz; sadece token
+    return res.json({ mode: "paytr", token: data.token });
   } catch (e) {
     console.error("[PAYTR][inline] Hata:", e);
-    res.status(500).send("Ödeme başlatılamadı (server).");
+    res.status(500).json({ message: "Ödeme başlatılamadı (server)." });
   }
 };
+
+/** MOCK tamamla (sadece geliştirme) */
 exports.mockComplete = async (req, res) => {
   try {
     const { conversationId } = req.body || {};
@@ -321,12 +402,13 @@ exports.mockComplete = async (req, res) => {
     return res.status(500).json({ message: "Mock tamamlama başarısız." });
   }
 };
+
 /** 3) PAYTR postback (panelde ayarlarsın) */
 exports.paytrCallback = async (req, res) => {
   try {
     const { merchant_oid, status, total_amount, hash } = req.body || {};
-    const KEY = process.env.PAYTR_MERCHANT_KEY;
-    const SALT = process.env.PAYTR_MERCHANT_SALT;
+    const KEY = (process.env.PAYTR_MERCHANT_KEY || "").trim();
+    const SALT = (process.env.PAYTR_MERCHANT_SALT || "").trim();
 
     if (!merchant_oid) return res.status(400).send("BAD REQUEST");
 
@@ -346,11 +428,25 @@ exports.paytrCallback = async (req, res) => {
     }
 
     if (status === "success") {
-      await Order.findOneAndUpdate(
+      // ✅ önce siparişi bulup paid yapıyoruz
+      const order = await Order.findOneAndUpdate(
         { conversationId: merchant_oid },
         { status: "paid", paymentId: merchant_oid, adminSeenAt: null },
         { new: true }
       );
+
+      // ✅ stok düşürme burada
+      if (order) {
+        try {
+          await applyStockChanges(order);
+          console.log(
+            "[PAYTR][callback] Stok güncellendi. orderId:",
+            order._id
+          );
+        } catch (e) {
+          console.error("[PAYTR][callback] Stok düşürme hatası:", e);
+        }
+      }
     } else {
       await Order.deleteOne({ conversationId: merchant_oid }).catch(() => {});
     }

@@ -25,8 +25,9 @@ export default function CheckoutPage() {
     api
       .get("/users/me/addresses")
       .then(({ data }) => {
-        setAddresses(data);
-        if (data.length) setSelectedAddress(data[0]._id);
+        const list = data || [];
+        setAddresses(list);
+        if (list.length) setSelectedAddress(list[0]._id);
       })
       .finally(() => setAddrLoading(false));
   }, []);
@@ -79,14 +80,18 @@ export default function CheckoutPage() {
         useFallback,
       });
 
+      // Eksik kullanıcı verisi varsa (ör. telefon), bir kez fallback ile tekrar dene
       if (data?.missing && !useFallback) {
         return attemptPayment(true);
       }
 
       if (data?.conversationId) {
-        // ✅ PaymentPage’e yönlendiriyoruz, orada embed edilecek
+        // PaymentPage’e -> state ile hem conversationId hem de seçili adresi gönder
         navigate("/payment", {
-          state: { conversationId: data.conversationId },
+          state: {
+            conversationId: data.conversationId,
+            selectedAddress: selectedAddress,
+          },
         });
         return;
       }

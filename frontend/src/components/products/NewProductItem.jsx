@@ -1,3 +1,4 @@
+/* eslint-disable no-empty */
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import PropTypes from "prop-types";
 import { Link } from "react-router-dom";
@@ -52,9 +53,12 @@ export default function NewProductItem({
   video,
   poster,
   name,
+  /** normalize: indirim varsa ORİJİNAL, yoksa FINAL */
   price,
-  originalPrice,
-  discountPercentage,
+  /** normalize: indirim varsa FINAL, yoksa null/undefined */
+  discountedPrice,
+  /** opsiyonel rozet yüzdesi */
+  discountRate,
   stock,
 }) {
   const videoRef = useRef(null);
@@ -87,19 +91,25 @@ export default function NewProductItem({
     }
   }, []);
 
+  // --- İndirim görünümü (hesap YOK) ---
   const hasDiscount = useMemo(
-    () => Number(discountPercentage || 0) > 0,
-    [discountPercentage]
+    () =>
+      discountedPrice !== null &&
+      discountedPrice !== undefined &&
+      Number(discountedPrice) < Number(price),
+    [discountedPrice, price]
   );
 
-  const discountedPrice = useMemo(() => {
-    if (!hasDiscount) return Number(price || 0);
-    const p = Math.max(
-      0,
-      (Number(price || 0) * (100 - Number(discountPercentage))) / 100
-    );
-    return p;
-  }, [price, discountPercentage, hasDiscount]);
+  const badgeRate = useMemo(() => {
+    if (Number(discountRate) > 0) return Math.round(Number(discountRate));
+    if (hasDiscount && Number(price) > 0) {
+      const pct = Math.round(
+        100 - (Number(discountedPrice) / Number(price)) * 100
+      );
+      return pct > 0 ? pct : 0;
+    }
+    return 0;
+  }, [discountRate, hasDiscount, price, discountedPrice]);
 
   const fmt = (n) =>
     `${Number(n || 0).toLocaleString("tr-TR", {
@@ -116,7 +126,8 @@ export default function NewProductItem({
         const { data: prod } = await api.get(`/products/${id}`);
         const baseId = prod?.parentProductId || prod?._id;
         if (!baseId) {
-          if (alive) setVariants(prod?.color ? [{ _id: id, color: prod.color }] : []);
+          if (alive)
+            setVariants(prod?.color ? [{ _id: id, color: prod.color }] : []);
           return;
         }
         const { data: group } = await api.get(`/products?varyantsOf=${baseId}`);
@@ -140,9 +151,7 @@ export default function NewProductItem({
     if (!isHoverCapable) return;
     setIsHovered(true);
     if (videoRef.current && video) {
-      videoRef.current
-        .play()
-        .catch((e) => console.debug("Video play blocked (hover):", e?.message));
+      videoRef.current.play().catch(() => {});
     }
   };
   const handleMouseLeave = () => {
@@ -152,7 +161,7 @@ export default function NewProductItem({
       try {
         videoRef.current.pause();
         videoRef.current.currentTime = 0;
-      } catch (e) {}
+      } catch {}
     }
   };
 
@@ -200,7 +209,10 @@ export default function NewProductItem({
   const shouldShowVideo =
     !!video && (isHoverCapable || (isTouch && mobileWantsPlay));
 
-  const colorDots = useMemo(() => (variants.length ? variants : []), [variants]);
+  const colorDots = useMemo(
+    () => (variants.length ? variants : []),
+    [variants]
+  );
 
   return (
     <Link
@@ -209,13 +221,6 @@ export default function NewProductItem({
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
     >
-      {/* Stok etiketi */}
-      {stock === 0 && (
-        <div className="absolute top-2 left-2 bg-red-600 text-white text-xs px-2 py-1 rounded shadow z-20">
-          TÜKENDİ
-        </div>
-      )}
-
       {/* Ses butonu — sadece desktop */}
       {shouldShowVideo && isHoverCapable && isHovered && (
         <button
@@ -233,6 +238,22 @@ export default function NewProductItem({
 
       {/* Medya */}
       <div className="relative w-full aspect-[3/4] bg-light1">
+        {/* İndirim Rozeti: mobilde küçük, daha genişte büyür; sol-üst */}
+        {hasDiscount && badgeRate > 0 && (
+          <div className="absolute top-2 left-2 z-10">
+            <div className="bg-red-600 text-white rounded-full shadow-md flex items-center justify-center font-bold w-7 h-7 text-[9px] sm:w-8 sm:h-8 sm:text-[10px] md:w-10 md:h-10 md:text-xs">
+              %{badgeRate}
+            </div>
+          </div>
+        )}
+
+        {/* TÜKENDİ — medya alanının sol-altında */}
+        {stock === 0 && (
+          <div className="absolute bottom-2 left-2 bg-red-600 text-white text-[10px] sm:text-xs px-2 py-1 rounded shadow z-10">
+            TÜKENDİ
+          </div>
+        )}
+
         {shouldShowVideo ? (
           <video
             ref={videoRef}
@@ -248,23 +269,19 @@ export default function NewProductItem({
               } catch {}
             }}
           />
+        ) : poster ? (
+          <img
+            src={poster}
+            alt={name}
+            loading="lazy"
+            className="absolute inset-0 w-full h-full object-cover transition duration-300 group-hover:scale-105"
+            onError={(e) => {
+              e.currentTarget.style.background = "#f3f4f6";
+              e.currentTarget.src = "";
+            }}
+          />
         ) : (
-          <>
-            {poster ? (
-              <img
-                src={poster}
-                alt={name}
-                loading="lazy"
-                className="absolute inset-0 w-full h-full object-cover transition duration-300 group-hover:scale-105"
-                onError={(e) => {
-                  e.currentTarget.style.background = "#f3f4f6";
-                  e.currentTarget.src = "";
-                }}
-              />
-            ) : (
-              <div className="absolute inset-0 w-full h-full bg-light1" />
-            )}
-          </>
+          <div className="absolute inset-0 w-full h-full bg-light1" />
         )}
 
         {/* ► DİKEY RENK NOKTALARI */}
@@ -303,14 +320,8 @@ export default function NewProductItem({
         )}
       </div>
 
-      {/* İçerik + indirim rozeti */}
-      <div className="relative p-4">
-        {hasDiscount && (
-          <div className="absolute bottom-4 left-2 bg-red-600 text-white text-xs font-bold w-10 h-10 flex items-center justify-center rounded-full shadow z-20">
-            %{discountPercentage}
-          </div>
-        )}
-
+      {/* İçerik */}
+      <div className="p-4">
         <h3 className="text-sm font-medium text-dark1 mb-2 text-center">
           {name}
         </h3>
@@ -318,7 +329,7 @@ export default function NewProductItem({
         {hasDiscount ? (
           <div className="text-center">
             <div className="text-xs text-gray-500 line-through">
-              {fmt(originalPrice || price)}
+              {fmt(price)}
             </div>
             <div className="text-base font-semibold text-dark2">
               {fmt(discountedPrice)}
@@ -339,15 +350,18 @@ NewProductItem.propTypes = {
   video: PropTypes.string,
   poster: PropTypes.string,
   name: PropTypes.string.isRequired,
+  // normalize edilmiş pricing props:
   price: PropTypes.number.isRequired,
-  originalPrice: PropTypes.number,
-  discountPercentage: PropTypes.number,
+  discountedPrice: PropTypes.number, // opsiyonel
+  discountRate: PropTypes.number, // opsiyonel
   stock: PropTypes.number.isRequired,
 };
 
 NewProductItem.defaultProps = {
   video: null,
   poster: null,
-  originalPrice: undefined,
-  discountPercentage: 0,
+  discountedPrice: null,
+  discountRate: 0,
 };
+
+

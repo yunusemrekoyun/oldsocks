@@ -1,7 +1,19 @@
+// src/components/user/OrdersList.jsx
 import React, { useEffect, useState } from "react";
 import api from "../../../api";
+import {
+  MagnifyingGlassIcon,
+  ChevronDownIcon,
+  ChevronUpIcon,
+  MapPinIcon,
+  CubeIcon,
+  ClockIcon,
+  CheckCircleIcon,
+  XCircleIcon,
+  TruckIcon,
+} from "@heroicons/react/24/outline";
 
-// Durum kodlarını Türkçeye çeviren eşleme
+// Durum etiketleri
 const STATUS_LABELS = {
   pending: "Sipariş oluşturuldu",
   paid: "Ödeme alındı",
@@ -10,10 +22,38 @@ const STATUS_LABELS = {
   cancelled: "İptal edildi",
 };
 
+// Durum rozet stilleri
+const STATUS_STYLES = {
+  pending:
+    "bg-amber-50 text-amber-800 ring-1 ring-inset ring-amber-200 dark:ring-amber-300/50",
+  paid: "bg-emerald-50 text-emerald-800 ring-1 ring-inset ring-emerald-200 dark:ring-emerald-300/50",
+  shipped:
+    "bg-blue-50 text-blue-800 ring-1 ring-inset ring-blue-200 dark:ring-blue-300/50",
+  completed:
+    "bg-gray-900 text-white ring-1 ring-inset ring-gray-900/10 dark:bg-dark1",
+  cancelled:
+    "bg-rose-50 text-rose-800 ring-1 ring-inset ring-rose-200 dark:ring-rose-300/50",
+};
+
+const STATUS_ICON = {
+  pending: ClockIcon,
+  paid: CheckCircleIcon,
+  shipped: TruckIcon,
+  completed: CheckCircleIcon,
+  cancelled: XCircleIcon,
+};
+
+const fmtTL = (n) =>
+  `₺${Number(n || 0).toLocaleString("tr-TR", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
+
 export default function OrdersList() {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [expanded, setExpanded] = useState({}); // {orderId: true/false}
 
   useEffect(() => {
     api
@@ -23,78 +63,208 @@ export default function OrdersList() {
       .finally(() => setLoading(false));
   }, []);
 
-  if (loading) return <div>Yükleniyor…</div>;
+  if (loading) {
+    return (
+      <div className="space-y-3">
+        <div className="h-10 w-full rounded-lg bg-gray-100 animate-pulse" />
+        {[...Array(3)].map((_, i) => (
+          <div
+            key={i}
+            className="rounded-2xl border border-gray-200 p-4 bg-white"
+          >
+            <div className="h-6 w-2/3 bg-gray-100 rounded animate-pulse mb-3" />
+            <div className="h-4 w-1/3 bg-gray-100 rounded animate-pulse" />
+          </div>
+        ))}
+      </div>
+    );
+  }
 
   const filtered = orders.filter(
     (o) =>
-      (o.orderNumber || "").includes(search) ||
-      (o.paymentId || "").includes(search)
+      (o.orderNumber || "").toLowerCase().includes(search.toLowerCase()) ||
+      (o.paymentId || "").toLowerCase().includes(search.toLowerCase())
   );
 
   return (
-    <div>
-      <div className="mb-4">
-        <input
-          type="text"
-          placeholder="Sipariş numarası ara..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="w-full px-3 py-2 border rounded"
-        />
+    <div className="space-y-6">
+      {/* Başlık + Arama */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <h2 className="text-xl font-semibold text-dark1">Siparişlerim</h2>
+
+        <div className="relative w-full sm:w-80">
+          <MagnifyingGlassIcon className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
+          <input
+            type="text"
+            placeholder="Sipariş no / ödeme no ile ara…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="w-full pl-10 pr-3 py-2.5 rounded-xl border border-gray-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-dark1/20 focus:border-dark1/30 transition"
+          />
+        </div>
       </div>
 
-      <div className="space-y-4">
-        {filtered.length === 0 && (
-          <p className="text-center text-gray-500">Hiç sipariş bulunamadı.</p>
-        )}
+      {/* Boş durum */}
+      {filtered.length === 0 && (
+        <div className="text-center py-14 rounded-2xl border border-dashed border-gray-300 bg-white">
+          <CubeIcon className="mx-auto h-10 w-10 text-gray-400 mb-3" />
+          <p className="text-gray-600">Hiç sipariş bulunamadı.</p>
+          <p className="text-sm text-gray-500 mt-1">
+            Yeni verdiğiniz siparişler birkaç saniye içinde burada görünecek.
+          </p>
+        </div>
+      )}
 
-        {filtered.map((order) => (
-          <div key={order._id} className="bg-white p-4 rounded shadow-md">
-            <h3 className="font-semibold mb-1">
-              Sipariş No: {order.orderNumber}
-            </h3>
-            <p className="text-sm text-gray-600 mb-1">
-              Tarih: {new Date(order.createdAt).toLocaleString()}
-            </p>
-            <p className="text-sm mb-1">
-              Durum:{" "}
-              <span className="font-medium">
-                {STATUS_LABELS[order.status] || order.status}
-              </span>
-            </p>
-            <p className="text-sm font-medium mb-2">
-              Toplam: ₺{order.totalPrice.toFixed(2)}
-            </p>
+      {/* Sipariş Kartları */}
+      <div className="grid grid-cols-1 gap-5">
+        {filtered.map((order) => {
+          const badgeClass =
+            STATUS_STYLES[order.status] || "bg-gray-100 text-gray-700";
+          const Icon = STATUS_ICON[order.status] || ClockIcon;
+          const isOpen = !!expanded[order._id];
 
-            {/* Adres */}
-            <div className="mb-2">
-              <p className="font-medium">Adres:</p>
-              <p className="text-sm">{order.address.title}</p>
-              <p className="text-sm">{order.address.mainaddress}</p>
-              <p className="text-sm">
-                {order.address.street}, {order.address.district}
-              </p>
-              <p className="text-sm">
-                {order.address.city} / {order.address.postalCode}
-              </p>
+          return (
+            <div
+              key={order._id}
+              className="group rounded-2xl border border-gray-200 bg-white shadow-sm hover:shadow-md transition-shadow"
+            >
+              {/* Üst Satır */}
+              <div className="p-5 sm:p-6">
+                <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                  {/* Sol kısım: sipariş no + tarih */}
+                  <div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-sm text-gray-500">Sipariş No</span>
+                      <span className="font-semibold tracking-wide text-dark1">
+                        #{order.orderNumber}
+                      </span>
+                    </div>
+                    <div className="mt-1 text-sm text-gray-500">
+                      {new Date(order.createdAt).toLocaleString("tr-TR")}
+                    </div>
+                  </div>
+
+                  {/* Orta kısım: durum rozeti */}
+                  <div className="flex items-center gap-2">
+                    <span
+                      className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium ${badgeClass}`}
+                    >
+                      <Icon className="h-4 w-4" />
+                      {STATUS_LABELS[order.status] || order.status}
+                    </span>
+                  </div>
+
+                  {/* Sağ kısım: toplam + aç/kapa */}
+                  <div className="flex items-center gap-3 md:gap-4">
+                    <div className="text-right">
+                      <div className="text-xs text-gray-500">Toplam</div>
+                      <div className="text-base font-semibold text-dark1">
+                        {fmtTL(order.totalPrice)}
+                      </div>
+                    </div>
+
+                    <button
+                      onClick={() =>
+                        setExpanded((s) => ({ ...s, [order._id]: !isOpen }))
+                      }
+                      className="ml-1 inline-flex items-center gap-1 rounded-lg border border-gray-200 px-3 py-2 text-sm font-medium text-dark1 hover:bg-gray-50 transition"
+                    >
+                      {isOpen ? (
+                        <>
+                          Detayı Gizle <ChevronUpIcon className="h-4 w-4" />
+                        </>
+                      ) : (
+                        <>
+                          Detayı Göster <ChevronDownIcon className="h-4 w-4" />
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Ayracı */}
+              <div className="border-t border-gray-100" />
+
+              {/* Detaylar */}
+              {isOpen && (
+                <div className="p-5 sm:p-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
+                  {/* Ürünler */}
+                  <section className="lg:col-span-2">
+                    <h4 className="text-sm font-semibold text-gray-700 mb-3">
+                      Ürünler
+                    </h4>
+                    <ul className="divide-y divide-gray-100 rounded-xl border border-gray-100 overflow-hidden">
+                      {order.items.map((it, i) => (
+                        <li
+                          key={i}
+                          className="flex items-start justify-between gap-4 p-4 bg-white"
+                        >
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium text-dark1 truncate">
+                              {it.name}
+                            </p>
+                            <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-gray-600">
+                              {it.size && (
+                                <span className="inline-flex items-center rounded-md bg-gray-100 px-2 py-1">
+                                  Beden: {it.size}
+                                </span>
+                              )}
+                              {it.color && (
+                                <span className="inline-flex items-center rounded-md bg-gray-100 px-2 py-1">
+                                  Renk: {it.color}
+                                </span>
+                              )}
+                              <span className="inline-flex items-center rounded-md bg-gray-100 px-2 py-1">
+                                Adet: {it.qty}
+                              </span>
+                            </div>
+                          </div>
+                          <div className="text-sm font-semibold text-dark1 whitespace-nowrap">
+                            {fmtTL(it.price)}
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  </section>
+
+                  {/* Adres */}
+                  <section className="lg:col-span-1">
+                    <h4 className="text-sm font-semibold text-gray-700 mb-3">
+                      Teslimat Adresi
+                    </h4>
+                    <div className="rounded-xl border border-gray-100 bg-gray-50 p-4">
+                      <div className="flex items-start gap-2">
+                        <MapPinIcon className="h-5 w-5 text-gray-500 mt-0.5" />
+                        <div className="text-sm text-gray-700 leading-6">
+                          <div className="font-medium text-dark1">
+                            {order.address.title}
+                          </div>
+                          <div>{order.address.mainaddress}</div>
+                          {(order.address.street || order.address.district) && (
+                            <div>
+                              {order.address.street}
+                              {order.address.street && order.address.district
+                                ? ", "
+                                : ""}
+                              {order.address.district}
+                            </div>
+                          )}
+                          <div>
+                            {order.address.city}
+                            {order.address.postalCode
+                              ? ` / ${order.address.postalCode}`
+                              : ""}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </section>
+                </div>
+              )}
             </div>
-
-            {/* Ürünler */}
-            <div>
-              <p className="font-medium mb-1">Ürünler:</p>
-              <ul className="list-disc list-inside">
-                {order.items.map((it, i) => (
-                  <li key={i}>
-                    {it.name}
-                    {it.size && <span> — Beden: {it.size}</span>}
-                    {it.color && <span> — Renk: {it.color}</span>}
-                    {" — "}Adet: {it.qty} × ₺{it.price.toFixed(2)}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );

@@ -35,14 +35,32 @@ export default function Products({ products: propProducts }) {
     return <div className="text-center py-10">Ürün bulunamadı.</div>;
   }
 
+  // ── Yardımcı: Kart için doğru fiyat alanlarını normalize et ──────────────
+  const toCardPricing = (p) => {
+    const final = Number(p.price ?? 0); // backend'in final fiyatı
+    const original = Number(p.originalPrice ?? 0); // orijinal fiyat
+
+    const hasDiscount = original > 0 && final > 0 && final < original;
+    const computedRate = hasDiscount
+      ? Math.round(100 - (final / original) * 100)
+      : 0;
+
+    return {
+      // ProductItem props:
+      price: hasDiscount ? original : final, // baş fiyat olarak orijinal (yoksa final)
+      discountedPrice: hasDiscount ? final : null, // varsa final fiyatı gönder
+      discountRate: hasDiscount ? computedRate : 0, // rozet için yüzde
+    };
+  };
+
   return (
     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-6 mt-8">
       {products.map((p) => {
-        const rate = Number(p.discount || 0);
-        const hasDiscount = rate > 0 && p.price != null;
-        const discountedPrice = hasDiscount
-          ? Math.max(0, Number(((p.price * (100 - rate)) / 100).toFixed(2)))
-          : null;
+        const { price, discountedPrice, discountRate } = toCardPricing(p);
+
+        const stock = Array.isArray(p.sizes)
+          ? p.sizes.reduce((sum, s) => sum + (s.stock || 0), 0)
+          : 0;
 
         return (
           <ProductItem
@@ -51,15 +69,10 @@ export default function Products({ products: propProducts }) {
             video={p.video}
             poster={p.poster || p.images?.[0] || null}
             name={p.name}
-            price={Number(p.price || 0)}
-            discountedPrice={discountedPrice}
-            discountRate={hasDiscount ? rate : 0}
-            // stok bilgisi gerekiyorsa:
-            stock={
-              Array.isArray(p.sizes)
-                ? p.sizes.reduce((sum, s) => sum + (s.stock || 0), 0)
-                : 0
-            }
+            price={price} // ← orijinal (yoksa final)
+            discountedPrice={discountedPrice} // ← final
+            discountRate={discountRate} // ← hesaplanan yüzde
+            stock={stock}
           />
         );
       })}

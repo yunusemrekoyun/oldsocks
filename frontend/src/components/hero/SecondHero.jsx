@@ -19,8 +19,7 @@ export default function SecondHero() {
   const { title, subtitle, buttonText, imageUrl, items } = campaign;
 
   const handleClick = () => {
-    // 1) Konsola bas
-    console.log("Kampanyadaki ürünler:", items);
+
     // 2) /shop sayfasına yönlendir, state ile aktar
     navigate("/shop", {
       state: {

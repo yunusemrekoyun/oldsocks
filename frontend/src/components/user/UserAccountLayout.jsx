@@ -1,11 +1,15 @@
 // src/components/user/UserAccountLayout.jsx
 import React, { useState } from "react";
+import { useLocation } from "react-router-dom";
 import UserAccount from "./UserAccount";
 import AddressList from "./AddressList";
 import OrdersList from "./OrdersList";
 
 export default function UserAccountLayout() {
-  const [tab, setTab] = useState("profile");
+  const location = useLocation();
+  const initialTab = location.state?.tab || "profile"; // 👈 state’ten gelen tab
+  const [tab, setTab] = useState(initialTab);
+
   const tabs = [
     { key: "profile", label: "Profil Bilgileri" },
     { key: "addresses", label: "Adreslerim" },

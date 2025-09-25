@@ -1,3 +1,4 @@
+/* eslint-disable no-empty */
 // src/components/products/ProductItem.jsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import PropTypes from "prop-types";
@@ -48,6 +49,14 @@ const toCssColor = (val) => {
   return colorMap[k] || k;
 };
 
+// TL formatlayıcı
+const fmtTL = (n) =>
+  new Intl.NumberFormat("tr-TR", {
+    style: "currency",
+    currency: "TRY",
+    minimumFractionDigits: 2,
+  }).format(n);
+
 const ProductItem = ({
   id,
   video,
@@ -85,10 +94,43 @@ const ProductItem = ({
     }
   }, []);
 
-  const showDiscount = useMemo(
-    () => discountedPrice != null && discountedPrice < price,
-    [discountedPrice, price]
+  /** ------------------ Fiyat Mantığı (double-discount fix) ------------------ **/
+  const cleanPrice = useMemo(() => Number(price) || 0, [price]);
+  const hasDiscountedPrice = useMemo(
+    () => discountedPrice !== null && discountedPrice !== undefined,
+    [discountedPrice]
   );
+
+  // Final satış fiyatı:
+  // 1) discountedPrice varsa -> onu kullan (asla oran uygulama)
+  // 2) yoksa ve discountRate > 0 ise -> price * (1 - rate/100)
+  // 3) aksi halde -> price
+  const finalPrice = useMemo(() => {
+    if (hasDiscountedPrice) return Number(discountedPrice) || 0;
+    const rateNum = Number(discountRate) || 0;
+    if (rateNum > 0 && cleanPrice > 0) {
+      const v = cleanPrice * (1 - rateNum / 100);
+      return v < 0 ? 0 : v;
+    }
+    return cleanPrice;
+  }, [hasDiscountedPrice, discountedPrice, discountRate, cleanPrice]);
+
+  // İndirim var mı?
+  const showDiscount = useMemo(
+    () => cleanPrice > 0 && finalPrice < cleanPrice,
+    [cleanPrice, finalPrice]
+  );
+
+  // Rozette gösterilecek oran:
+  const badgeRate = useMemo(() => {
+    if (!showDiscount || cleanPrice <= 0) return 0;
+    if (hasDiscountedPrice) {
+      const pct = Math.round(100 - (finalPrice / cleanPrice) * 100);
+      return pct > 0 ? pct : 0;
+    }
+    const pct = Math.round(Number(discountRate) || 0);
+    return pct > 0 ? pct : 0;
+  }, [showDiscount, hasDiscountedPrice, discountRate, cleanPrice, finalPrice]);
 
   /* ----- Varyant renklerini çek ----- */
   useEffect(() => {
@@ -99,7 +141,8 @@ const ProductItem = ({
         const { data: prod } = await api.get(`/products/${id}`);
         const baseId = prod?.parentProductId || prod?._id;
         if (!baseId) {
-          if (alive) setVariants(prod?.color ? [{ _id: id, color: prod.color }] : []);
+          if (alive)
+            setVariants(prod?.color ? [{ _id: id, color: prod.color }] : []);
           return;
         }
         const { data: group } = await api.get(`/products?varyantsOf=${baseId}`);
@@ -181,7 +224,10 @@ const ProductItem = ({
     !!video && (isHoverCapable || (isTouch && mobileWantsPlay));
 
   // gösterilecek renk noktaları
-  const colorDots = useMemo(() => (variants.length ? variants : []), [variants]);
+  const colorDots = useMemo(
+    () => (variants.length ? variants : []),
+    [variants]
+  );
 
   return (
     <Link
@@ -190,13 +236,6 @@ const ProductItem = ({
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
     >
-      {/* stok etiketi */}
-      {stock === 0 && (
-        <div className="absolute top-2 left-2 bg-red-600 text-white text-xs px-2 py-1 rounded shadow z-20">
-          TÜKENDİ
-        </div>
-      )}
-
       {/* ses butonu */}
       {shouldShowVideo && isHoverCapable && isHovered && (
         <button
@@ -212,17 +251,24 @@ const ProductItem = ({
         </button>
       )}
 
-      {/* indirim rozeti */}
-      {showDiscount && (
-        <div className="absolute left-3 bottom-3 z-10">
-          <div className="bg-red-600 text-white w-10 h-10 rounded-full flex items-center justify-center text-xs font-bold shadow-md -translate-y-1">
-            %{discountRate}
-          </div>
-        </div>
-      )}
-
       {/* MEDYA ALANI */}
       <div className="relative h-64 overflow-hidden bg-light1">
+        {/* İndirim Rozeti: mobilde küçük, daha genişte büyür; sol-üst */}
+        {showDiscount && badgeRate > 0 && (
+          <div className="absolute top-2 left-2 z-10">
+            <div className="bg-red-600 text-white rounded-full shadow-md flex items-center justify-center font-bold w-7 h-7 text-[9px] sm:w-8 sm:h-8 sm:text-[10px] md:w-10 md:h-10 md:text-xs">
+              %{badgeRate}
+            </div>
+          </div>
+        )}
+
+        {/* TÜKENDİ — medya alanının sol-altında */}
+        {stock === 0 && (
+          <div className="absolute bottom-2 left-2 bg-red-600 text-white text-[10px] sm:text-xs px-2 py-1 rounded shadow z-10">
+            TÜKENDİ
+          </div>
+        )}
+
         {shouldShowVideo ? (
           <video
             ref={videoRef}
@@ -294,15 +340,13 @@ const ProductItem = ({
         {showDiscount ? (
           <div>
             <p className="text-sm text-gray-500 line-through">
-              {price.toFixed(2)}₺
+              {fmtTL(cleanPrice)}
             </p>
-            <p className="text-lg font-bold text-dark2">
-              {discountedPrice.toFixed(2)}₺
-            </p>
+            <p className="text-lg font-bold text-dark2">{fmtTL(finalPrice)}</p>
           </div>
         ) : (
           <p className="text-lg font-semibold text-dark2">
-            {price.toFixed(2)}₺
+            {fmtTL(finalPrice)}
           </p>
         )}
       </div>

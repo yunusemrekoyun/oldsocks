@@ -19,13 +19,13 @@ export default function AddToCart({
   const [selectedColor, setSelectedColor] = useState(color || null);
   const [colorOptions, setColorOptions] = useState([]);
   const [qty, setQty] = useState(1);
-  const [available, setAvailable] = useState(Infinity); // seçilen beden stok
+  const [available, setAvailable] = useState(Infinity);
   const [warn, setWarn] = useState("");
   const [showAdded, setShowAdded] = useState(false);
 
   const { addToCart } = useCart();
   const navigate = useNavigate();
-  const sentWarnRef = useRef(false); // aynı uyarıyı arka arkaya göstermesin
+  const sentWarnRef = useRef(false);
 
   /* ------------- Varyant renkleri ------------- */
   useEffect(() => {
@@ -67,7 +67,6 @@ export default function AddToCart({
       return q + 1;
     });
   };
-
   const decrement = () => setQty((q) => Math.max(1, q - 1));
 
   const showWarn = (msg) => {
@@ -246,11 +245,22 @@ export default function AddToCart({
         }`}
       >
         {showAdded ? (
-          <span className="animate-pulse">Sepete Başarıyla Eklendi!</span>
+          <span className="animate-pulse">Sepete eklendi</span>
         ) : (
           "Sepete Ekle"
         )}
       </button>
+
+      {/* Sepete Git — sadece eklendikten sonra göster */}
+      {showAdded && (
+        <button
+          type="button"
+          onClick={() => navigate("/cart")}
+          className="w-full py-3 rounded-lg border border-dark1 text-dark1 font-semibold hover:bg-dark1 hover:text-white transition"
+        >
+          Sepete Git
+        </button>
+      )}
     </div>
   );
 }

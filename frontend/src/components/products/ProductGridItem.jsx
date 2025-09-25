@@ -1,3 +1,4 @@
+/* eslint-disable no-empty */
 import React, { useEffect, useRef, useState, useMemo } from "react";
 import PropTypes from "prop-types";
 import { Link } from "react-router-dom";
@@ -47,14 +48,20 @@ const toCssColor = (val) => {
   return colorMap[k] || k;
 };
 
+const fmt = (n) =>
+  Number(n || 0).toLocaleString("tr-TR", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+
 const ProductGridItem = ({
   id,
   video,
   poster,
   name,
-  price,
-  originalPrice,
-  discount,
+  price, // normalize: indirim varsa ORİJİNAL, yoksa FINAL
+  discountedPrice, // normalize: indirim varsa FINAL, yoksa null/undefined
+  discountRate, // opsiyonel: rozet için yüzde
   stock,
 }) => {
   const videoRef = useRef(null);
@@ -84,23 +91,25 @@ const ProductGridItem = ({
     }
   }, []);
 
-  // ---- İndirim hesapları ----
-  const rate = Number(discount || 0);
-  const hasDiscount =
-    rate > 0 ||
-    (Number.isFinite(originalPrice) && Number(originalPrice) > Number(price));
+  // ---- İndirim görünümü (HESAPLAMA YOK) ----
+  const hasDiscount = useMemo(
+    () =>
+      discountedPrice !== null &&
+      discountedPrice !== undefined &&
+      Number(discountedPrice) < Number(price),
+    [discountedPrice, price]
+  );
 
-  const discountPercentage = Math.min(100, Math.max(0, Math.round(rate)));
-  const discountedPrice =
-    hasDiscount && rate > 0
-      ? Math.max(0, Number(((price * (100 - rate)) / 100).toFixed(2)))
-      : Number(price || 0);
-
-  const fmt = (n) =>
-    Number(n || 0).toLocaleString("tr-TR", {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    });
+  const badgeRate = useMemo(() => {
+    if (Number(discountRate) > 0) return Math.round(Number(discountRate));
+    if (hasDiscount && Number(price) > 0) {
+      const pct = Math.round(
+        100 - (Number(discountedPrice) / Number(price)) * 100
+      );
+      return pct > 0 ? pct : 0;
+    }
+    return 0;
+  }, [discountRate, hasDiscount, price, discountedPrice]);
 
   /* ----- Varyant renklerini çek ----- */
   useEffect(() => {
@@ -111,7 +120,8 @@ const ProductGridItem = ({
         const { data: prod } = await api.get(`/products/${id}`);
         const baseId = prod?.parentProductId || prod?._id;
         if (!baseId) {
-          if (alive) setVariants(prod?.color ? [{ _id: id, color: prod.color }] : []);
+          if (alive)
+            setVariants(prod?.color ? [{ _id: id, color: prod.color }] : []);
           return;
         }
         const { data: group } = await api.get(`/products?varyantsOf=${baseId}`);
@@ -196,7 +206,10 @@ const ProductGridItem = ({
   const shouldShowVideo =
     !!video && (isHoverCapable || (isTouch && mobileWantsPlay));
 
-  const colorDots = useMemo(() => (variants.length ? variants : []), [variants]);
+  const colorDots = useMemo(
+    () => (variants.length ? variants : []),
+    [variants]
+  );
 
   return (
     <Link
@@ -205,11 +218,8 @@ const ProductGridItem = ({
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
     >
-      {stock === 0 && (
-        <div className="absolute top-2 left-2 bg-red-600 text-white text-xs px-2 py-1 rounded shadow z-20">
-          TÜKENDİ
-        </div>
-      )}
+      {/* TÜKENDİ etiketi: medya alanının sol-altında (mobilde küçük) */}
+      {/* (Eskiden dışardaydı; kaldırıldı ve aşağıdaki medya div'inin içine taşındı) */}
 
       {shouldShowVideo && isHoverCapable && isHovered && (
         <button
@@ -226,6 +236,22 @@ const ProductGridItem = ({
       )}
 
       <div className="relative w-full aspect-[3/4] bg-light1">
+        {/* İndirim Rozeti: mobilde küçük, breakpoint'lerde kademeli büyür; sol-üst */}
+        {hasDiscount && badgeRate > 0 && (
+          <div className="absolute top-2 left-2 z-10">
+            <div className="bg-red-600 text-white rounded-full shadow-md flex items-center justify-center font-bold w-7 h-7 text-[9px] sm:w-8 sm:h-8 sm:text-[10px] md:w-10 md:h-10 md:text-xs">
+              %{badgeRate}
+            </div>
+          </div>
+        )}
+
+        {/* TÜKENDİ — medya alanının sol-altında */}
+        {stock === 0 && (
+          <div className="absolute bottom-2 left-2 bg-red-600 text-white text-[10px] sm:text-xs px-2 py-1 rounded shadow z-10">
+            TÜKENDİ
+          </div>
+        )}
+
         {shouldShowVideo ? (
           <video
             ref={videoRef}
@@ -291,12 +317,7 @@ const ProductGridItem = ({
 
       {/* İçerik */}
       <div className="p-4 relative">
-        {hasDiscount && discountPercentage > 0 && (
-          <div className="absolute bottom-3 left-3 bg-red-600 text-white text-xs font-bold w-10 h-10 flex items-center justify-center rounded-full shadow z-20">
-            %{discountPercentage}
-          </div>
-        )}
-
+        {/* (Rozet artık içerikte değil, medya alanında) */}
         <h3 className="text-sm font-medium text-dark1 mb-2 text-center">
           {name}
         </h3>
@@ -304,7 +325,7 @@ const ProductGridItem = ({
         {hasDiscount ? (
           <div className="flex flex-col items-center gap-0.5">
             <div className="text-sm text-dark2 line-through opacity-70">
-              {fmt(originalPrice || price)}₺
+              {fmt(price)}₺
             </div>
             <div className="text-center text-base font-semibold text-dark1">
               {fmt(discountedPrice)}₺
@@ -325,17 +346,18 @@ ProductGridItem.propTypes = {
   video: PropTypes.string,
   poster: PropTypes.string,
   name: PropTypes.string.isRequired,
+  // normalize edilmiş pricing props
   price: PropTypes.number.isRequired,
-  originalPrice: PropTypes.number,
-  discount: PropTypes.number,
+  discountedPrice: PropTypes.number, // opsiyonel
+  discountRate: PropTypes.number, // opsiyonel
   stock: PropTypes.number.isRequired,
 };
 
 ProductGridItem.defaultProps = {
   video: null,
   poster: null,
-  originalPrice: 0,
-  discount: 0,
+  discountedPrice: null,
+  discountRate: 0,
 };
 
 export default ProductGridItem;

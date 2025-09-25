@@ -26,6 +26,23 @@ export default function ProductGrid() {
     );
   }
 
+  // Kart için fiyat verilerini normalize et
+  const toCardPricing = (p) => {
+    const final = Number(p.price ?? 0); // backend'in final fiyatı
+    const original = Number(p.originalPrice ?? 0);
+
+    const hasDiscount = original > 0 && final > 0 && final < original;
+    const computedRate = hasDiscount
+      ? Math.round(100 - (final / original) * 100)
+      : 0;
+
+    return {
+      price: hasDiscount ? original : final, // üstü çizilecek fiyat
+      discountedPrice: hasDiscount ? final : null, // indirimli fiyat
+      discountRate: hasDiscount ? computedRate : 0, // rozet için
+    };
+  };
+
   return (
     <section className="bg-light1 py-12">
       <div className="container mx-auto px-4">
@@ -35,8 +52,14 @@ export default function ProductGrid() {
 
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-6">
           {products.map((p) => {
+            const { price, discountedPrice, discountRate } = toCardPricing(p);
+
             const posterUrl =
               p.poster || (Array.isArray(p.images) ? p.images[0] : null);
+
+            const stock = Array.isArray(p.sizes)
+              ? p.sizes.reduce((sum, s) => sum + (s.stock || 0), 0)
+              : 0;
 
             return (
               <ProductGridItem
@@ -45,14 +68,10 @@ export default function ProductGrid() {
                 video={p.video}
                 poster={posterUrl}
                 name={p.name}
-                price={Number(p.price || 0)}
-                originalPrice={Number(p.originalPrice || 0)}
-                discount={Number(p.discount || 0)}
-                stock={
-                  Array.isArray(p.sizes)
-                    ? p.sizes.reduce((sum, s) => sum + (s.stock || 0), 0)
-                    : 0
-                }
+                price={price}
+                discountedPrice={discountedPrice}
+                discountRate={discountRate}
+                stock={stock}
               />
             );
           })}

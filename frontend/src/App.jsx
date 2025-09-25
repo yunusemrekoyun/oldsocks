@@ -26,6 +26,7 @@ import CheckoutPage from "./pages/CheckoutPage";
 import PaymentResultPage from "./pages/PaymentResultPage";
 import NotFoundPage from "./pages/NotFoundPage";
 import PaymentPage from "./pages/PaymentPage";
+import ScrollToTop from "./components/common/ScrollToTop";
 
 // Admin sayfaları
 // import ProductsPage from "./admin/pages/ProductsPage";
@@ -46,6 +47,7 @@ import HeroVideoPage from "./admin/pages/HeroVideoPage";
 export default function App() {
   return (
     <BrowserRouter>
+      <ScrollToTop />
       <Routes>
         {/* Public / User Routes */}
         <Route

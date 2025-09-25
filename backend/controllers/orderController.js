@@ -1,8 +1,6 @@
 // backend/controllers/orderController.js
 const Order = require("../models/Order");
 const { applyStockChanges } = require("../utils/updateStock");
-
-// ✅ EKLE: mail helper
 const { sendOrderPlacedMail } = require("../utils/mailer");
 
 exports.getAllOrders = async (req, res) => {
@@ -16,10 +14,7 @@ exports.getAllOrders = async (req, res) => {
     res.status(500).json({ message: "Siparişler alınırken hata oluştu." });
   }
 };
-/** ────────────────────────────────────────────────────────────────
-+ *  GET /orders/unseen-count  (admin)
-+ *  status=paid & adminSeenAt=null olan kayıt sayısı
-+ *  ───────────────────────────────────────────────────────────────*/
+
 exports.getUnseenPaidCount = async (req, res) => {
   try {
     const count = await Order.countDocuments({
@@ -33,10 +28,6 @@ exports.getUnseenPaidCount = async (req, res) => {
   }
 };
 
-/** ────────────────────────────────────────────────────────────────
-+ *  PUT /orders/mark-seen  (admin)
-+ *  status=paid & adminSeenAt=null tüm siparişleri görüldü işaretle
-+ *  ───────────────────────────────────────────────────────────────*/
 exports.markPaidOrdersSeen = async (req, res) => {
   try {
     const now = new Date();
@@ -53,6 +44,7 @@ exports.markPaidOrdersSeen = async (req, res) => {
     res.status(500).json({ message: "Siparişler görüldü işaretlenemedi." });
   }
 };
+
 exports.updateOrderStatus = async (req, res) => {
   try {
     const { status } = req.body;
@@ -61,15 +53,26 @@ exports.updateOrderStatus = async (req, res) => {
       return res.status(400).json({ message: "Geçersiz status değeri." });
     }
 
-    const update =
-      status === "paid" ? { status, adminSeenAt: null } : { status };
-    const order = await Order.findByIdAndUpdate(req.params.id, update, {
-      new: true,
-    });
+    const order = await Order.findById(req.params.id);
     if (!order) {
       return res.status(404).json({ message: "Sipariş bulunamadı." });
     }
 
+    // status değiştir
+    order.status = status;
+    if (status === "paid") {
+      order.adminSeenAt = null;
+
+      // ✅ stok düşürme
+      try {
+        await applyStockChanges(order);
+        console.log("[OrderController] Admin manuel paid → stok güncellendi.");
+      } catch (e) {
+        console.error("[OrderController] Stok düşürme hatası:", e);
+      }
+    }
+
+    await order.save();
     res.json({ message: "Sipariş durumu güncellendi.", order });
   } catch (err) {
     console.error("updateOrderStatus error:", err);
@@ -95,7 +98,6 @@ exports.getOrderById = async (req, res) => {
   res.json(order);
 };
 
-// — Ödeme sonrası: status=paid, paymentId varsa güncelle
 exports.confirmOrderPayment = async (req, res) => {
   const { conversationId } = req.body;
   if (!conversationId)
@@ -107,7 +109,6 @@ exports.confirmOrderPayment = async (req, res) => {
   if (!order) return res.status(404).json({ message: "Sipariş bulunamadı." });
 
   if (order.status !== "paid") {
-    // callback henüz ulaşmadıysa 409
     return res.status(409).json({ message: "Ödeme henüz onaylanmadı." });
   }
   return res.json({ orderNumber: order.orderNumber });

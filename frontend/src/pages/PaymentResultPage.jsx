@@ -1,8 +1,10 @@
+/* eslint-disable no-empty */
 // src/pages/PaymentResultPage.jsx
 import React, { useEffect, useState, useRef } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import { useCart } from "../context/useCart";
 import api from "../../api";
+import { CheckCircleIcon, XCircleIcon } from "@heroicons/react/24/solid";
 
 export default function PaymentResultPage() {
   const [searchParams] = useSearchParams();
@@ -22,17 +24,23 @@ export default function PaymentResultPage() {
   const [message, setMessage] = useState("");
   const [orderNumber, setOrderNumber] = useState("");
 
-  const unmounted = useRef(false);
+  // guard & timers
   const timers = useRef([]);
+  const doneRef = useRef(false);
+  const attemptsRef = useRef(0);
+
+  const clearAllTimers = () => {
+    timers.current.forEach(clearTimeout);
+    timers.current = [];
+  };
 
   useEffect(() => {
-    // StrictMode'da ikinci mount'a girerken resetle
-    unmounted.current = false;
     return () => {
-      unmounted.current = true;
-      timers.current.forEach(clearTimeout);
+      doneRef.current = true;
+      clearAllTimers();
     };
   }, []);
+
   useEffect(() => {
     const decode = (s) => {
       try {
@@ -50,105 +58,150 @@ export default function PaymentResultPage() {
     }
 
     if (status === "success" && conversationId) {
-      let attempts = 0;
-      const maxAttempts = 7;
-      const delayMs = 1500;
+      const onceKey = `confirm:${conversationId}`;
+      const lockKey = `__CONFIRM_LOCK__:${conversationId}`;
+      const state = sessionStorage.getItem(onceKey);
+      if (state === "done") {
+        setMessage("Siparişiniz başarıyla kaydedildi.");
+        setLoaded(true);
+        return;
+      }
+
+      if (window[lockKey]) {
+        if (!loaded) setLoaded(false);
+        return;
+      }
+      window[lockKey] = true;
+      if (state !== "started") sessionStorage.setItem(onceKey, "started");
+
+      doneRef.current = false;
+      attemptsRef.current = 0;
 
       const finishAsSuccess = (maybeOrderNo) => {
-        if (unmounted.current) return;
+        if (doneRef.current) return;
+        doneRef.current = true;
         if (maybeOrderNo) setOrderNumber(maybeOrderNo);
-        setMessage("Siparişiniz başarıyla kaydedildi!");
-        clearCart();
+        setMessage("Siparişiniz başarıyla kaydedildi.");
+        try {
+          clearCart();
+        } catch {}
+        sessionStorage.setItem(onceKey, "done");
+        clearAllTimers();
         setLoaded(true);
       };
 
       const finishAsError = (msg) => {
-        if (unmounted.current) return;
+        if (doneRef.current) return;
+        doneRef.current = true;
         setMessage(msg || "Sipariş kaydı sırasında bir hata oluştu.");
+        clearAllTimers();
         setLoaded(true);
       };
 
       const tryConfirm = async () => {
+        if (doneRef.current) return;
         try {
           const res = await api.post("/orders/confirm", { conversationId });
-          // Başarı: orderNumber olsa da olmasa da başarı ekranına geç
           const no = res?.data?.orderNumber;
           finishAsSuccess(no);
         } catch (err) {
+          if (doneRef.current) return;
           const code = err?.response?.status;
-          if (code === 409 && attempts < maxAttempts) {
-            attempts += 1;
+          const attempt = attemptsRef.current;
+          const maxAttempts = 7;
+          if (code === 409 && attempt < maxAttempts) {
+            attemptsRef.current = attempt + 1;
+            const delayMs = 1500 + attempt * 500;
             const t = setTimeout(tryConfirm, delayMs);
             timers.current.push(t);
             return;
           }
-          // Diğer hatalarda hata ekranı
-          finishAsError();
+          finishAsError(
+            code === 409
+              ? "Onay beklenenden uzun sürdü. Siparişiniz oluşturulduysa 'Hesabım → Siparişlerim'den görebilirsiniz."
+              : undefined
+          );
         }
       };
 
       (async () => {
-        // MOCK ise önce backend’e tek sefer “paid” dedirtip sonra confirm et
         if (paymentId && paymentId.startsWith("mock_")) {
           try {
             await api.post("/payment/mock-complete", { conversationId });
-          } catch {
-            // önemli değil; confirm polling yine deneyecek
-          }
+          } catch {}
         }
-
-        // 12 sn watchdog: hiçbir şeye düşemezse spinner’ı sonlandır
         const watchdog = setTimeout(() => {
           finishAsError(
             "Onay beklenenden uzun sürdü. Siparişiniz oluşturulduysa 'Hesabım → Siparişlerim'den görebilirsiniz."
           );
         }, 12000);
         timers.current.push(watchdog);
-
         tryConfirm();
       })();
 
       return;
     }
 
-    // Beklenmedik durum
     setMessage("Geçersiz geri dönüş parametreleri.");
     setLoaded(true);
-  }, [status, conversationId, clearCart, searchParams, paymentId]);
+  }, [status, conversationId, paymentId, loaded]);
 
   if (!loaded) {
-    return <div className="text-center p-10">Sonuç alınıyor…</div>;
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-100 to-gray-200">
+        <p className="text-lg font-medium text-gray-700 animate-pulse">
+          Sonuç alınıyor…
+        </p>
+      </div>
+    );
   }
 
+  const isSuccess = status === "success";
+
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center p-6">
-      {status === "success" ? (
-        <>
-          <h2 className="text-3xl font-bold text-green-600 mb-4">
-            Ödeme Başarılı 🎉
-          </h2>
-          {paymentId && <p className="mb-2">Ödeme Numaranız: {paymentId}</p>}
-          {orderNumber && (
-            <p className="mb-4">
-              Sipariş Numaranız: <strong>{orderNumber}</strong>
-            </p>
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-50 to-gray-200 px-4 py-10">
+      <div className="w-full max-w-lg bg-white shadow-2xl rounded-2xl p-8 text-center">
+        {isSuccess ? (
+          <CheckCircleIcon className="w-20 h-20 text-green-500 mx-auto mb-6 drop-shadow" />
+        ) : (
+          <XCircleIcon className="w-20 h-20 text-red-500 mx-auto mb-6 drop-shadow" />
+        )}
+
+        <h2
+          className={`text-3xl font-bold mb-3 ${
+            isSuccess ? "text-green-600" : "text-red-600"
+          }`}
+        >
+          {isSuccess ? "Ödeme Başarılı" : "Ödeme Başarısız"}
+        </h2>
+
+        {paymentId && (
+          <p className="text-sm text-gray-500 mb-1">Ödeme No: {paymentId}</p>
+        )}
+        {orderNumber && (
+          <p className="text-sm text-gray-500 mb-3">
+            Sipariş No: <strong>{orderNumber}</strong>
+          </p>
+        )}
+        {message && <p className="text-gray-700 mb-6">{message}</p>}
+
+        <div className="flex flex-col sm:flex-row gap-3">
+          <button
+            onClick={() => navigate("/")}
+            className="flex-1 py-3 bg-dark1 text-white rounded-lg shadow-md hover:bg-dark2 transition"
+          >
+            Ana Sayfa
+          </button>
+          {isSuccess && (
+            <button
+              onClick={() => navigate("/profile", { state: { tab: "orders" } })}
+              className="flex-1 py-3 border border-gray-300 rounded-lg shadow-sm hover:bg-gray-50 transition"
+            >
+              Siparişlerim
+            </button>
           )}
-          {message && <p className="text-center max-w-md">{message}</p>}
-        </>
-      ) : (
-        <>
-          <h2 className="text-3xl font-bold text-red-600 mb-4">
-            Ödeme Başarısız 😞
-          </h2>
-          <p className="text-center max-w-md">{message}</p>
-        </>
-      )}
-      <button
-        onClick={() => navigate("/")}
-        className="mt-6 px-4 py-2 bg-dark1 text-white rounded hover:bg-dark2"
-      >
-        Ana Sayfa
-      </button>
+        </div>
+      </div>
     </div>
   );
 }

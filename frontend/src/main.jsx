@@ -8,8 +8,13 @@ import CartProvider from "./context/CartContext.jsx";
 import UploadQueueOverlay from "./components/ui/UploadQueueOverlay.jsx";
 import { UploadQueueProvider } from "./context/UploadQueueContext.jsx";
 
+const RootWrapper =
+  import.meta.env.MODE === "production"
+    ? ({ children }) => children
+    : StrictMode;
+
 createRoot(document.getElementById("root")).render(
-  <StrictMode>
+  <RootWrapper>
     <AuthProvider>
       <CartProvider>
         <UploadQueueProvider>
@@ -18,5 +23,5 @@ createRoot(document.getElementById("root")).render(
         </UploadQueueProvider>
       </CartProvider>
     </AuthProvider>
-  </StrictMode>
+  </RootWrapper>
 );

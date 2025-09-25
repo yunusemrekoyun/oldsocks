@@ -5,7 +5,6 @@ import { AuthContext } from "../../context/AuthContext";
 
 export default function RequireAdmin() {
   const { isLoggedIn, role } = useContext(AuthContext);
-  console.log("🚀 RequireAdmin:", { isLoggedIn, role });
 
   // 1) Henüz token var ama rol gelmemişse, bekle:
   if (isLoggedIn && role === null) {

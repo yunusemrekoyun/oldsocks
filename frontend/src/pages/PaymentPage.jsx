@@ -1,13 +1,14 @@
+// src/pages/PaymentPage.jsx
 import React, { useEffect, useRef, useState, useMemo } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useCart } from "../context/useCart";
 import api from "../../api";
 
-const SESSION_KEY = "iyzicoCheckoutHtml";
-const RELOAD_FLAG = "iyzicoReloadOnce";
-
 export default function PaymentPage() {
   const containerRef = useRef(null);
+  const startedForConvRef = useRef(null); // <-- aynı conversation için sadece bir kez çalış
+  const iframeAppendedRef = useRef(false); // <-- birden fazla iframe oluşturmayı engelle
+
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -19,7 +20,21 @@ export default function PaymentPage() {
 
   const [addresses, setAddresses] = useState([]);
   const [addrLoading, setAddrLoading] = useState(true);
+
   const selectedAddressIdFromState = location.state?.selectedAddress || null;
+  const conversationId = location.state?.conversationId;
+
+  useEffect(() => {
+    if (!conversationId) navigate("/cart", { replace: true });
+  }, [conversationId, navigate]);
+
+  useEffect(() => {
+    api
+      .get("/users/me/addresses")
+      .then(({ data }) => setAddresses(data || []))
+      .finally(() => setAddrLoading(false));
+  }, []);
+
   const selectedAddress = useMemo(() => {
     if (!addresses.length) return null;
     return (
@@ -28,28 +43,55 @@ export default function PaymentPage() {
     );
   }, [addresses, selectedAddressIdFromState]);
 
-  const [html, setHtml] = useState("");
-  const [nonce, setNonce] = useState(0);
-
-  const conversationId = location.state?.conversationId;
-
-  // HTML getir (backend’den inline endpoint)
   useEffect(() => {
-    if (!conversationId) {
-      navigate("/cart", { replace: true });
-      return;
-    }
+    // StrictMode ikinci mount’ta bu guard devreye girsin
+    if (!conversationId) return;
+    if (startedForConvRef.current === conversationId) return; // zaten başlatıldı
+    startedForConvRef.current = conversationId;
 
-    let cancelled = false;
+    let alive = true;
 
     (async () => {
       try {
         const { data } = await api.get(`/payment/inline/${conversationId}`, {
-          responseType: "text",
+          params: { t: Date.now() },
         });
-        if (cancelled) return;
-        setHtml(data);
-        sessionStorage.setItem(SESSION_KEY, data);
+        if (!alive) return;
+
+        const host = containerRef.current;
+        if (!host) return;
+
+        // Yalnızca ilk kez temizle+yerleştir
+        if (!iframeAppendedRef.current) host.innerHTML = "";
+
+        if (data?.mode === "mock" && typeof data.html === "string") {
+          if (iframeAppendedRef.current) return;
+          host.innerHTML = data.html;
+          iframeAppendedRef.current = true;
+          return;
+        }
+
+        if (data?.mode === "paytr" && data.token) {
+          if (iframeAppendedRef.current) return; // ikinci kez iframe oluşturma
+          const iframe = document.createElement("iframe");
+          iframe.id = "paytriframe";
+          iframe.src = `https://www.paytr.com/odeme/guvenli/${
+            data.token
+          }?t=${Date.now()}`;
+          iframe.frameBorder = "0";
+          iframe.scrolling = "auto";
+          iframe.style.width = "100%";
+          iframe.style.minHeight = "1100px";
+          iframe.style.display = "block";
+          iframe.style.border = "0";
+          host.appendChild(iframe);
+          iframeAppendedRef.current = true;
+          return;
+        }
+
+        console.error("Bilinmeyen inline response:", data);
+        alert("Ödeme başlatılamadı. Lütfen tekrar deneyin.");
+        navigate("/cart", { replace: true });
       } catch (e) {
         console.error("Ödeme formu yüklenemedi:", e);
         alert("Ödeme başlatılamadı. Lütfen tekrar deneyin.");
@@ -58,102 +100,49 @@ export default function PaymentPage() {
     })();
 
     return () => {
-      cancelled = true;
-    };
-  }, [conversationId, navigate]);
-
-  // Adresleri getir
-  useEffect(() => {
-    api
-      .get("/users/me/addresses")
-      .then(({ data }) => setAddresses(data || []))
-      .finally(() => setAddrLoading(false));
-  }, []);
-
-  // Formu DOM’a bas + script’leri yeniden çalıştır
-  useEffect(() => {
-    if (!html || !containerRef.current) return;
-
-    const el = containerRef.current;
-    el.innerHTML = html;
-
-    const scripts = Array.from(el.querySelectorAll("script"));
-    scripts.forEach((old) => {
-      const s = document.createElement("script");
-      Array.from(old.attributes).forEach((attr) =>
-        s.setAttribute(attr.name, attr.value)
-      );
-      if (old.src) s.src = old.src;
-      else s.textContent = old.innerHTML;
-      old.parentNode?.replaceChild(s, old);
-    });
-
-    const t = setTimeout(() => {
-      const hasForm = el.querySelector("form") || el.querySelector("iframe");
-      const already = sessionStorage.getItem(RELOAD_FLAG);
-      if (!hasForm && !already) {
-        sessionStorage.setItem(RELOAD_FLAG, "1");
-        window.location.reload();
-      } else {
-        sessionStorage.removeItem(RELOAD_FLAG);
+      alive = false;
+      // Unmount’ta iframe’i silme — StrictMode’un ikinci ‘unmount/mount’ döngüsünde
+      // token’ı tekrar yükleyip 429’a düşmemek için DOM’u koruyoruz.
+      // Sayfadan ayrılırken otomatik resetlenmesi için:
+      if (location.pathname !== "/payment") {
+        const host = containerRef.current;
+        if (host) host.innerHTML = "";
+        iframeAppendedRef.current = false;
+        startedForConvRef.current = null;
       }
-    }, 1000);
-
-    return () => clearTimeout(t);
-  }, [html, nonce]);
-
-  // Geri gelince tekrar inject et
-  useEffect(() => {
-    const onPageShow = (e) => {
-      const el = containerRef.current;
-      const hasForm =
-        el && (el.querySelector("form") || el.querySelector("iframe"));
-      const cached = sessionStorage.getItem(SESSION_KEY);
-      const already = sessionStorage.getItem(RELOAD_FLAG);
-
-      if ((!hasForm || e?.persisted) && cached && !already) {
-        sessionStorage.setItem(RELOAD_FLAG, "1");
-        window.location.reload();
-        return;
-      }
-      sessionStorage.removeItem(RELOAD_FLAG);
-      setNonce((n) => n + 1);
     };
-
-    window.addEventListener("pageshow", onPageShow);
-    return () => window.removeEventListener("pageshow", onPageShow);
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [conversationId]); // navigate'ı dependency'ye eklemiyoruz
 
   return (
-    <div className="min-h-screen bg-light1 text-dark1 py-8 px-4">
+    <div className="min-h-screen bg-light1 text-dark1 py-6 sm:py-8 px-3 sm:px-4">
       <div className="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* SOL: Ödeme Formu */}
         <section className="lg:col-span-2">
           <div className="bg-white rounded-2xl shadow-md p-4 sm:p-6">
             <header className="mb-4 sm:mb-6">
               <h2 className="text-xl sm:text-2xl font-semibold">Ödeme</h2>
               <p className="text-sm text-gray-500 mt-1">
-                Kart bilgilerinizi güvenle İyzico formu üzerinden girin.
+                Kart bilgilerinizi güvenle PayTR formu üzerinden girin.
               </p>
             </header>
-
-            <div className="w-full flex justify-start">
-              <div className="w-full max-w-[640px] rounded-xl border border-gray-200 p-3 sm:p-4 bg-white">
+            <div className="w-full">
+              <div
+                key={conversationId}
+                className="w-full mx-auto rounded-xl border border-gray-200 p-3 sm:p-4 bg-white max-w-[720px]"
+              >
                 <div
                   ref={containerRef}
-                  id="iyzipay-checkout-form"
-                  className="w-full min-h-[520px]"
+                  id="paytr-inline-container"
+                  className="w-full min-h-[1000px] lg:min-h-[1100px]"
                 />
               </div>
             </div>
           </div>
         </section>
 
-        {/* SAĞ: Sipariş Özeti + Adres */}
         <aside className="lg:col-span-1">
-          <div className="bg-white rounded-2xl shadow-md p-4 sm:p-6 lg:sticky lg:top-6">
+          <div className="bg-white rounded-2xl shadow-md p-4 sm:p-6 xl:sticky xl:top-6">
             <h3 className="text-lg font-semibold mb-4">Sipariş Özeti</h3>
-
             <ul className="space-y-3 max-h-72 overflow-auto pr-1">
               {items.map((it, i) => (
                 <li
@@ -190,7 +179,6 @@ export default function PaymentPage() {
               <h4 className="text-sm font-semibold text-gray-700 mb-2">
                 Gönderim Adresi
               </h4>
-
               {addrLoading ? (
                 <div className="text-sm text-gray-500">
                   Adresler yükleniyor…

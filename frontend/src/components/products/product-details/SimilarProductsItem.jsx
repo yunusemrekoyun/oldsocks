@@ -1,4 +1,5 @@
 // src/components/products/SimilarProductItem.jsx
+/* eslint-disable no-empty */
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import PropTypes from "prop-types";
@@ -55,6 +56,7 @@ export default function SimilarProductItem({
   name,
   price,
   discountedPrice,
+  stock, // opsiyonel: 0 ise "TÜKENDİ" göster
 }) {
   const videoRef = useRef(null);
 
@@ -107,7 +109,8 @@ export default function SimilarProductItem({
         const { data: prod } = await api.get(`/products/${id}`);
         const baseId = prod?.parentProductId || prod?._id;
         if (!baseId) {
-          if (alive) setVariants(prod?.color ? [{ _id: id, color: prod.color }] : []);
+          if (alive)
+            setVariants(prod?.color ? [{ _id: id, color: prod.color }] : []);
           return;
         }
         const { data: group } = await api.get(`/products?varyantsOf=${baseId}`);
@@ -214,6 +217,20 @@ export default function SimilarProductItem({
     >
       {/* Görsel/Video Alanı */}
       <div className="relative h-64 overflow-hidden bg-light1">
+        {/* İndirim Rozeti: sol-üst, mobilde küçük; breakpoint'lerde kademeli büyür */}
+        {hasDiscount && (
+          <span className="absolute top-2 left-2 z-10 inline-flex items-center justify-center rounded-full bg-red-600 text-white font-bold shadow w-7 h-7 text-[9px] sm:w-8 sm:h-8 sm:text-[10px] md:w-10 md:h-10 md:text-xs">
+            -{pct}%
+          </span>
+        )}
+
+        {/* TÜKENDİ — medya alanının sol-altında (opsiyonel stock=0) */}
+        {typeof stock !== "undefined" && stock === 0 && (
+          <span className="absolute bottom-2 left-2 z-10 inline-flex items-center justify-center px-2 py-1 rounded bg-red-600 text-white text-[10px] sm:text-xs shadow">
+            TÜKENDİ
+          </span>
+        )}
+
         {shouldShowVideo ? (
           <video
             ref={videoRef}
@@ -276,13 +293,6 @@ export default function SimilarProductItem({
           </button>
         )}
 
-        {/* İndirim Rozeti */}
-        {hasDiscount && (
-          <span className="absolute bottom-2 left-2 z-10 inline-flex items-center justify-center w-7 h-7 rounded-full bg-red-600 text-white text-[10px] font-bold shadow">
-            -{pct}%
-          </span>
-        )}
-
         {/* ► DİKEY RENK NOKTALARI */}
         {loadingColors ? (
           <div className="absolute bottom-2 right-2 z-10 pointer-events-none">
@@ -337,4 +347,9 @@ SimilarProductItem.propTypes = {
   name: PropTypes.string.isRequired,
   price: PropTypes.number.isRequired,
   discountedPrice: PropTypes.number,
+  stock: PropTypes.number, // opsiyonel
+};
+
+SimilarProductItem.defaultProps = {
+  stock: undefined,
 };
