@@ -41,14 +41,26 @@ function buildOrderHtml(order) {
             it.name
           }${size}${color}</td>
           <td style="padding:8px 0;border-bottom:1px solid #eee;" align="right">
-            ${it.qty} × ${fmt(it.price)}
+            ${it.qty} × ₺${Number(it.price || 0).toFixed(2)}
           </td>
         </tr>`;
     })
     .join("");
 
-  const addr = order.shippingAddress || {};
-  const customer = order.customer || order.user || {};
+  // ← senin şemaya göre doldur
+  const addr = order.address || {};
+  const isGuest = !!order.guest;
+  const fullName = isGuest
+    ? `${order.guest?.firstName || ""} ${order.guest?.lastName || ""}`.trim()
+    : order.user?.firstName && order.user?.lastName
+    ? `${order.user.firstName} ${order.user.lastName}`
+    : "-";
+  const email = isGuest ? order.guest?.email || "-" : order.user?.email || "-";
+  const phone = isGuest ? order.guest?.phone || "-" : "-"; // user populated değilse boş gelebilir
+
+  const addrLine1 = addr.mainaddress || "-";
+  const addrLine2 = addr.street || "";
+  const cityLine = `${addr.city || ""} ${addr.postalCode || ""}`.trim();
 
   return `
   <div style="font-family:Arial, Helvetica, sans-serif; max-width:640px; margin:auto;">
@@ -71,9 +83,9 @@ function buildOrderHtml(order) {
       <tfoot>
         <tr>
           <td style="padding-top:12px;" align="left"><strong>Toplam</strong></td>
-          <td style="padding-top:12px;" align="right"><strong>${fmt(
-            order.totalPrice
-          )}</strong></td>
+          <td style="padding-top:12px;" align="right"><strong>₺${Number(
+            order.totalPrice || 0
+          ).toFixed(2)}</strong></td>
         </tr>
       </tfoot>
     </table>
@@ -81,13 +93,11 @@ function buildOrderHtml(order) {
     <div style="margin-top:18px; padding-top:12px; border-top:1px solid #eee;">
       <h3 style="margin:0 0 6px 0;">Müşteri / Teslimat</h3>
       <p style="margin:0; color:#555;">
-        ${customer.name || customer.fullName || "-"}<br/>
-        ${order.email || customer.email || "-"}<br/>
-        ${addr.phone || order.phone || "-"}<br/>
-        ${addr.addressLine1 || addr.address || "-"} ${
-    addr.addressLine2 || ""
-  }<br/>
-        ${addr.city || ""} ${addr.postalCode || ""} ${addr.country || ""}
+        ${fullName}<br/>
+        ${email}<br/>
+        ${phone}<br/>
+        ${addrLine1} ${addrLine2}<br/>
+        ${cityLine}
       </p>
     </div>
   </div>`;

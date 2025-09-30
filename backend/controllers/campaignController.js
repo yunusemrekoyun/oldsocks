@@ -21,9 +21,10 @@ exports.createCampaign = async (req, res) => {
     const products = parseArrayField(req.body.products);
     const categories = parseArrayField(req.body.categories);
 
-    if (!title || !subtitle || !buttonText || !req.file) {
+    // subtitle zorunlu değil
+    if (!title || !buttonText || !req.file) {
       return res.status(400).json({
-        message: "title, subtitle, buttonText ve image zorunludur.",
+        message: "title, buttonText ve image zorunludur.",
       });
     }
 
@@ -41,7 +42,7 @@ exports.createCampaign = async (req, res) => {
 
     const campaign = await Campaign.create({
       title,
-      subtitle,
+      subtitle, // gönderilmezse şema default "" kullanır
       buttonText,
       imageUrl: req.file.path,
       products,
@@ -91,9 +92,10 @@ exports.updateCampaign = async (req, res) => {
     const products = parseArrayField(req.body.products);
     const categories = parseArrayField(req.body.categories);
 
-    if (!title || !subtitle || !buttonText) {
+    // subtitle artık zorunlu değil
+    if (!title || !buttonText) {
       return res.status(400).json({
-        message: "title, subtitle ve buttonText zorunludur.",
+        message: "title ve buttonText zorunludur.",
       });
     }
 
@@ -111,11 +113,16 @@ exports.updateCampaign = async (req, res) => {
 
     const updates = {
       title,
-      subtitle,
       buttonText,
       products,
       categories,
     };
+
+    // subtitle gönderildiyse güncelle (undefined ise elleme)
+    if (typeof subtitle !== "undefined") {
+      updates.subtitle = subtitle;
+    }
+
     if (req.file) {
       updates.imageUrl = req.file.path;
     }
@@ -175,10 +182,10 @@ exports.getActiveCampaign = async (req, res) => {
       items = await Product.find({
         _id: { $in: campaign.products },
       })
-        .select("name images price originalPrice discount video") // <-- video ekledik
+        .select("name images price originalPrice discount video")
         .lean();
     } else if (campaign.categories?.length > 0) {
-      // (kategori mantığı aynı)…
+      // Kategori + alt kategori
       const subs = await Category.find({
         parent: { $in: campaign.categories },
       }).select("_id");
@@ -189,14 +196,14 @@ exports.getActiveCampaign = async (req, res) => {
       items = await Product.find({
         category: { $in: catIds },
       })
-        .select("name images price originalPrice discount video") // <-- video ekledik
+        .select("name images price originalPrice discount video")
         .lean();
     }
 
     return res.json({
       _id: campaign._id,
       title: campaign.title,
-      subtitle: campaign.subtitle,
+      subtitle: campaign.subtitle, // boş string olabilir
       buttonText: campaign.buttonText,
       imageUrl: campaign.imageUrl,
       items,

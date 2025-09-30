@@ -136,12 +136,12 @@ const ContactPage = () => {
             />
             <ContactInfo
               Icon={FaPhoneAlt}
-              title="+90 (000) 000 00 00"
+              title="+90 541 428 29 89"
               subtitle="Pazartesi-Cumartesi 09:00-20:00"
             />
             <ContactInfo
               Icon={FaEnvelope}
-              title="support@oldsocks.com"
+              title="oldscks@gmail.com"
               subtitle="Dilediğiniz zaman bize ulaşabilirsiniz"
             />
           </aside>

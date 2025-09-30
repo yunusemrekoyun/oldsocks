@@ -342,7 +342,10 @@ const ProductItem = ({
             <p className="text-sm text-gray-500 line-through">
               {fmtTL(cleanPrice)}
             </p>
-            <p className="text-lg font-bold text-dark2">{fmtTL(finalPrice)}</p>
+            {/* İndirimde: final fiyat KIRMIZI */}
+            <p className="text-lg font-bold text-red-600">
+              {fmtTL(finalPrice)}
+            </p>
           </div>
         ) : (
           <p className="text-lg font-semibold text-dark2">

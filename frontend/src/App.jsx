@@ -7,12 +7,11 @@ import {
   Outlet,
   Navigate,
 } from "react-router-dom";
-
 import Layout from "./components/layout/Layout";
 import AdminLayout from "./admin/layout/AdminLayout";
 import RequireAdmin from "./components/auth/RequireAdmin";
 import RequireAuth from "./components/auth/RequireAuth";
-
+import GuestCheckoutPage from "./pages/GuestCheckoutPage";
 import HomePage from "./pages/HomePage";
 import ShopPage from "./pages/ShopPage";
 import AboutPage from "./pages/AboutPage";
@@ -27,7 +26,8 @@ import PaymentResultPage from "./pages/PaymentResultPage";
 import NotFoundPage from "./pages/NotFoundPage";
 import PaymentPage from "./pages/PaymentPage";
 import ScrollToTop from "./components/common/ScrollToTop";
-
+import AgreementPage from "./pages/AgreementPage";
+import KvkkPage from "./pages/KvkkPage";
 // Admin sayfaları
 // import ProductsPage from "./admin/pages/ProductsPage";
 import UsersPage from "./admin/pages/UsersPage";
@@ -44,12 +44,12 @@ import ProductListPage from "./admin/pages/ProductListPage";
 import AdminUsersPage from "./admin/pages/UsersPage";
 import DiscountsPage from "./admin/pages/DiscountsPage";
 import HeroVideoPage from "./admin/pages/HeroVideoPage";
+import ShippingMethodsPage from "./admin/pages/ShippingMethodsPage";
 export default function App() {
   return (
     <BrowserRouter>
       <ScrollToTop />
       <Routes>
-        {/* Public / User Routes */}
         <Route
           element={
             <Layout>
@@ -65,18 +65,10 @@ export default function App() {
           <Route path="/blog/:slug" element={<BlogDetailsPage />} />
           <Route path="/product-details/:id" element={<ProductDetailsPage />} />
           <Route path="/cart" element={<CartPage />} />
-
-          {/* Payment, önce oturum kontrolü */}
-          <Route
-            path="/payment"
-            element={
-              <RequireAuth>
-                <PaymentPage />
-              </RequireAuth>
-            }
-          />
-
-          {/* Checkout, önce oturum kontrolü */}
+          <Route path="/checkout-guest" element={<GuestCheckoutPage />} />
+          <Route path="/agreement" element={<AgreementPage />} />
+          <Route path="/payment" element={<PaymentPage />} />
+          <Route path="/kvkk" element={<KvkkPage />} />
           <Route
             path="/checkout"
             element={
@@ -85,14 +77,11 @@ export default function App() {
               </RequireAuth>
             }
           />
-
           <Route path="/payment-result" element={<PaymentResultPage />} />
           <Route path="/auth" element={<AuthPage />} />
           <Route path="/profile" element={<AuthPage />} />
           <Route path="*" element={<NotFoundPage />} />
         </Route>
-
-        {/* Admin Routes */}
         <Route element={<RequireAdmin />}>
           <Route
             path="/admin"
@@ -116,9 +105,7 @@ export default function App() {
             <Route path="replies" element={<CommentRepliesPage />} />
             <Route path="instagram-posts" element={<InstagramPostsPage />} />
             <Route path="hero-videos" element={<HeroVideoPage />} />
-
-            {/* Admin için 404 */}
-
+            <Route path="shipping" element={<ShippingMethodsPage />} />
             <Route path="*" element={<Navigate to="/admin" replace />} />
           </Route>
         </Route>

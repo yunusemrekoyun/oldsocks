@@ -63,12 +63,20 @@ exports.updateOrderStatus = async (req, res) => {
     if (status === "paid") {
       order.adminSeenAt = null;
 
-      // ✅ stok düşürme
       try {
         await applyStockChanges(order);
         console.log("[OrderController] Admin manuel paid → stok güncellendi.");
       } catch (e) {
         console.error("[OrderController] Stok düşürme hatası:", e);
+      }
+
+      if (!order.orderMailSentAt) {
+        try {
+          await sendOrderPlacedMail(order);
+          order.orderMailSentAt = new Date();
+        } catch (e) {
+          console.error("[OrderController] Mail gönderilemedi:", e);
+        }
       }
     }
 
@@ -103,13 +111,24 @@ exports.confirmOrderPayment = async (req, res) => {
   if (!conversationId)
     return res.status(400).json({ message: "Eksik parametre." });
 
-  const order = await Order.findOne({ conversationId }).select(
-    "orderNumber status"
-  );
+  const order = await Order.findOne({ conversationId });
   if (!order) return res.status(404).json({ message: "Sipariş bulunamadı." });
 
   if (order.status !== "paid") {
     return res.status(409).json({ message: "Ödeme henüz onaylanmadı." });
   }
+
+  if (!order.orderMailSentAt) {
+    try {
+      await sendOrderPlacedMail(order);
+      order.orderMailSentAt = new Date();
+      await order.save();
+      console.log("[OrderConfirm] Mail gönderildi (safety).");
+    } catch (e) {
+      console.error("[OrderConfirm] Mail gönderilemedi:", e?.message || e);
+      // Burada hata olsa bile sipariş numarasını döndürmeye devam ediyoruz
+    }
+  }
+
   return res.json({ orderNumber: order.orderNumber });
 };

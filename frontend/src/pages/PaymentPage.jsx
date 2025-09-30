@@ -6,8 +6,8 @@ import api from "../../api";
 
 export default function PaymentPage() {
   const containerRef = useRef(null);
-  const startedForConvRef = useRef(null); // <-- aynı conversation için sadece bir kez çalış
-  const iframeAppendedRef = useRef(false); // <-- birden fazla iframe oluşturmayı engelle
+  const startedForConvRef = useRef(null); // aynı conversation için sadece bir kez çalış
+  const iframeAppendedRef = useRef(false); // ikinci kez iframe eklenmesin
 
   const location = useLocation();
   const navigate = useNavigate();
@@ -18,33 +18,59 @@ export default function PaymentPage() {
     [items]
   );
 
-  const [addresses, setAddresses] = useState([]);
-  const [addrLoading, setAddrLoading] = useState(true);
+  // ← Checkout/GuestCheckout'tan opsiyonel özet
+  const summary = location.state?.summary || null;
 
-  const selectedAddressIdFromState = location.state?.selectedAddress || null;
+  const isGuest = location.state?.guest === true;
   const conversationId = location.state?.conversationId;
+  const selectedAddressIdFromState = location.state?.selectedAddress || null;
 
+  const [addresses, setAddresses] = useState([]);
+  const [addrLoading, setAddrLoading] = useState(!isGuest); // guest’te adres çekmeyeceğiz
+
+  // conversationId yoksa geri gönder
   useEffect(() => {
     if (!conversationId) navigate("/cart", { replace: true });
   }, [conversationId, navigate]);
 
+  // SADECE kayıtlı kullanıcı akışında adresleri çek
   useEffect(() => {
-    api
-      .get("/users/me/addresses")
-      .then(({ data }) => setAddresses(data || []))
-      .finally(() => setAddrLoading(false));
-  }, []);
+    if (isGuest) {
+      setAddrLoading(false);
+      return;
+    }
+    let alive = true;
+    (async () => {
+      try {
+        const { data } = await api.get("/users/me/addresses");
+        if (!alive) return;
+        setAddresses(data || []);
+      } catch (err) {
+        console.warn(
+          "[PaymentPage] addresses fetch failed:",
+          err?.response?.status
+        );
+        setAddresses([]);
+      } finally {
+        if (alive) setAddrLoading(false);
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [isGuest]);
 
+  // İlgili adresi (kayıtlı kullanıcı akışı için) seç
   const selectedAddress = useMemo(() => {
-    if (!addresses.length) return null;
+    if (isGuest || !addresses.length) return null;
     return (
       addresses.find((a) => a._id === selectedAddressIdFromState) ||
       addresses[0]
     );
-  }, [addresses, selectedAddressIdFromState]);
+  }, [isGuest, addresses, selectedAddressIdFromState]);
 
+  // PayTR inline formu başlat
   useEffect(() => {
-    // StrictMode ikinci mount’ta bu guard devreye girsin
     if (!conversationId) return;
     if (startedForConvRef.current === conversationId) return; // zaten başlatıldı
     startedForConvRef.current = conversationId;
@@ -61,7 +87,6 @@ export default function PaymentPage() {
         const host = containerRef.current;
         if (!host) return;
 
-        // Yalnızca ilk kez temizle+yerleştir
         if (!iframeAppendedRef.current) host.innerHTML = "";
 
         if (data?.mode === "mock" && typeof data.html === "string") {
@@ -72,7 +97,7 @@ export default function PaymentPage() {
         }
 
         if (data?.mode === "paytr" && data.token) {
-          if (iframeAppendedRef.current) return; // ikinci kez iframe oluşturma
+          if (iframeAppendedRef.current) return;
           const iframe = document.createElement("iframe");
           iframe.id = "paytriframe";
           iframe.src = `https://www.paytr.com/odeme/guvenli/${
@@ -101,9 +126,7 @@ export default function PaymentPage() {
 
     return () => {
       alive = false;
-      // Unmount’ta iframe’i silme — StrictMode’un ikinci ‘unmount/mount’ döngüsünde
-      // token’ı tekrar yükleyip 429’a düşmemek için DOM’u koruyoruz.
-      // Sayfadan ayrılırken otomatik resetlenmesi için:
+      // /payment dışına çıkarken temizle
       if (location.pathname !== "/payment") {
         const host = containerRef.current;
         if (host) host.innerHTML = "";
@@ -112,7 +135,7 @@ export default function PaymentPage() {
       }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [conversationId]); // navigate'ı dependency'ye eklemiyoruz
+  }, [conversationId]);
 
   return (
     <div className="min-h-screen bg-light1 text-dark1 py-6 sm:py-8 px-3 sm:px-4">
@@ -143,6 +166,7 @@ export default function PaymentPage() {
         <aside className="lg:col-span-1">
           <div className="bg-white rounded-2xl shadow-md p-4 sm:p-6 xl:sticky xl:top-6">
             <h3 className="text-lg font-semibold mb-4">Sipariş Özeti</h3>
+
             <ul className="space-y-3 max-h-72 overflow-auto pr-1">
               {items.map((it, i) => (
                 <li
@@ -170,16 +194,66 @@ export default function PaymentPage() {
               ))}
             </ul>
 
-            <div className="flex justify-between items-center text-base sm:text-lg font-semibold border-t pt-4 mt-4">
-              <span>Toplam</span>
-              <span>₺{totalPrice.toFixed(2)}</span>
-            </div>
+            {/* Toplamlar */}
+            {summary ? (
+              <div className="space-y-2 text-base sm:text-lg font-semibold border-t pt-4 mt-4">
+                <div className="flex justify-between">
+                  <span>Ara Toplam</span>
+                  <span>₺{Number(summary.subTotal || 0).toFixed(2)}</span>
+                </div>
 
+                <div className="flex justify-between items-center">
+                  <span>
+                    Kargo
+                    {summary.shippingName ? ` — ${summary.shippingName}` : ""}
+                  </span>
+                  {summary.isFree ? (
+                    <span className="flex items-center gap-2">
+                      <span className="line-through text-gray-500">
+                        ₺{Number(summary.shippingFee || 0).toFixed(2)}
+                      </span>
+                      <span className="text-emerald-600 font-bold">
+                        Ücretsiz
+                      </span>
+                    </span>
+                  ) : (
+                    <span>₺{Number(summary.shippingFee || 0).toFixed(2)}</span>
+                  )}
+                </div>
+
+                <div className="flex justify-between text-xl">
+                  <span>Genel Toplam</span>
+                  <span className="text-primary">
+                    ₺{Number(summary.grandTotal || 0).toFixed(2)}
+                  </span>
+                </div>
+
+                {summary.isFree && summary.freeShippingThreshold != null && (
+                  <p className="text-xs text-emerald-700">
+                    ₺{Number(summary.freeShippingThreshold).toFixed(0)} ve üzeri
+                    alışverişlerde kargo ücretsiz.
+                  </p>
+                )}
+              </div>
+            ) : (
+              // summary yoksa: eski davranış (sadece ürün toplamı)
+              <div className="flex justify-between items-center text-base sm:text-lg font-semibold border-t pt-4 mt-4">
+                <span>Toplam</span>
+                <span>₺{totalPrice.toFixed(2)}</span>
+              </div>
+            )}
+
+            {/* Adres Bölümü: kayıtlı kullanıcı için göster, guest için bilgilendirme */}
             <div className="mt-6">
               <h4 className="text-sm font-semibold text-gray-700 mb-2">
                 Gönderim Adresi
               </h4>
-              {addrLoading ? (
+
+              {isGuest ? (
+                <div className="text-sm bg-light2/60 p-3 rounded-lg leading-6">
+                  Misafir sipariş: adres bilgileri ödeme başlatılırken iletildi.
+                </div>
+              ) : addrLoading ? (
                 <div className="text-sm text-gray-500">
                   Adresler yükleniyor…
                 </div>
@@ -203,13 +277,15 @@ export default function PaymentPage() {
                 </div>
               )}
 
-              <button
-                type="button"
-                onClick={() => navigate("/profile")}
-                className="mt-3 w-full text-center text-sm bg-dark1 hover:bg-dark2 text-white rounded-lg py-2 transition"
-              >
-                Adresleri Yönet
-              </button>
+              {!isGuest && (
+                <button
+                  type="button"
+                  onClick={() => navigate("/profile")}
+                  className="mt-3 w-full text-center text-sm bg-dark1 hover:bg-dark2 text-white rounded-lg py-2 transition"
+                >
+                  Adresleri Yönet
+                </button>
+              )}
             </div>
 
             <p className="text-[12px] text-gray-500 mt-4">

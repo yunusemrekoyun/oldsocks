@@ -10,14 +10,31 @@ const OrderItemSchema = new mongoose.Schema({
   color: { type: String },
 });
 
+const GuestSchema = new mongoose.Schema(
+  {
+    firstName: { type: String, trim: true },
+    lastName: { type: String, trim: true },
+    email: { type: String, trim: true },
+    phone: { type: String, trim: true },
+    identityNumber: { type: String, trim: true },
+    registrationAddress: { type: String, trim: true },
+  },
+  { _id: false }
+);
+
 const OrderSchema = new mongoose.Schema(
   {
     orderNumber: { type: String, required: true, unique: true },
 
-    user: { type: mongoose.Types.ObjectId, ref: "User", required: true },
+    // Kayıtlı kullanıcı varsa doldurulur:
+    user: { type: mongoose.Types.ObjectId, ref: "User", required: false },
+
+    // Guest checkout bilgileri (opsiyonel — user yoksa guest dolu olmalı)
+    guest: { type: GuestSchema, default: null },
+
     items: { type: [OrderItemSchema], required: true },
     totalPrice: { type: Number, required: true },
-
+    orderMailSentAt: { type: Date, default: null },
     address: {
       title: { type: String, required: true },
       mainaddress: { type: String, required: true },
@@ -27,8 +44,8 @@ const OrderSchema = new mongoose.Schema(
       postalCode: { type: String },
     },
 
-    paymentId: { type: String }, // PayTR'de "payment_id" zorunlu değil, opsiyonel
-    conversationId: { type: String, required: true, unique: true }, // == merchant_oid
+    paymentId: { type: String },
+    conversationId: { type: String, required: true, unique: true },
     status: {
       type: String,
       enum: ["pending", "paid", "shipped", "completed", "cancelled"],
@@ -37,14 +54,19 @@ const OrderSchema = new mongoose.Schema(
     stockUpdated: { type: Boolean, default: false },
     adminSeenAt: { type: Date, default: null },
 
-    // ── YENİ: PayTR için hazırlanan pre-init veri (get-token için)
     paytrInit: { type: Object, default: null },
-
-    // ── eski Iyzico alanı bırakılabilir (read-only)
     iyzInit: { type: Object, default: null },
   },
   { timestamps: true }
 );
+
+// En azından user veya guest birinden biri dolu olsun
+OrderSchema.pre("validate", function (next) {
+  if (!this.user && !this.guest) {
+    return next(new Error("Order must have either a user or guest info."));
+  }
+  next();
+});
 
 OrderSchema.index({ status: 1, adminSeenAt: 1, createdAt: -1 });
 module.exports = mongoose.model("Order", OrderSchema);

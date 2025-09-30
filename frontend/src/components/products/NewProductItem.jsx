@@ -331,7 +331,8 @@ export default function NewProductItem({
             <div className="text-xs text-gray-500 line-through">
               {fmt(price)}
             </div>
-            <div className="text-base font-semibold text-dark2">
+            {/* İndirimliyse kırmızı */}
+            <div className="text-base font-semibold text-red-600">
               {fmt(discountedPrice)}
             </div>
           </div>
@@ -363,5 +364,3 @@ NewProductItem.defaultProps = {
   discountedPrice: null,
   discountRate: 0,
 };
-
-

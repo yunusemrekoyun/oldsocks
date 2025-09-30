@@ -1,3 +1,4 @@
+// src/pages/CheckoutPage.jsx
 import React, { useState, useMemo, useEffect } from "react";
 import { Navigate, useNavigate } from "react-router-dom";
 import { useCart } from "../context/useCart";
@@ -16,10 +17,43 @@ export default function CheckoutPage() {
   const [selectedAddress, setSelectedAddress] = useState(null);
   const [showLoginModal, setShowLoginModal] = useState(false);
 
-  const totalPrice = useMemo(
+  // kargo state
+  const [shipping, setShipping] = useState(null);
+  const [shipLoading, setShipLoading] = useState(true);
+
+  // ürün ara toplamı
+  const subTotal = useMemo(
     () => items.reduce((sum, i) => sum + i.price * i.qty, 0),
     [items]
   );
+
+  // kargo bilgisi çek
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        setShipLoading(true);
+        const { data } = await api.get("/shipping");
+        if (!alive) return;
+        const list = Array.isArray(data) ? data : [];
+        setShipping(list[0] || null);
+      } catch (e) {
+        console.error("shipping load error:", e);
+      } finally {
+        if (alive) setShipLoading(false);
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  const isFree =
+    shipping?.freeShippingThreshold != null &&
+    subTotal >= Number(shipping.freeShippingThreshold);
+
+  const shippingFee = shipping ? (isFree ? 0 : Number(shipping.fee || 0)) : 0;
+  const grandTotal = subTotal + shippingFee;
 
   useEffect(() => {
     api
@@ -75,22 +109,33 @@ export default function CheckoutPage() {
     try {
       const { data } = await api.post("/payment/start", {
         cartItems: items,
-        totalPrice,
+        totalPrice: grandTotal,
+        shippingFee,
+        shippingName: shipping?.name || null,
         addressId: selectedAddress,
         useFallback,
       });
 
-      // Eksik kullanıcı verisi varsa (ör. telefon), bir kez fallback ile tekrar dene
       if (data?.missing && !useFallback) {
         return attemptPayment(true);
       }
 
       if (data?.conversationId) {
-        // PaymentPage’e -> state ile hem conversationId hem de seçili adresi gönder
+        // PaymentPage'e özet bilgileri de gönder
+        const summary = {
+          subTotal,
+          shippingFee,
+          grandTotal,
+          isFree,
+          shippingName: shipping?.name || null,
+          freeShippingThreshold: shipping?.freeShippingThreshold ?? null,
+        };
+
         navigate("/payment", {
           state: {
             conversationId: data.conversationId,
             selectedAddress: selectedAddress,
+            summary,
           },
         });
         return;
@@ -157,9 +202,36 @@ export default function CheckoutPage() {
           ))}
         </ul>
 
-        <div className="flex justify-between text-lg font-semibold border-t pt-4">
-          <span>Toplam:</span>
-          <span>₺{totalPrice.toFixed(2)}</span>
+        <div className="space-y-2 border-t pt-4 text-lg font-semibold">
+          <div className="flex justify-between">
+            <span>Ara Toplam:</span>
+            <span>₺{subTotal.toFixed(2)}</span>
+          </div>
+
+          <div className="flex justify-between items-center">
+            <span>Kargo:</span>
+            {shipLoading ? (
+              <span className="text-gray-500">Kargo yükleniyor…</span>
+            ) : shipping ? (
+              isFree ? (
+                <span className="flex items-center gap-2">
+                  <span className="line-through text-gray-500">
+                    ₺{Number(shipping.fee).toFixed(2)}
+                  </span>
+                  <span className="text-emerald-600 font-bold">Ücretsiz</span>
+                </span>
+              ) : (
+                <span>₺{shippingFee.toFixed(2)}</span>
+              )
+            ) : (
+              <span className="text-gray-500">Tanımlı kargo yok</span>
+            )}
+          </div>
+
+          <div className="flex justify-between text-xl">
+            <span>Genel Toplam:</span>
+            <span className="text-primary">₺{grandTotal.toFixed(2)}</span>
+          </div>
         </div>
 
         <button

@@ -25,6 +25,7 @@ import {
   CameraIcon,
   ChevronDownIcon,
   ChevronRightIcon,
+  TruckIcon,
 } from "@heroicons/react/24/solid";
 
 /* --------- Küçük yardımcı --------- */
@@ -81,6 +82,11 @@ export default function AdminLayout({ children }) {
         label: "Ürünler",
         icon: <ShoppingBagIcon className="w-5 h-5" />,
         path: "/admin/products",
+      },
+      {
+        label: "Kargo",
+        icon: <TruckIcon className="w-5 h-5" />,
+        path: "/admin/shipping",
       },
       {
         label: "İndirimler",

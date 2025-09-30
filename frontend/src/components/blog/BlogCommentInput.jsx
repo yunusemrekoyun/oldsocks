@@ -6,20 +6,28 @@ import api from "../../../api";
 export default function BlogCommentInput({ blogId, onCommentPosted }) {
   const [text, setText] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [feedback, setFeedback] = useState(null); // ✅ yeni feedback alanı
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!text.trim()) return;
     setSubmitting(true);
+    setFeedback(null);
+
     try {
-      // Eski: /blogs/${blogId}/comments
-      // Yeni route:
       await api.post(`/comments/blogs/${blogId}/comments`, { text });
       setText("");
+      setFeedback({
+        type: "success",
+        msg: "Yorumunuz alındı ve onaylandıktan sonra yayınlanacaktır.",
+      });
       onCommentPosted();
     } catch (err) {
       console.error("Yorum gönderilemedi:", err);
-      alert("Yorum gönderilirken hata oluştu.");
+      setFeedback({
+        type: "error",
+        msg: "Yorum gönderilirken bir hata oluştu. Lütfen tekrar deneyin.",
+      });
     } finally {
       setSubmitting(false);
     }
@@ -38,6 +46,18 @@ export default function BlogCommentInput({ blogId, onCommentPosted }) {
           onChange={(e) => setText(e.target.value)}
           className="w-full border px-3 py-2 rounded resize-none"
         />
+
+        {/* ✅ Feedback mesajı */}
+        {feedback && (
+          <p
+            className={`text-sm ${
+              feedback.type === "success" ? "text-green-600" : "text-red-600"
+            }`}
+          >
+            {feedback.msg}
+          </p>
+        )}
+
         <button
           type="submit"
           disabled={submitting}

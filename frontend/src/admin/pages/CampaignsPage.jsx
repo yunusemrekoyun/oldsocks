@@ -1,4 +1,3 @@
-// src/pages/admin/CampaignsPage.jsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   Card,
@@ -19,11 +18,105 @@ import {
   MagnifyingGlassIcon,
   FunnelIcon,
   ArrowUpTrayIcon,
+  ExclamationTriangleIcon,
 } from "@heroicons/react/24/outline";
 import api from "../../../api";
 import ToastAlert from "../../components/ui/ToastAlert";
 import { v4 as uuidv4 } from "uuid";
 import { useUploadQueue } from "../../context/UploadQueueContext";
+
+/* ───── Yardımcı: Desteklenen tipler ───── */
+const ALLOWED_MIMES = ["image/jpeg", "image/png"]; // nihai çıktı hedefi
+const READABLE_BUT_CONVERT = ["image/webp"]; // tarayıcı okuyabiliyor → jpeg'e çevir
+const NOT_READABLE_HEIC = ["image/heic", "image/heif"]; // çoğu tarayıcı okuyamaz
+
+/* ───── Yardımcı: Görsel sıkıştırma & dönüştürme (canvas) ─────
+   - maxW x maxH kutusuna sığdırır (oranı korur)
+   - kaliteyi fazla düşürmeden ~limit altına inmeye çalışır
+*/
+async function compressToJpeg(
+  file,
+  { maxW = 1920, maxH = 600, maxBytes = 10 * 1024 * 1024, startQuality = 0.9 }
+) {
+  // Tarayıcı okuyabiliyorsa <img> ile yükle
+  const canLoadDirect =
+    file.type.startsWith("image/") && !NOT_READABLE_HEIC.includes(file.type);
+
+  if (!canLoadDirect) {
+    throw new Error(
+      "Bu görüntü formatı (özellikle HEIC/HEIF) tarayıcıda açılamıyor. Lütfen JPG veya PNG yükleyin."
+    );
+  }
+
+  const dataUrl = await new Promise((resolve, reject) => {
+    const fr = new FileReader();
+    fr.onload = () => resolve(fr.result);
+    fr.onerror = () => reject(new Error("Dosya okunamadı."));
+    fr.readAsDataURL(file);
+  });
+
+  const img = await new Promise((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = () => reject(new Error("Görsel yüklenemedi."));
+    image.src = dataUrl;
+  });
+
+  // Ölçekleme: 1920x600 kutusuna sığdır (oranı koru)
+  const ratio = Math.min(maxW / img.width, maxH / img.height, 1); // büyütme yok
+  const targetW = Math.round(img.width * ratio);
+  const targetH = Math.round(img.height * ratio);
+
+  const canvas = document.createElement("canvas");
+  canvas.width = targetW;
+  canvas.height = targetH;
+  const ctx = canvas.getContext("2d");
+  ctx.drawImage(img, 0, 0, targetW, targetH);
+
+  // Kademeli kalite düşürme ile maxBytes altına inmeyi dene
+  let q = startQuality;
+  let blob = await new Promise((resolve) =>
+    canvas.toBlob(resolve, "image/jpeg", q)
+  );
+  if (!blob) throw new Error("Sıkıştırma başarısız.");
+
+  while (blob.size > maxBytes && q > 0.5) {
+    q -= 0.1;
+    // bir alt kalite ile tekrar
+    blob = await new Promise((resolve) =>
+      canvas.toBlob(resolve, "image/jpeg", q)
+    );
+    if (!blob) break;
+  }
+
+  // Hâlâ büyükse, son bir kez daha sert düş (en az 0.5'e kadar)
+  if (blob && blob.size > maxBytes && q <= 0.5) {
+    // son çare
+    blob = await new Promise((resolve) =>
+      canvas.toBlob(resolve, "image/jpeg", 0.5)
+    );
+  }
+
+  if (!blob) throw new Error("Görsel dönüştürülemedi.");
+
+  const outFile = new File([blob], ensureJpegName(file.name), {
+    type: "image/jpeg",
+  });
+  const previewUrl = URL.createObjectURL(blob);
+
+  return {
+    file: outFile,
+    previewUrl,
+    width: targetW,
+    height: targetH,
+    quality: q,
+  };
+}
+
+function ensureJpegName(name = "image.jpg") {
+  const base = name.replace(/\.[^.]+$/, "");
+  return `${base}.jpg`;
+}
 
 /* ───── Silme Onayı ───── */
 const ConfirmModal = ({ open, onClose, onConfirm, message }) => {
@@ -90,6 +183,7 @@ export default function CampaignsPage() {
   /* form dialog */
   const [dialogOpen, setDialogOpen] = useState(false);
   const [dirty, setDirty] = useState(false);
+  const [saving, setSaving] = useState(false); // Kaydet'e basınca disable/guard
 
   const [selectionType, setSelectionType] = useState("");
   const [options, setOptions] = useState({
@@ -107,6 +201,14 @@ export default function CampaignsPage() {
     imageFile: null,
     products: [],
     categories: [],
+  });
+
+  /* alan bazlı hata mesajları */
+  const [fieldErrors, setFieldErrors] = useState({
+    title: "",
+    buttonText: "",
+    selection: "",
+    image: "",
   });
 
   /* toast & sil onay */
@@ -182,7 +284,9 @@ export default function CampaignsPage() {
       categories: [],
     });
     setSelectionType("");
+    setFieldErrors({ title: "", buttonText: "", selection: "", image: "" });
     setDirty(false);
+    setSaving(false);
   };
 
   const openNew = () => {
@@ -211,12 +315,14 @@ export default function CampaignsPage() {
       categories: catIds,
     });
     setSelectionType(type);
+    setFieldErrors({ title: "", buttonText: "", selection: "", image: "" });
     setDirty(false);
+    setSaving(false);
     setDialogOpen(true);
   };
 
   const closeDialog = () => {
-    if (dirty) {
+    if (dirty && !saving) {
       const sure = confirm("Kaydedilmemiş değişiklikler var. Kapatılsın mı?");
       if (!sure) return;
     }
@@ -224,36 +330,176 @@ export default function CampaignsPage() {
   };
 
   /* ---------------- validation ---------------- */
+
+  function isHeicFile(file) {
+    const mime = (file?.type || "").toLowerCase();
+    const name = (file?.name || "").toLowerCase();
+    const ext = name.split(".").pop();
+
+    // Safari/iOS bazen empty mime veya application/octet-stream döndürür
+    if (mime === "image/heic" || mime === "image/heif") return true;
+    if (ext === "heic" || ext === "heif") return true;
+    if (
+      (mime === "" || mime === "application/octet-stream") &&
+      (ext === "heic" || ext === "heif")
+    )
+      return true;
+
+    return false;
+  }
   const selectionCount =
     selectionType === "products"
       ? form.products.length
       : form.categories.length;
 
-  const isValid =
-    form.title.trim().length > 0 &&
-    selectionType &&
-    selectionCount > 0 &&
-    (Boolean(form.imageUrl) || Boolean(form.imageFile) || Boolean(form._id));
+  // const isValidCore =
+  //   form.title.trim().length > 0 &&
+  //   form.buttonText.trim().length > 0 &&
+  //   selectionType &&
+  //   selectionCount > 0 &&
+  //   (Boolean(form.imageUrl) || Boolean(form.imageFile) || Boolean(form._id));
+
+  // Alan bazlı hata üreten yardımcı
+  const validateAndSetErrors = () => {
+    const errs = { title: "", buttonText: "", selection: "", image: "" };
+
+    if (!form.title.trim()) errs.title = "Başlık zorunludur.";
+    if (!form.buttonText.trim()) errs.buttonText = "Buton metni zorunludur.";
+
+    if (!selectionType) {
+      errs.selection =
+        "Seçim türü zorunludur (Ürün / Kategori / Alt Kategori).";
+    } else if (selectionCount === 0) {
+      errs.selection =
+        selectionType === "products"
+          ? "En az bir ürün seçiniz."
+          : "En az bir kategori/alt kategori seçiniz.";
+    }
+
+    if (!form._id && !(form.imageUrl || form.imageFile)) {
+      errs.image = "Kapak görseli zorunludur.";
+    }
+
+    setFieldErrors(errs);
+    return Object.values(errs).every((v) => !v);
+  };
 
   /* ---------------- save with queue ---------------- */
   const handleSave = async () => {
+    if (saving) return;
+    // 1) Validasyon (alan bazlı feedback + toast)
+    const ok = validateAndSetErrors();
+    if (!ok) {
+      setToast({
+        msg: "Lütfen zorunlu alanları doldurun: Başlık, Buton, Seçim ve Görsel.",
+        type: "error",
+      });
+      return;
+    }
+
+    setSaving(true);
+
+    // 2) Görseli gerekiyorsa dönüştür/sıkıştır
+    let uploadFile = form.imageFile;
+    try {
+      if (uploadFile) {
+        if (isHeicFile(uploadFile)) {
+          setSaving(false);
+          setFieldErrors((e) => ({
+            ...e,
+            image: "HEIC/HEIF desteklenmiyor. Lütfen JPG/PNG yükleyin.",
+          }));
+          setToast({
+            msg: "HEIC/HEIF tespit edildi. Lütfen JPG/PNG yükleyin.",
+            type: "error",
+          });
+          return;
+        }
+
+        if (
+          !ALLOWED_MIMES.includes(uploadFile.type) ||
+          READABLE_BUT_CONVERT.includes(uploadFile.type)
+        ) {
+          // WEBP vb. → JPEG'e çevir
+          const { file: converted, previewUrl } = await compressToJpeg(
+            uploadFile,
+            {
+              maxW: 1920,
+              maxH: 600,
+              maxBytes: 10 * 1024 * 1024, // ~10MB
+              startQuality: 0.9,
+            }
+          );
+          uploadFile = converted;
+          setForm((f) => ({
+            ...f,
+            imageFile: converted,
+            imageUrl: previewUrl,
+          }));
+          setToast({
+            msg: "Yüklenen görsel JPEG'e dönüştürüldü ve optimize edildi.",
+            type: "info",
+          });
+        } else {
+          // JPEG/PNG ise yine de optimize etmeyi deneyebiliriz (çok büyükse)
+          if (uploadFile.size > 10 * 1024 * 1024) {
+            const { file: compressed, previewUrl } = await compressToJpeg(
+              uploadFile,
+              {
+                maxW: 1920,
+                maxH: 600,
+                maxBytes: 10 * 1024 * 1024,
+                startQuality: 0.9,
+              }
+            );
+            uploadFile = compressed;
+            setForm((f) => ({
+              ...f,
+              imageFile: compressed,
+              imageUrl: previewUrl,
+            }));
+            setToast({
+              msg: "Görsel boyutu büyük olduğu için sıkıştırıldı (≈1920×600).",
+              type: "info",
+            });
+          }
+        }
+      }
+    } catch (err) {
+      console.error("Image process error:", err);
+      setSaving(false);
+      setToast({
+        msg:
+          err?.message ||
+          "Görsel işlenirken sorun oluştu. Lütfen JPG/PNG yüklemeyi deneyin.",
+        type: "error",
+      });
+      return;
+    }
+
+    // 3) FormData hazırla
     const fd = new FormData();
     fd.append("title", form.title);
-    fd.append("subtitle", form.subtitle);
+    fd.append("subtitle", form.subtitle || ""); // opsiyonel
     fd.append("buttonText", form.buttonText);
-    if (form.imageFile) fd.append("image", form.imageFile);
+    if (uploadFile) fd.append("image", uploadFile);
     fd.append("products", JSON.stringify(form.products));
     fd.append("categories", JSON.stringify(form.categories));
 
-    const id = uuidv4();
-    addTask({ id, name: form.title || "Kampanya", progress: 0 });
+    // 4) UploadQueue'ya ekle → DİREKT FORMU KAPAT
+    const taskId = uuidv4();
+    addTask({ id: taskId, name: form.title || "Kampanya", progress: 0 });
+
+    // Form kapansın ve dirty sıfırlansın → confirm/uyarı yok
+    setDirty(false);
+    setDialogOpen(false);
 
     const cfg = {
       headers: { "Content-Type": "multipart/form-data" },
       onUploadProgress: (ev) => {
         if (!ev.total) return;
         const pct = Math.round((ev.loaded * 100) / ev.total);
-        updateTask(id, { progress: pct });
+        updateTask(taskId, { progress: pct });
       },
     };
 
@@ -264,19 +510,23 @@ export default function CampaignsPage() {
         await api.post("/campaigns", fd, cfg);
       }
 
-      updateTask(id, { progress: 100, status: "success" });
-      setTimeout(() => removeTask(id), 2000);
+      updateTask(taskId, { progress: 100, status: "success" });
+      setTimeout(() => removeTask(taskId), 2000);
 
       const { data } = await api.get("/campaigns");
       setCampaigns(data);
-      setDialogOpen(false);
-    } catch {
-      updateTask(id, {
+      setToast({ msg: "Kampanya kaydedildi.", type: "success" });
+      setSaving(false);
+    } catch (e) {
+      console.error(e);
+      updateTask(taskId, {
         progress: 100,
         status: "error",
         errorMsg: "Kampanya kaydedilemedi",
       });
-      setTimeout(() => removeTask(id), 4000);
+      setTimeout(() => removeTask(taskId), 4000);
+      setToast({ msg: "Kampanya kaydedilemedi.", type: "error" });
+      setSaving(false);
     }
   };
 
@@ -325,6 +575,67 @@ export default function CampaignsPage() {
 
     return ids.map((id) => ({ id, name: source[id] || "—" }));
   }, [selectionType, options, form.products, form.categories]);
+
+  // Dosya seçimi (optimizasyon + uyarı akışı)
+  const onPickFile = async (file) => {
+    if (!file) return;
+
+    // ✅ HEIC/HEIF: anında uyar ve hiç yükleme
+    if (isHeicFile(file)) {
+      setFieldErrors((e) => ({
+        ...e,
+        image: "HEIC/HEIF desteklenmiyor. Lütfen JPG veya PNG yükleyin.",
+      }));
+      setToast({
+        msg: "HEIC/HEIF tespit edildi. Dosya yüklenmedi. Lütfen JPG/PNG seçin.",
+        type: "error",
+      });
+      return;
+    }
+
+    // PNG/JPEG → büyükse sıkıştır; WEBP vb. → JPEG'e dönüştür
+    try {
+      let processed = file;
+      if (
+        !ALLOWED_MIMES.includes(file.type) ||
+        READABLE_BUT_CONVERT.includes(file.type) ||
+        file.size > 10 * 1024 * 1024
+      ) {
+        const { file: out, previewUrl } = await compressToJpeg(file, {
+          maxW: 1920,
+          maxH: 600,
+          maxBytes: 10 * 1024 * 1024,
+          startQuality: 0.9,
+        });
+        processed = out;
+        setForm((f) => ({ ...f, imageFile: processed, imageUrl: previewUrl }));
+        setDirty(true);
+
+        if (!ALLOWED_MIMES.includes(file.type)) {
+          setToast({
+            msg: "Görsel JPEG'e dönüştürüldü ve optimize edildi.",
+            type: "info",
+          });
+        } else {
+          setToast({
+            msg: "Görsel optimize edildi (≈1920×600).",
+            type: "info",
+          });
+        }
+      } else {
+        const url = URL.createObjectURL(file);
+        setForm((f) => ({ ...f, imageFile: file, imageUrl: url }));
+        setDirty(true);
+      }
+      setFieldErrors((e) => ({ ...e, image: "" }));
+    } catch (err) {
+      console.error(err);
+      setToast({
+        msg: err?.message || "Görsel işlenemedi. Lütfen JPG/PNG yükleyin.",
+        type: "error",
+      });
+    }
+  };
 
   /* ---------------- render ---------------- */
   return (
@@ -521,20 +832,38 @@ export default function CampaignsPage() {
           {form._id ? "Kampanyayı Güncelle" : "Yeni Kampanya"}
         </DialogHeader>
         <DialogBody divider className="overflow-auto max-h-[70svh] pr-4">
+          <div className="rounded-md border border-amber-200 bg-amber-50 text-amber-900 p-3 mb-4 text-sm flex items-start gap-2">
+            <ExclamationTriangleIcon className="w-5 h-5 mt-0.5 shrink-0" />
+            <div>
+              <b>Zorunlu alanlar:</b> Başlık, Buton Metni, Seçim Türü ve en az
+              bir seçim, ayrıca yeni kampanya oluştururken Kapak Görseli.
+            </div>
+          </div>
+
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* SOL: FORM */}
             <div className="space-y-4">
+              <div>
+                <Input
+                  label="Başlık *"
+                  value={form.title}
+                  onChange={(e) => {
+                    setForm((f) => ({ ...f, title: e.target.value }));
+                    setDirty(true);
+                    setFieldErrors((er) => ({ ...er, title: "" }));
+                  }}
+                  crossOrigin=""
+                  error={Boolean(fieldErrors.title)}
+                />
+                {fieldErrors.title && (
+                  <p className="mt-1 text-xs text-red-600">
+                    {fieldErrors.title}
+                  </p>
+                )}
+              </div>
+
               <Input
-                label="Başlık *"
-                value={form.title}
-                onChange={(e) => {
-                  setForm((f) => ({ ...f, title: e.target.value }));
-                  setDirty(true);
-                }}
-                crossOrigin=""
-              />
-              <Input
-                label="Alt Başlık"
+                label="Alt Başlık (opsiyonel)"
                 value={form.subtitle}
                 onChange={(e) => {
                   setForm((f) => ({ ...f, subtitle: e.target.value }));
@@ -542,15 +871,25 @@ export default function CampaignsPage() {
                 }}
                 crossOrigin=""
               />
-              <Input
-                label="Buton Metni"
-                value={form.buttonText}
-                onChange={(e) => {
-                  setForm((f) => ({ ...f, buttonText: e.target.value }));
-                  setDirty(true);
-                }}
-                crossOrigin=""
-              />
+
+              <div>
+                <Input
+                  label="Buton Metni *"
+                  value={form.buttonText}
+                  onChange={(e) => {
+                    setForm((f) => ({ ...f, buttonText: e.target.value }));
+                    setDirty(true);
+                    setFieldErrors((er) => ({ ...er, buttonText: "" }));
+                  }}
+                  crossOrigin=""
+                  error={Boolean(fieldErrors.buttonText)}
+                />
+                {fieldErrors.buttonText && (
+                  <p className="mt-1 text-xs text-red-600">
+                    {fieldErrors.buttonText}
+                  </p>
+                )}
+              </div>
 
               {/* seçim türü */}
               <div>
@@ -573,6 +912,7 @@ export default function CampaignsPage() {
                           categories: [],
                         }));
                         setDirty(true);
+                        setFieldErrors((er) => ({ ...er, selection: "" }));
                       }}
                       className={`border rounded-lg py-2 text-sm ${
                         selectionType === t.key
@@ -584,6 +924,11 @@ export default function CampaignsPage() {
                     </button>
                   ))}
                 </div>
+                {fieldErrors.selection && (
+                  <p className="mt-2 text-xs text-red-600">
+                    {fieldErrors.selection}
+                  </p>
+                )}
               </div>
 
               {/* çoklu seçim */}
@@ -622,6 +967,7 @@ export default function CampaignsPage() {
                           selectionType !== "products" ? vals : f.categories,
                       }));
                       setDirty(true);
+                      setFieldErrors((er) => ({ ...er, selection: "" }));
                     }}
                   >
                     {currentOptions.map((opt) => (
@@ -667,7 +1013,7 @@ export default function CampaignsPage() {
               {/* resim yükle */}
               <div>
                 <label className="block text-sm mb-2 font-medium">
-                  Kapak Görseli
+                  Kapak Görseli {form._id ? "" : "*"}
                 </label>
 
                 <label
@@ -676,7 +1022,9 @@ export default function CampaignsPage() {
                 >
                   <ArrowUpTrayIcon className="w-5 h-5" />
                   <span className="text-sm">
-                    {form.imageFile ? form.imageFile.name : "Dosya seçin"}
+                    {form.imageFile
+                      ? form.imageFile.name
+                      : "Dosya seçin (JPG/PNG önerilir)"}
                   </span>
                   <input
                     type="file"
@@ -685,25 +1033,20 @@ export default function CampaignsPage() {
                     onChange={(e) => {
                       const file = e.target.files?.[0];
                       if (!file) return;
-                      setForm((f) => ({
-                        ...f,
-                        imageFile: file,
-                        imageUrl: URL.createObjectURL(file),
-                      }));
-                      setDirty(true);
+                      onPickFile(file);
                     }}
                   />
                 </label>
                 <Typography variant="small" className="text-gray-500 mt-1">
-                  1920×600 önerilir. JPG/PNG.
+                  Hedef çözünürlük: yaklaşık 1920×600 (oran korunur).
+                  Desteklenen formatlar: JPG/PNG.
                 </Typography>
+                {fieldErrors.image && (
+                  <p className="mt-1 text-xs text-red-600">
+                    {fieldErrors.image}
+                  </p>
+                )}
               </div>
-
-              {!isValid && (
-                <Typography variant="small" className="text-red-600">
-                  Başlık, seçim türü ve en az bir seçim gereklidir.
-                </Typography>
-              )}
             </div>
 
             {/* SAĞ: ÖNİZLEME */}
@@ -744,7 +1087,12 @@ export default function CampaignsPage() {
                   <Typography className="text-gray-600 line-clamp-2">
                     {form.subtitle || "Kısa açıklama metni burada görünecek."}
                   </Typography>
-                  <Button size="sm" variant="outlined" className="mt-4">
+                  <Button
+                    size="sm"
+                    variant="outlined"
+                    className="mt-4"
+                    disabled
+                  >
                     {form.buttonText || "Buton"}
                   </Button>
                 </div>
@@ -753,15 +1101,11 @@ export default function CampaignsPage() {
           </div>
         </DialogBody>
         <DialogFooter className="gap-2">
-          <Button variant="text" onClick={closeDialog}>
+          <Button variant="text" onClick={closeDialog} disabled={saving}>
             İptal
           </Button>
-          <Button
-            disabled={!isValid || !dirty}
-            onClick={handleSave}
-            color="blue"
-          >
-            Kaydet
+          <Button disabled={saving} onClick={handleSave} color="blue">
+            {saving ? "Kaydediliyor..." : "Kaydet"}
           </Button>
         </DialogFooter>
       </Dialog>

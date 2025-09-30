@@ -1,4 +1,3 @@
-// src/pages/admin/CategoriesPage.jsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import api from "../../../api";
 import Window from "../../components/ui/Window";
@@ -284,7 +283,7 @@ export default function CategoriesPage() {
 
                   {/* Aksiyonlar */}
                   <div className="mt-4 flex items-center justify-end gap-2">
-                    {/* Mobil aksiyonlar (md'den küçük ekranlar) */}
+                    {/* Mobil aksiyonlar */}
                     <div className="flex md:hidden w-full gap-2">
                       <button
                         onClick={() => openEdit(c)}
@@ -304,7 +303,7 @@ export default function CategoriesPage() {
                       </button>
                     </div>
 
-                    {/* Desktop: yalnız Sil (Düzenle overlay’de) */}
+                    {/* Desktop: yalnız Sil */}
                     <button
                       onClick={() => setDeleteId(c._id)}
                       className="hidden md:inline-flex text-sm items-center gap-2 px-3 py-1 rounded border border-red-200 text-red-600 hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-400"
@@ -353,9 +352,32 @@ export default function CategoriesPage() {
           <CategoryFormModal
             category={activeCat}
             onClose={() => setShowForm(false)}
-            onSaved={() => {
-              fetchCats();
-              setShowForm(false);
+            onSaved={(result) => {
+              // Başarı: null/undefined
+              if (!result) {
+                setShowForm(false);
+                fetchCats();
+                setToast({ msg: "Kategori kaydedildi.", type: "success" });
+                return;
+              }
+              // Hata: string ya da {status, message}
+              if (typeof result === "object") {
+                if (result.status === 500) {
+                  setToast({
+                    msg: "Görselin boyutu çok yüksek. Lütfen 10MB altında bir görsel seçin.",
+                    type: "error",
+                  });
+                  return; // modal AÇIK kalsın
+                }
+                setToast({
+                  msg: result.message || "İşlem başarısız.",
+                  type: "error",
+                });
+                return; // modal AÇIK kalsın
+              }
+              // Eski string davranışı
+              setToast({ msg: result, type: "error" });
+              // modal AÇIK kalsın
             }}
           />
         </Window>

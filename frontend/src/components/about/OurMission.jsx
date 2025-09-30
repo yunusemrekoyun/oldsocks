@@ -20,7 +20,7 @@ const OurMission = () => (
         <img
           src={missionImg}
           alt="Oldsocks Misyon"
-          className="w-full h-auto object-cover"
+          className="w-full h-[600px] object-cover object-center"
         />
       </div>
     </div>

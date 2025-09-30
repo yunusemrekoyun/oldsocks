@@ -1,22 +1,59 @@
-// src/components/products/ProductGrid.jsx
 import React, { useState, useEffect } from "react";
 import api from "../../../api";
 import ProductGridItem from "./ProductGridItem";
 
-export default function ProductGrid() {
+/* Seed'li PRNG (mulberry32) */
+function mulberry32(seed) {
+  let t = seed >>> 0;
+  return function () {
+    t += 0x6d2b79f5;
+    let r = Math.imul(t ^ (t >>> 15), 1 | t);
+    r ^= r + Math.imul(r ^ (r >>> 7), 61 | r);
+    return ((r ^ (r >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+/* Seed'li shuffle (Fisher–Yates) */
+function shuffleWithSeed(arr, seed) {
+  const a = arr.slice();
+  const rand = mulberry32(
+    // string/number seed kabul et
+    typeof seed === "number"
+      ? seed
+      : Array.from(String(seed || "default")).reduce(
+          (s, c) => s + c.charCodeAt(0),
+          0
+        )
+  );
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(rand() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+export default function ProductGrid({ limit = 4, seed = "default" }) {
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    let alive = true;
     api
       .get("/products")
       .then((res) => {
         const list = Array.isArray(res.data) ? res.data : [];
-        setProducts(list.slice(0, 4));
+        const shuffled = shuffleWithSeed(list, seed);
+        const picked = shuffled.slice(0, Math.max(0, limit));
+        if (alive) setProducts(picked);
       })
       .catch((err) => console.error("Ürünler getirilirken hata:", err))
-      .finally(() => setLoading(false));
-  }, []);
+      .finally(() => {
+        if (alive) setLoading(false);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [seed, limit]); // seed değişirse farklı set üret
 
   if (loading) {
     return (

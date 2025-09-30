@@ -327,7 +327,8 @@ const ProductGridItem = ({
             <div className="text-sm text-dark2 line-through opacity-70">
               {fmt(price)}₺
             </div>
-            <div className="text-center text-base font-semibold text-dark1">
+            {/* İndirimliyse kırmızı */}
+            <div className="text-center text-base font-semibold text-red-600">
               {fmt(discountedPrice)}₺
             </div>
           </div>

@@ -4,6 +4,7 @@ import placeholderAvatar from "../../assets/blog/blog-owner/author.png";
 import CommentReplyForm from "./CommentReplyForm";
 import CommentReplies from "./CommentReplies";
 import api from "../../../api";
+import ToastAlert from "../ui/ToastAlert";
 
 export default function BlogCommentItem({ comment }) {
   const { author, createdAt, text, _id: commentId } = comment;
@@ -21,6 +22,9 @@ export default function BlogCommentItem({ comment }) {
   const [loadingReplies, setLoadingReplies] = useState(false);
   const [showForm, setShowForm] = useState(false);
 
+  // toast’ı parent’ta tut
+  const [toast, setToast] = useState(null);
+
   const fetchReplies = async () => {
     setLoadingReplies(true);
     try {
@@ -37,10 +41,18 @@ export default function BlogCommentItem({ comment }) {
     if (showReplies) fetchReplies();
   }, [showReplies]);
 
-  const handleReplyPosted = () => {
-    setShowForm(false);
-    fetchReplies();
-    setShowReplies(true);
+  // reply formundan gelen sonucu al
+  const handleReplyPosted = (result) => {
+    // result: { ok: boolean, msg: string }
+    if (result?.ok) {
+      setShowForm(false);
+      setShowReplies(true);
+      fetchReplies();
+    }
+    // toast’ı her iki durumda da göster (form kapanmış olsa bile görünür)
+    if (result?.msg) {
+      setToast({ msg: result.msg, type: result.ok ? "success" : "error" });
+    }
   };
 
   return (
@@ -90,6 +102,15 @@ export default function BlogCommentItem({ comment }) {
           )}
         </div>
       </div>
+
+      {/* Toast parent’ta — form kapansa bile görünür */}
+      {toast && (
+        <ToastAlert
+          msg={toast.msg}
+          type={toast.type}
+          onClose={() => setToast(null)}
+        />
+      )}
     </div>
   );
 }

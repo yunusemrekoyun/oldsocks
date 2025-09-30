@@ -1,5 +1,6 @@
 // backend/controllers/categoryController.js
 const Category = require("../models/Category");
+const Product = require("../models/Product");
 
 // — Public —
 
@@ -63,6 +64,18 @@ exports.createCategory = async (req, res) => {
     );
     res.status(201).json(populated);
   } catch (err) {
+    // 🔴 Yalnızca dosya boyutu hatasını yakala
+    if (
+      err &&
+      (err.code === "LIMIT_FILE_SIZE" ||
+        /File size too large/i.test(err.message))
+    ) {
+      const maxMB = 10; // backend limitin (MB)
+      return res.status(413).json({
+        message: `Dosya boyutu çok büyük. Lütfen ${maxMB}MB altında JPG/PNG yükleyin.`,
+      });
+    }
+
     console.error(err);
     res.status(500).json({ message: "Kategori oluşturulurken hata oluştu." });
   }
@@ -84,62 +97,50 @@ exports.updateCategory = async (req, res) => {
 
     // 2) Çocuk listesi geldiyse, ID'leri KORUYARAK güncelle
     if (children !== undefined) {
-      // İstenen son liste (virgül -> isim)
       const desiredNames = children
         .split(",")
         .map((c) => c.trim())
         .filter(Boolean);
 
-      // Mevcut çocuklar
       const existingChildren = await Category.find({ parent: updated._id });
 
-      // Hızlı erişim set & map'leri
       const desiredSet = new Set(desiredNames.map((n) => n.toLowerCase()));
       const existingByName = new Map(
         existingChildren.map((c) => [c.name.toLowerCase(), c])
       );
 
-      // 2a) EKLENECEKLER: desired'ta olup mevcutta olmayanlar
       const toCreate = desiredNames.filter(
         (nm) => !existingByName.has(nm.toLowerCase())
       );
-
-      // 2b) KALACAKLAR: desired'ta da mevcutta da olanlar (ID korunur)
       const toKeep = existingChildren.filter((c) =>
         desiredSet.has(c.name.toLowerCase())
       );
-
-      // 2c) SİLİNECEKLER: mevcutta olup desired'ta olmayanlar
       const toDelete = existingChildren.filter(
         (c) => !desiredSet.has(c.name.toLowerCase())
       );
 
-      // EKLE: yeni isimler için child oluştur
       if (toCreate.length > 0) {
         await Promise.all(
           toCreate.map((nm) =>
             Category.create({
               name: nm,
-              image: updated.image, // aynı görseli kullan
+              image: updated.image,
               parent: updated._id,
             })
           )
         );
       }
 
-      // SİL: yalnızca ürüne bağlı DEĞİLSE
       const blocked = [];
       for (const c of toDelete) {
         const inUse = await Product.exists({ category: c._id });
         if (inUse) {
           blocked.push({ id: c._id.toString(), name: c.name });
-          continue; // bu çocuğu silemeyiz, referans var
+          continue;
         }
         await Category.findByIdAndDelete(c._id);
       }
 
-      // İsteğe bağlı: kept çocukların görselini parent'ınkine eşitle
-      // (name değişimi desteklemiyoruz; sadece listedekiyle aynı isimler kalır)
       if (req.file) {
         await Category.updateMany(
           { _id: { $in: toKeep.map((c) => c._id) } },
@@ -147,33 +148,68 @@ exports.updateCategory = async (req, res) => {
         );
       }
 
-      // Eğer silinemeyen (ürüne bağlı) çocuk varsa bilgi verelim (200 veya 409 tercihine göre)
       if (blocked.length > 0) {
+        const blockedIds = blocked.map((b) => b.id);
+        const products = await Product.find({ category: { $in: blockedIds } })
+          .select("_id name images category")
+          .limit(12 * blockedIds.length)
+          .lean();
+
+        const byCat = new Map();
+        for (const b of blocked) {
+          byCat.set(b.id, {
+            categoryId: b.id,
+            categoryName: b.name,
+            products: [],
+          });
+        }
+        for (const p of products) {
+          const catId = (p.category || "").toString();
+          if (!byCat.has(catId)) continue;
+          byCat.get(catId).products.push({
+            _id: p._id,
+            name: p.name,
+            image: Array.isArray(p.images) && p.images[0] ? p.images[0] : "",
+          });
+        }
+
         const populated = await Category.findById(updated._id)
           .populate("children", "name image")
           .populate("parent", "name");
 
         return res.status(409).json({
           message:
-            "Bazı alt kategoriler ürüne bağlı olduğu için silinmedi. Lütfen önce o ürünleri taşıyın veya alt kategorileri yeniden düzenleyin.",
-          blocked, // [{ id, name }]
+            "Bazı alt kategoriler ürüne bağlı olduğu için silinmedi. Lütfen önce bu ürünleri taşıyın ya da alt kategorileri yeniden düzenleyin.",
+          blocked,
+          productsByCategory: Array.from(byCat.values()),
           category: populated,
         });
       }
     }
 
-    // 3) Son halini dön
     const populated = await Category.findById(updated._id)
       .populate("children", "name image")
       .populate("parent", "name");
 
     res.json(populated);
   } catch (err) {
+    // 🔴 Güncellemede de aynı kontrol
+    if (
+      err &&
+      (err.code === "LIMIT_FILE_SIZE" ||
+        /File size too large/i.test(err.message))
+    ) {
+      const maxMB = 10;
+      return res.status(413).json({
+        message: `Dosya boyutu çok büyük. Lütfen ${maxMB}MB altında JPG/PNG yükleyin.`,
+      });
+    }
+
     console.error(err);
     res.status(500).json({ message: "Kategori güncellenirken hata oluştu." });
   }
 };
-// Sil (alt kategorileri de istersen ayrı endpoint’le silebilirsin)
+
 exports.deleteCategory = async (req, res) => {
   try {
     const cat = await Category.findByIdAndDelete(req.params.id);

@@ -33,6 +33,9 @@ router.get(
   allowPayTRCSP,
   paymentCtrl.inlineCheckoutHtml
 );
+
+router.post("/start-guest", paymentCtrl.startGuestPaymentSession);
+
 router.post("/callback/paytr", paymentCtrl.paytrCallback);
 router.post("/mock-complete", paymentCtrl.mockComplete);
 

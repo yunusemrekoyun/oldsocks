@@ -4,6 +4,7 @@ const { v4: uuidv4 } = require("uuid");
 const User = require("../models/User");
 const Order = require("../models/Order");
 const fallbackData = require("../config/fallback.json");
+const { sendOrderPlacedMail } = require("../utils/mailer");
 const { applyStockChanges } = require("../utils/updateStock");
 
 /* Frontend base (ilk origin) */
@@ -44,6 +45,85 @@ function safeLogPaytrInput(inp) {
   } catch {}
 }
 
+exports.startGuestPaymentSession = async (req, res) => {
+  try {
+    const { cartItems, totalPrice, address, guest } = req.body || {};
+
+    // 1) Basit zorunlu alan kontrolü (fallback YOK)
+    const missing = [];
+    if (!guest?.firstName) missing.push("guest.firstName");
+    if (!guest?.lastName) missing.push("guest.lastName");
+    if (!guest?.email) missing.push("guest.email");
+    if (!guest?.phone) missing.push("guest.phone");
+    if (!guest?.identityNumber) missing.push("guest.identityNumber");
+    if (!guest?.registrationAddress) missing.push("guest.registrationAddress");
+
+    if (!address?.title) missing.push("address.title");
+    if (!address?.mainaddress) missing.push("address.mainaddress");
+    if (!address?.street) missing.push("address.street");
+    if (!address?.city) missing.push("address.city");
+
+    if (!Array.isArray(cartItems) || cartItems.length === 0)
+      missing.push("cartItems");
+    if (typeof totalPrice !== "number") missing.push("totalPrice");
+
+    if (missing.length) {
+      return res.status(400).json({
+        message: "Eksik/Geçersiz alanlar var.",
+        missing,
+      });
+    }
+
+    // 2) merchant_oid / orderNumber üret
+    const conversationId = uuidv4()
+      .replace(/-/g, "")
+      .toUpperCase()
+      .slice(0, 64);
+    const orderNumber = Math.floor(1e9 + Math.random() * 9e9).toString();
+
+    // 3) Order yarat (user YOK, guest DOLU)
+    await Order.create({
+      orderNumber,
+      user: undefined,
+      guest: {
+        firstName: guest.firstName,
+        lastName: guest.lastName,
+        email: guest.email,
+        phone: guest.phone,
+        identityNumber: guest.identityNumber,
+        registrationAddress: guest.registrationAddress,
+      },
+      items: cartItems.map((it) => ({
+        productId: it.id,
+        name: it.name,
+        price: it.price,
+        qty: it.qty,
+        size: it.size,
+        color: it.color,
+      })),
+      totalPrice,
+      address: {
+        title: address.title,
+        mainaddress: address.mainaddress,
+        street: address.street,
+        district: address.district || "",
+        city: address.city,
+        postalCode: address.postalCode || "",
+      },
+      conversationId,
+      status: "pending",
+      iyzInit: null,
+    });
+
+    return res.json({
+      conversationId,
+      inlineUrl: `${process.env.BACKEND_PUBLIC_URL}/api/v1/payment/inline/${conversationId}`,
+    });
+  } catch (e) {
+    console.error("[PAYMENT][start-guest] Hata:", e);
+    res.status(500).json({ message: "Misafir ödemesi başlatılamadı." });
+  }
+};
 /** 1) Ödeme oturumunu başlat (pending Order) */
 exports.startPaymentSession = async (req, res) => {
   try {
@@ -225,7 +305,8 @@ exports.inlineCheckoutHtml = async (req, res) => {
     }
 
     // ---- GERÇEK PAYTR AKIŞI ----
-    const user = await User.findById(order.user).lean();
+    // Kayıtlı kullanıcı varsa user, yoksa guest üzerinden bilgileri hazırla
+    const user = order.user ? await User.findById(order.user).lean() : null;
 
     // ENV'leri trimleyerek al
     const MERCHANT_ID = (process.env.PAYTR_MERCHANT_ID || "").trim();
@@ -240,7 +321,22 @@ exports.inlineCheckoutHtml = async (req, res) => {
       .replace(/[^A-Za-z0-9]/g, "")
       .slice(0, 64);
 
-    const email = user?.email || "fallback@example.com";
+    // ←←← GÜNCEL KISIM: email / isim / telefon / adres seçimleri
+    const email = user?.email || order.guest?.email || "fallback@example.com";
+    const user_name = user
+      ? `${user.firstName || "Müşteri"} ${user.lastName || ""}`.trim()
+      : `${order.guest?.firstName || "Müşteri"} ${
+          order.guest?.lastName || ""
+        }`.trim();
+    const user_phone = user?.phone || order.guest?.phone || "0000000000";
+    const user_address = user
+      ? `${order.address?.mainaddress || ""} ${
+          order.address?.city || ""
+        }`.trim()
+      : `${
+          order.guest?.registrationAddress || order.address?.mainaddress || ""
+        } ${order.address?.city || ""}`.trim();
+
     const payment_amount = tlToKurus(order.totalPrice);
 
     const basket = (order.items || []).map((it) => [
@@ -254,14 +350,6 @@ exports.inlineCheckoutHtml = async (req, res) => {
     const max_installment = "0";
     const currency = "TL";
     const non_3d = "0"; // Hash’e DAHİL değil
-
-    const user_name = `${user?.firstName || "Müşteri"} ${
-      user?.lastName || ""
-    }`.trim();
-    const user_address = `${order.address?.mainaddress || ""} ${
-      order.address?.city || ""
-    }`.trim();
-    const user_phone = user?.phone || "0000000000";
 
     // Hash (non_3d DAHİL değil)
     const hashStr =
@@ -396,6 +484,18 @@ exports.mockComplete = async (req, res) => {
     if (!order) {
       return res.status(404).json({ message: "Sipariş bulunamadı." });
     }
+
+    // Opsiyonel: mock akışında mail de gönder (dev/test için faydalı)
+    if (!order.orderMailSentAt) {
+      try {
+        await sendOrderPlacedMail(order);
+        order.orderMailSentAt = new Date();
+        await order.save();
+      } catch (e) {
+        console.warn("[PAYMENT][mock-complete] mail error:", e?.message || e);
+      }
+    }
+
     return res.json({ ok: true });
   } catch (e) {
     console.error("[PAYMENT][mock-complete] Hata:", e);
@@ -411,42 +511,64 @@ exports.paytrCallback = async (req, res) => {
     const SALT = (process.env.PAYTR_MERCHANT_SALT || "").trim();
 
     if (!merchant_oid) return res.status(400).send("BAD REQUEST");
-
-    if (!KEY || !SALT) {
-      // mock/anahtar yokken, postback gelirse görmezden gel
-      return res.send("OK");
-    }
+    if (!KEY || !SALT) return res.send("OK"); // mock ortam
 
     const check = crypto
       .createHmac("sha256", KEY)
       .update(merchant_oid + SALT + status + total_amount)
       .digest("base64");
 
-    if (check !== hash) {
-      console.warn("[PAYTR][callback] Hash uyumsuz.");
-      return res.status(400).send("BAD REQUEST");
-    }
+    if (check !== hash) return res.status(400).send("BAD REQUEST");
 
     if (status === "success") {
-      // ✅ önce siparişi bulup paid yapıyoruz
-      const order = await Order.findOneAndUpdate(
-        { conversationId: merchant_oid },
-        { status: "paid", paymentId: merchant_oid, adminSeenAt: null },
-        { new: true }
-      );
+      const order = await Order.findOne({ conversationId: merchant_oid });
+      if (!order) return res.send("OK");
 
-      // ✅ stok düşürme burada
-      if (order) {
+      // ➊ tutar doğrulaması (kuruş bazında)
+      const expected = Math.round(Number(order.totalPrice || 0) * 100);
+      if (Number(total_amount) !== expected) {
+        console.warn("[PAYTR][callback] Amount mismatch", {
+          merchant_oid,
+          fromPaytr: total_amount,
+          expected,
+        });
+        // İstersen burada 'cancelled' yap veya alarm üret:
+        return res.send("OK");
+      }
+
+      // ➋ idempotency: zaten paid ise / stok düşmüşse tekrar dokunma
+      if (order.status === "paid" && order.stockUpdated) {
+        return res.send("OK");
+      }
+
+      // State güncelle
+      order.status = "paid";
+      order.paymentId = merchant_oid;
+      order.adminSeenAt = null;
+
+      // Stok düş
+      try {
+        await applyStockChanges(order);
+        order.stockUpdated = true;
+      } catch (e) {
+        console.error("[PAYTR][callback] stock error:", e);
+      }
+
+      // Mail (tek sefer)
+      if (!order.orderMailSentAt) {
         try {
-          await applyStockChanges(order);
-          console.log(
-            "[PAYTR][callback] Stok güncellendi. orderId:",
-            order._id
-          );
+          await sendOrderPlacedMail(order);
+          order.orderMailSentAt = new Date();
         } catch (e) {
-          console.error("[PAYTR][callback] Stok düşürme hatası:", e);
+          console.warn(
+            "[PAYTR][callback] order mail send error:",
+            e?.message || e
+          );
         }
       }
+
+      // Tek sefer kayıt
+      await order.save();
     } else {
       await Order.deleteOne({ conversationId: merchant_oid }).catch(() => {});
     }
