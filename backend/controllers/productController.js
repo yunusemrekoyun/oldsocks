@@ -43,18 +43,18 @@ exports.createProduct = async (req, res) => {
       return res.status(400).json({ message: "Geçersiz kategori." });
     }
 
-    const videoUrl = req.files.video?.[0]?.path;
-    const imagesUrls = req.files.images?.map((f) => f.path) || [];
+    const videoUrl = req.files?.video?.[0]?.path;
+    const imagesUrls = req.files?.images?.map((f) => f.path) || [];
 
-    if (!videoUrl || imagesUrls.length === 0) {
+    if (imagesUrls.length === 0) {
       return res
         .status(400)
-        .json({ message: "Video ve en az bir resim zorunludur." });
+        .json({ message: "En az bir ürün görseli zorunludur." });
     }
 
     const product = await Product.create({
       name,
-      video: videoUrl,
+      video: videoUrl || "",
       images: imagesUrls,
       price: Number(price),
       originalPrice: Number(originalPrice),
@@ -241,17 +241,20 @@ exports.createProductWithNewColor = async (req, res) => {
        2) Medya (yeni yüklendiyse kullan; yoksa base’ten miras al)
        ────────────────────────────────── */
     const video =
-      req.files?.video?.[0]?.path || // yeni video geldiyse
-      base.video; // yoksa eski video
+      req.files?.video?.[0]?.path ?? // yeni video geldiyse kullan
+      (typeof base.video === "string" ? base.video : ""); // yoksa base ya da boş string
 
-    const images =
-      req.files?.images?.map((f) => f.path) || // yeni görseller
-      base.images; // eski görseller
+    const uploadedImages = req.files?.images?.map((f) => f.path) || [];
+    const images = uploadedImages.length
+      ? uploadedImages
+      : Array.isArray(base.images)
+      ? base.images
+      : [];
 
-    if (!video || images.length === 0)
+    if (images.length === 0)
       return res
         .status(400)
-        .json({ message: "Video ve en az bir resim yüklenmelidir." });
+        .json({ message: "En az bir ürün görseli yüklenmelidir." });
 
     /* ──────────────────────────────────
        3) Yeni ürün kaydı

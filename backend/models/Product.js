@@ -9,7 +9,7 @@ const SizeSchema = new mongoose.Schema({
 const ProductSchema = new mongoose.Schema(
   {
     name: { type: String, required: true, trim: true },
-    video: { type: String, required: true },
+    video: { type: String, default: "" },
     images: [{ type: String, required: true }],
     price: { type: Number, required: true },
     originalPrice: { type: Number, required: true },

@@ -3,6 +3,10 @@ import React, { useState, useEffect, useMemo } from "react";
 import api from "../../../api";
 import { useUploadQueue } from "../../context/UploadQueueContext";
 import { v4 as uuidv4 } from "uuid";
+import {
+  compressImageFileList,
+  MAX_IMAGE_BYTES,
+} from "../../utils/imageCompression";
 
 const Badge = ({ children }) => (
   <span className="inline-flex items-center px-2 py-0.5 rounded text-xs bg-gray-100 text-gray-700">
@@ -18,6 +22,7 @@ export default function ProductFormModal({ product, onClose, onSaved }) {
   const [loading, setLoading] = useState(false);
   const { addTask, updateTask, removeTask } = useUploadQueue();
   const [isNewColor, setIsNewColor] = useState(false);
+  const [feedback, setFeedback] = useState(null);
 
   /* --------- Kategoriler --------- */
   useEffect(() => {
@@ -137,14 +142,39 @@ export default function ProductFormModal({ product, onClose, onSaved }) {
   }, [original, discountPct]);
 
   /* --------- Handlers --------- */
-  const handleChange = (e) => {
+  const handleChange = async (e) => {
     const { name, value, files } = e.target;
     if (files) {
-      if (name === "video") setForm((f) => ({ ...f, video: files[0] }));
-      else setForm((f) => ({ ...f, images: [...files] }));
-    } else {
-      setForm((f) => ({ ...f, [name]: value }));
+      if (name === "video") {
+        setForm((f) => ({ ...f, video: files[0] }));
+        return;
+      }
+      const selectedFiles = Array.from(files);
+      if (!selectedFiles.length) {
+        setForm((f) => ({ ...f, images: [] }));
+        setFeedback(null);
+        return;
+      }
+      setFeedback(null);
+      const { processed, failed } = await compressImageFileList(selectedFiles, {
+        maxBytes: MAX_IMAGE_BYTES,
+      });
+      e.target.value = "";
+      if (failed.length) {
+        const maxMb = Math.round((MAX_IMAGE_BYTES / (1024 * 1024)) * 10) / 10;
+        setFeedback({
+          type: "error",
+          message: `${failed
+            .map((f) => f.name)
+            .join(", ")} görseli sıkıştırılamadı. Lütfen ${maxMb}MB altında dosyalar seçin.`,
+        });
+      }
+      if (processed.length) {
+        setForm((f) => ({ ...f, images: processed }));
+      }
+      return;
     }
+    setForm((f) => ({ ...f, [name]: value }));
   };
 
   const addSize = () =>
@@ -232,6 +262,17 @@ export default function ProductFormModal({ product, onClose, onSaved }) {
 
   return (
     <form onSubmit={handleSubmit} className="w-full">
+      {feedback && (
+        <div
+          className={`mb-4 rounded-lg px-4 py-2 text-sm ${
+            feedback.type === "error"
+              ? "bg-red-50 text-red-700"
+              : "bg-blue-50 text-blue-700"
+          }`}
+        >
+          {feedback.message}
+        </div>
+      )}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* SOL: FORM */}
         <div className="space-y-4">
@@ -414,7 +455,9 @@ export default function ProductFormModal({ product, onClose, onSaved }) {
           {/* Medya */}
           <div className="space-y-3">
             <div>
-              <label className="block text-sm font-medium">Yeni Video</label>
+              <label className="block text-sm font-medium">
+                Video (Opsiyonel)
+              </label>
               <input
                 type="file"
                 name="video"

@@ -4,6 +4,10 @@ import api from "../../../api";
 import ToastAlert from "../../components/ui/ToastAlert";
 import { v4 as uuid } from "uuid";
 import { useUploadQueue } from "../../context/UploadQueueContext";
+import {
+  compressImageFileList,
+  MAX_IMAGE_BYTES,
+} from "../../utils/imageCompression";
 
 const Badge = ({ children }) => (
   <span className="inline-flex items-center px-2 py-0.5 rounded text-xs bg-gray-100 text-gray-700">
@@ -391,7 +395,7 @@ export default function EditProductForm({ product, onClose, onSaved }) {
           <div className="space-y-3">
             <div>
               <label className="block text-sm font-medium mb-1">
-                Yeni Video
+                Yeni Video (Opsiyonel)
               </label>
               <input
                 type="file"
@@ -411,9 +415,31 @@ export default function EditProductForm({ product, onClose, onSaved }) {
                 type="file"
                 multiple
                 accept="image/*"
-                onChange={(e) => {
-                  setNewImages(Array.from(e.target.files || []));
-                  setHasChanged(true);
+                onChange={async (e) => {
+                  const { files } = e.target;
+                  if (!files || files.length === 0) {
+                    setNewImages([]);
+                    setHasChanged(true);
+                    return;
+                  }
+                  const { processed, failed } = await compressImageFileList(
+                    files,
+                    { maxBytes: MAX_IMAGE_BYTES }
+                  );
+                  e.target.value = "";
+                  if (failed.length) {
+                    const maxMb = Math.round((MAX_IMAGE_BYTES / (1024 * 1024)) * 10) / 10;
+                    setToast({
+                      msg: `Aşağıdaki görseller sıkıştırılamadı: ${failed
+                        .map((f) => f.name)
+                        .join(", ")}. Lütfen ${maxMb}MB altında dosyalar seçin.`,
+                      type: "error",
+                    });
+                  }
+                  if (processed.length) {
+                    setNewImages(processed);
+                    setHasChanged(true);
+                  }
                 }}
                 className="block w-full text-sm"
               />

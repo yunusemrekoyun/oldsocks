@@ -4,6 +4,10 @@ import api from "../../../api";
 import ToastAlert from "../../components/ui/ToastAlert";
 import { v4 as uuid } from "uuid";
 import { useUploadQueue } from "../../context/UploadQueueContext";
+import {
+  compressImageFileList,
+  MAX_IMAGE_BYTES,
+} from "../../utils/imageCompression";
 
 const Badge = ({ children }) => (
   <span className="inline-flex items-center px-2 py-0.5 rounded text-xs bg-gray-100 text-gray-700">
@@ -331,7 +335,7 @@ export default function AddNewColorForm({ product, onClose, onSaved }) {
 
             <div>
               <label className="block text-sm mb-1 font-medium">
-                Yeni Video
+                Yeni Video (Opsiyonel)
               </label>
               <input
                 type="file"
@@ -348,7 +352,30 @@ export default function AddNewColorForm({ product, onClose, onSaved }) {
                 type="file"
                 multiple
                 accept="image/*"
-                onChange={(e) => setImages(Array.from(e.target.files))}
+                onChange={async (e) => {
+                  const { files } = e.target;
+                  if (!files || files.length === 0) {
+                    setImages([]);
+                    return;
+                  }
+                  const { processed, failed } = await compressImageFileList(
+                    files,
+                    { maxBytes: MAX_IMAGE_BYTES }
+                  );
+                  e.target.value = "";
+                  if (failed.length) {
+                    const maxMb = Math.round((MAX_IMAGE_BYTES / (1024 * 1024)) * 10) / 10;
+                    setToast({
+                      msg: `${failed
+                        .map((f) => f.name)
+                        .join(", ")} görseli sıkıştırılamadı. Lütfen ${maxMb}MB altında dosyalar seçin.`,
+                      type: "error",
+                    });
+                  }
+                  if (processed.length) {
+                    setImages(processed);
+                  }
+                }}
                 className="text-sm"
               />
             </div>

@@ -342,7 +342,7 @@ export default function SimilarProductItem({
 
 SimilarProductItem.propTypes = {
   id: PropTypes.string.isRequired,
-  video: PropTypes.string.isRequired,
+  video: PropTypes.string,
   poster: PropTypes.string, // opsiyonel
   name: PropTypes.string.isRequired,
   price: PropTypes.number.isRequired,
@@ -351,5 +351,6 @@ SimilarProductItem.propTypes = {
 };
 
 SimilarProductItem.defaultProps = {
+  video: null,
   stock: undefined,
 };
