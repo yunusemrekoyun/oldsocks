@@ -74,6 +74,9 @@ export default function CategoryFilter({
     : [];
 
   // Beden & Renk
+  // --- Sıralama: S -> M -> L -> XL, diğerleri en sonda (alfabetik) ---
+  const priority = { s: 0, m: 1, l: 2, xl: 3 };
+
   const sizeValues = Array.from(
     new Set(
       products
@@ -84,7 +87,25 @@ export default function CategoryFilter({
         )
         .filter(Boolean)
     )
-  ).sort((a, b) => a.localeCompare(b, "tr"));
+  ).sort((a, b) => {
+    const al = a.toLowerCase();
+    const bl = b.toLowerCase();
+
+    const pa = Object.prototype.hasOwnProperty.call(priority, al)
+      ? priority[al]
+      : Number.POSITIVE_INFINITY;
+
+    const pb = Object.prototype.hasOwnProperty.call(priority, bl)
+      ? priority[bl] // ✅ düzeltme
+      : Number.POSITIVE_INFINITY;
+
+    if (pa !== pb) return pa - pb; // Öncelik grubu (S,M,L,XL önce)
+    if (pa === Number.POSITIVE_INFINITY) {
+      // Diğerleri kendi aralarında alfabetik
+      return a.localeCompare(b, "tr", { sensitivity: "base" });
+    }
+    return 0; // S/M/L/XL kendi sırasını korur
+  });
 
   const colorValues = Array.from(
     new Set(
@@ -240,7 +261,7 @@ export default function CategoryFilter({
                           setPriceInput((p) => ({ ...p, min: v }));
                         }}
                         className="range-thumb absolute inset-0 w-full h-full appearance-none bg-transparent"
-                        style={{ zIndex: 3 }} // ⬅️ min başlığı üstte
+                        style={{ zIndex: 3 }}
                       />
 
                       {/* Max slider (altta) */}
@@ -255,7 +276,7 @@ export default function CategoryFilter({
                           setPriceInput((p) => ({ ...p, max: v }));
                         }}
                         className="range-thumb absolute inset-0 w-full h-full appearance-none bg-transparent"
-                        style={{ zIndex: 2 }} // ⬅️ max altta
+                        style={{ zIndex: 2 }}
                       />
                     </div>
 

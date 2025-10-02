@@ -16,6 +16,14 @@ const Badge = ({ children }) => (
   </span>
 );
 
+// Yardımcı: bir dizideki elemanı başa taşı
+const moveIndexToFront = (arr, idx) => {
+  if (!Array.isArray(arr) || idx <= 0 || idx >= arr.length) return arr;
+  const copy = [...arr];
+  const [sel] = copy.splice(idx, 1);
+  return [sel, ...copy];
+};
+
 export default function AddNewColorForm({ product, onClose, onSaved }) {
   const [formData, setFormData] = useState({
     name: "",
@@ -27,15 +35,31 @@ export default function AddNewColorForm({ product, onClose, onSaved }) {
     sizes: [],
   });
 
+  // Yeni seçilen medya
   const [video, setVideo] = useState(null);
-  const [images, setImages] = useState([]);
+  const [images, setImages] = useState([]); // File[]
+  const [imageUrls, setImageUrls] = useState([]); // preview urls
+  const [newCoverIndex, setNewCoverIndex] = useState(-1);
+
+  // Mevcut (base üründen gelen) medya
   const [existingVideo, setExistV] = useState("");
   const [existingImages, setExistI] = useState([]);
+  const [existingCoverIndex, setExistingCoverIndex] = useState(
+    -1 /* base'ten gelir gelmez set edilecek */
+  );
+
   const [toast, setToast] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [isSizeLess, setIsSizeLess] = useState(false);
 
   const { addTask, updateTask, removeTask } = useUploadQueue();
+
+  // Yeni seçilen görseller için preview URL'leri
+  useEffect(() => {
+    const urls = images.map((f) => URL.createObjectURL(f));
+    setImageUrls(urls);
+    return () => urls.forEach((u) => URL.revokeObjectURL(u));
+  }, [images]);
 
   useEffect(() => {
     (async () => {
@@ -59,8 +83,11 @@ export default function AddNewColorForm({ product, onClose, onSaved }) {
           color: "",
           sizes: data.sizes?.length ? data.sizes : [],
         });
-        setExistV(data.video);
-        setExistI(data.images || []);
+        setExistV(data.video || "");
+        const exImgs = data.images || [];
+        setExistI(exImgs);
+        setExistingCoverIndex(exImgs.length ? 0 : -1); // varsa ilki kapak
+        setNewCoverIndex(-1);
       } catch (err) {
         console.error("Ürün detayları alınamadı:", err);
       }
@@ -73,10 +100,8 @@ export default function AddNewColorForm({ product, onClose, onSaved }) {
     const num = Number(value);
     return Number.isFinite(num) ? num : null;
   };
-
   const originalNumber = toNumber(formData.originalPrice);
   const priceNumber = toNumber(formData.price);
-
   const pricingReady = originalNumber !== null && priceNumber !== null;
   const hasDiscount =
     pricingReady && priceNumber !== null && originalNumber !== null
@@ -94,7 +119,6 @@ export default function AddNewColorForm({ product, onClose, onSaved }) {
     const num = Number(val);
     return Number.isFinite(num) ? count + 1 : count;
   }, 0);
-
   const canComputePricing = numericFieldCount >= 2;
 
   const handleComputePricing = () => {
@@ -107,7 +131,6 @@ export default function AddNewColorForm({ product, onClose, onSaved }) {
       },
       undefined
     );
-
     const numbers = result.numbers;
     if (numbers.original === null || numbers.price === null) {
       setToast({
@@ -116,7 +139,6 @@ export default function AddNewColorForm({ product, onClose, onSaved }) {
       });
       return;
     }
-
     setFormData((prev) => ({ ...prev, ...result.values }));
   };
 
@@ -125,6 +147,7 @@ export default function AddNewColorForm({ product, onClose, onSaved }) {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
     })}`;
+
   const updatePricingField = (field, rawValue) => {
     setToast(null);
     setFormData((prev) => ({ ...prev, [field]: rawValue }));
@@ -156,22 +179,61 @@ export default function AddNewColorForm({ product, onClose, onSaved }) {
   const removeSizeRow = (id) =>
     setFormData((p) => ({ ...p, sizes: p.sizes.filter((s) => s.id !== id) }));
 
+  // ---- Mevcut/yeni medya kaldırma ----
+  const removeImageAt = (idx) => {
+    setImages((prev) => prev.filter((_, i) => i !== idx));
+    if (newCoverIndex === idx) {
+      setNewCoverIndex(images.length - 1 > 0 ? 0 : -1);
+    } else if (newCoverIndex > idx) {
+      setNewCoverIndex((c) => c - 1);
+    }
+  };
+  const clearVideo = () => setVideo(null);
+
+  const removeExistingImageAt = (idx) => {
+    setExistI((prev) => {
+      const next = prev.filter((_, i) => i !== idx);
+      if (existingCoverIndex === idx) {
+        setExistingCoverIndex(next.length ? 0 : -1);
+      } else if (existingCoverIndex > idx) {
+        setExistingCoverIndex((c) => c - 1);
+      }
+      return next;
+    });
+  };
+  const clearExistingVideo = () => setExistV("");
+
+  // En az bir medya var mı? (mevcut + yeni birleşik)
+  const hasAnyMedia =
+    (images && images.length > 0) ||
+    !!video ||
+    (existingImages && existingImages.length > 0) ||
+    !!existingVideo;
+
   const handleSubmit = async (e) => {
     e.preventDefault();
 
     if (!formData.color.trim())
       return setToast({ msg: "Renk alanı zorunludur.", type: "error" });
+
+    if (!hasAnyMedia) {
+      return setToast({
+        msg: "En az bir görsel veya video eklemelisiniz.",
+        type: "error",
+      });
+    }
+
     if (!isSizeLess && formData.sizes.length === 0)
       return setToast({
         msg: "En az bir beden satırı ekleyin.",
         type: "error",
       });
+
     const pricingResult = resolvePricingForSubmit({
       originalPrice: formData.originalPrice,
       discount: formData.discount,
       price: formData.price,
     });
-
     if (!pricingResult.valid) {
       return setToast({
         msg: "Fiyatı hesaplamak için en az iki alanı doldurup 'Fiyatı Hesapla' butonuna basın.",
@@ -179,8 +241,23 @@ export default function AddNewColorForm({ product, onClose, onSaved }) {
       });
     }
 
+    // Kapak mantığı:
+    // - Yeni görseller varsa: newCoverIndex >= 0 ise o görseli başa çek.
+    // - Yeni görsel yoksa ve mevcutlardan kapak seçildiyse: backend mevcut sıralamayı miras alır,
+    //   burada sıralamayı değiştiremeyiz. Uyarı amaçlı bir toast gösterebiliriz.
+    let orderedNew = [...images];
+    if (orderedNew.length > 0 && newCoverIndex >= 0) {
+      orderedNew = moveIndexToFront(orderedNew, newCoverIndex);
+    } else if (orderedNew.length === 0 && existingCoverIndex >= 0) {
+      // sadece bilgi amaçlı — submission'ı engellemiyoruz
+      // (İstersen bu uyarıyı kaldırabilirsin.)
+      setToast({
+        msg: "Kapak mevcut görsellerden seçildi. Mevcut sıralama base üründen miras alınır; kapak sıraya yansımayabilir. En az bir yeni görsel yükleyerek kapağı garanti edebilirsin.",
+        type: "error",
+      });
+    }
+
     const fd = new FormData();
-    // Backend şeması: price = hesaplanan; originalPrice & discount olduğu gibi
     fd.append("name", formData.name || "");
     fd.append("price", pricingResult.values.price);
     fd.append("originalPrice", pricingResult.values.originalPrice);
@@ -195,8 +272,10 @@ export default function AddNewColorForm({ product, onClose, onSaved }) {
           : formData.sizes
       )
     );
+
+    // Yeni medya ekle (yeni görseller varsa backend sadece onları kullanır)
     if (video) fd.append("video", video);
-    images.forEach((img) => fd.append("images", img));
+    orderedNew.forEach((img) => fd.append("images", img));
 
     const taskId = uuid();
     addTask({
@@ -228,7 +307,6 @@ export default function AddNewColorForm({ product, onClose, onSaved }) {
           err?.response?.data?.message || "Yeni renk eklenirken hata oluştu.",
       });
       setTimeout(() => removeTask(taskId), 4000);
-
       setToast({
         msg:
           err?.response?.data?.message || "Yeni renk eklenirken hata oluştu.",
@@ -261,7 +339,7 @@ export default function AddNewColorForm({ product, onClose, onSaved }) {
             />
           </div>
 
-          {/* Fiyatlar (Yeni Mantık) */}
+          {/* Fiyatlar */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div>
               <label className="block text-sm font-medium mb-1">
@@ -391,36 +469,168 @@ export default function AddNewColorForm({ product, onClose, onSaved }) {
             </div>
           )}
 
-          {/* Yeni Medya / Mevcut Önizlemeler */}
+          {/* Medya */}
           <div className="space-y-4">
-            {existingVideo && !video && (
-              <section>
-                <label className="block mb-1 font-medium">Mevcut Video</label>
-                <video
-                  src={existingVideo}
-                  controls
-                  className="w-full rounded-lg shadow"
-                />
+            {/* Video */}
+            {video ? (
+              <section className="relative">
+                <label className="block mb-1 font-medium">Yeni Video</label>
+                <div className="relative">
+                  <video
+                    src={URL.createObjectURL(video)}
+                    controls
+                    className="w-full rounded-lg shadow max-h-64 object-cover"
+                  />
+                  <button
+                    type="button"
+                    onClick={clearVideo}
+                    className="absolute -top-2 -right-2 w-6 h-6 bg-red-600 text-white rounded-full flex items-center justify-center shadow ring-2 ring-white"
+                    title="Kaldır"
+                    aria-label="Videoyu kaldır"
+                  >
+                    −
+                  </button>
+                </div>
               </section>
-            )}
-            {existingImages.length > 0 && images.length === 0 && (
+            ) : existingVideo ? (
+              <section className="relative">
+                <label className="block mb-1 font-medium">Mevcut Video</label>
+                <div className="relative">
+                  <video
+                    src={existingVideo}
+                    controls
+                    className="w-full rounded-lg shadow max-h-64 object-cover"
+                  />
+                  <button
+                    type="button"
+                    onClick={clearExistingVideo}
+                    className="absolute -top-2 -right-2 w-6 h-6 bg-red-600 text-white rounded-full flex items-center justify-center shadow ring-2 ring-white"
+                    title="Mevcut videoyu gizle"
+                    aria-label="Mevcut videoyu kaldır"
+                  >
+                    −
+                  </button>
+                </div>
+              </section>
+            ) : null}
+
+            {/* Yeni Görseller */}
+            {imageUrls.length > 0 && (
               <section>
-                <label className="block mb-1 font-medium">
-                  Mevcut Görseller
-                </label>
+                <label className="block mb-2 font-medium">Yeni Görseller</label>
                 <div className="grid grid-cols-3 gap-3">
-                  {existingImages.map((img, i) => (
-                    <img
-                      key={i}
-                      src={img}
-                      alt=""
-                      className="w-full aspect-square object-cover rounded-lg"
-                    />
-                  ))}
+                  {imageUrls.map((src, i) => {
+                    const isCover =
+                      newCoverIndex === i && existingCoverIndex === -1;
+                    return (
+                      <div key={`new-${i}`} className="relative">
+                        <img
+                          src={src}
+                          alt=""
+                          className={`w-full aspect-square object-cover rounded-lg border ${
+                            isCover ? "ring-2 ring-green-500" : ""
+                          }`}
+                        />
+                        {/* Kapak yap */}
+                        {!isCover && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setNewCoverIndex(i);
+                              setExistingCoverIndex(-1);
+                            }}
+                            className="absolute top-2 left-2 px-2 py-1 text-[10px] rounded bg-white/90 hover:bg-white shadow"
+                            title="Kapak yap"
+                          >
+                            Kapak yap
+                          </button>
+                        )}
+                        {/* Seçili kapak etiketi + overlay */}
+                        {isCover && (
+                          <>
+                            <div className="absolute inset-0 bg-black/10 rounded-lg pointer-events-none" />
+                            <span className="absolute top-2 left-2 px-2 py-1 text-[10px] rounded bg-green-600 text-white shadow">
+                              Kapak
+                            </span>
+                          </>
+                        )}
+                        {/* Sil */}
+                        <button
+                          type="button"
+                          onClick={() => removeImageAt(i)}
+                          className="absolute -top-2 -right-2 w-6 h-6 bg-red-600 text-white rounded-full flex items-center justify-center shadow ring-2 ring-white"
+                          title="Görseli kaldır"
+                          aria-label="Görseli kaldır"
+                        >
+                          −
+                        </button>
+                      </div>
+                    );
+                  })}
                 </div>
               </section>
             )}
 
+            {/* Mevcut Görseller (yeni yoksa göster) */}
+            {imageUrls.length === 0 && existingImages.length > 0 && (
+              <section>
+                <label className="block mb-2 font-medium">
+                  Mevcut Görseller
+                </label>
+                <div className="grid grid-cols-3 gap-3">
+                  {existingImages.map((img, i) => {
+                    const isCover =
+                      existingCoverIndex === i && newCoverIndex === -1;
+                    return (
+                      <div key={`ex-${i}`} className="relative">
+                        <img
+                          src={img}
+                          alt=""
+                          className={`w-full aspect-square object-cover rounded-lg border ${
+                            isCover ? "ring-2 ring-green-500" : ""
+                          }`}
+                        />
+                        {/* Kapak yap */}
+                        {!isCover && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setExistingCoverIndex(i);
+                              setNewCoverIndex(-1);
+                            }}
+                            className="absolute top-2 left-2 px-2 py-1 text-[10px] rounded bg-white/90 hover:bg-white shadow"
+                            title="Kapak yap"
+                          >
+                            Kapak yap
+                          </button>
+                        )}
+                        {/* Seçili kapak etiketi + overlay */}
+                        {isCover && (
+                          <>
+                            <div className="absolute inset-0 bg-black/10 rounded-lg pointer-events-none" />
+                            <span className="absolute top-2 left-2 px-2 py-1 text-[10px] rounded bg-green-600 text-white shadow">
+                              Kapak
+                            </span>
+                          </>
+                        )}
+                        {/* Sil */}
+                        <button
+                          type="button"
+                          onClick={() => removeExistingImageAt(i)}
+                          className="absolute -top-2 -right-2 w-6 h-6 bg-red-600 text-white rounded-full flex items-center justify-center shadow ring-2 ring-white"
+                          title="Mevcut görseli kaldır"
+                          aria-label="Mevcut görseli kaldır"
+                        >
+                          −
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              </section>
+            )}
+
+            {/* Yükleyiciler */}
             <div>
               <label className="block text-sm mb-1 font-medium">
                 Yeni Video (Opsiyonel)
@@ -428,7 +638,7 @@ export default function AddNewColorForm({ product, onClose, onSaved }) {
               <input
                 type="file"
                 accept="video/*"
-                onChange={(e) => setVideo(e.target.files[0])}
+                onChange={(e) => setVideo(e.target.files?.[0] || null)}
                 className="text-sm"
               />
             </div>
@@ -444,6 +654,7 @@ export default function AddNewColorForm({ product, onClose, onSaved }) {
                   const { files } = e.target;
                   if (!files || files.length === 0) {
                     setImages([]);
+                    setNewCoverIndex(-1);
                     return;
                   }
                   const { processed, failed } = await compressImageFileList(
@@ -452,21 +663,31 @@ export default function AddNewColorForm({ product, onClose, onSaved }) {
                   );
                   e.target.value = "";
                   if (failed.length) {
-                    const maxMb = Math.round((MAX_IMAGE_BYTES / (1024 * 1024)) * 10) / 10;
+                    const maxMb =
+                      Math.round((MAX_IMAGE_BYTES / (1024 * 1024)) * 10) / 10;
                     setToast({
                       msg: `${failed
                         .map((f) => f.name)
-                        .join(", ")} görseli sıkıştırılamadı. Lütfen ${maxMb}MB altında dosyalar seçin.`,
+                        .join(
+                          ", "
+                        )} görseli sıkıştırılamadı. Lütfen ${maxMb}MB altında dosyalar seçin.`,
                       type: "error",
                     });
                   }
                   if (processed.length) {
                     setImages(processed);
+                    setNewCoverIndex(-1);
                   }
                 }}
                 className="text-sm"
               />
             </div>
+
+            {!hasAnyMedia && (
+              <p className="text-xs text-red-600">
+                En az bir görsel veya video eklemelisiniz.
+              </p>
+            )}
           </div>
 
           {/* Alt Butonlar */}
@@ -480,9 +701,9 @@ export default function AddNewColorForm({ product, onClose, onSaved }) {
             </button>
             <button
               type="submit"
-              disabled={submitting || !pricingReady}
+              disabled={submitting || !pricingReady || !hasAnyMedia}
               className={`px-4 py-2 rounded-lg text-white ${
-                submitting || !pricingReady
+                submitting || !pricingReady || !hasAnyMedia
                   ? "bg-gray-300 cursor-not-allowed"
                   : "bg-green-600 hover:bg-green-700"
               }`}
@@ -512,7 +733,11 @@ export default function AddNewColorForm({ product, onClose, onSaved }) {
                 </>
               ) : (
                 <span className="text-blue-700 font-semibold">
-                  {finalPrice ? fmt(finalPrice) : original ? fmt(original) : "Fiyat"}
+                  {finalPrice
+                    ? fmt(finalPrice)
+                    : original
+                    ? fmt(original)
+                    : "Fiyat"}
                 </span>
               )}
               {formData.color && <Badge>{formData.color}</Badge>}

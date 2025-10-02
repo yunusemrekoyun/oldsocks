@@ -16,6 +16,14 @@ const Badge = ({ children }) => (
   </span>
 );
 
+// küçük yardımcı
+const moveIndexToFront = (arr, idx) => {
+  if (!Array.isArray(arr) || idx <= 0 || idx >= arr.length) return arr;
+  const copy = [...arr];
+  const [sel] = copy.splice(idx, 1);
+  return [sel, ...copy];
+};
+
 export default function EditProductForm({ product, onClose, onSaved }) {
   const [formData, setFormData] = useState({
     name: "",
@@ -31,13 +39,22 @@ export default function EditProductForm({ product, onClose, onSaved }) {
   const [subCat, setSubCat] = useState("");
   const [cats, setCats] = useState([]);
 
-  const [videoPreview, setVideoPreview] = useState(null);
-  const [imagePreviews, setImagePreviews] = useState([]);
+  // ── Mevcut medya
+  const [videoPreview, setVideoPreview] = useState(null); // string | null
+  // eslint-disable-next-line no-unused-vars
+  const [imagePreviews, setImagePreviews] = useState([]); // string[]
+  const [keepExistingImages, setKeepExistingImages] = useState([]); // string[] (server'a gidecek)
+  const [removeExistingVideo, setRemoveExistingVideo] = useState(false);
 
+  // Kapak seçim durumları
+  const [existingCoverIndex, setExistingCoverIndex] = useState(-1);
+  const [newCoverIndex, setNewCoverIndex] = useState(-1);
+
+  // ── Yeni medya
   const [newVideo, setNewVideo] = useState(null);
   const [newVideoUrl, setNewVideoUrl] = useState(null);
-  const [newImages, setNewImages] = useState([]);
-  const [newImageUrls, setNewImageUrls] = useState([]);
+  const [newImages, setNewImages] = useState([]); // File[]
+  const [newImageUrls, setNewImageUrls] = useState([]); // string[]
 
   const [hasChanged, setHasChanged] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -76,15 +93,22 @@ export default function EditProductForm({ product, onClose, onSaved }) {
         color: p.color || "",
         sizes: (p.sizes || []).map((s) => ({ ...s, id: uuid() })),
       });
+
+      const imgs = p.images || [];
+      setImagePreviews(imgs);
+      setKeepExistingImages(imgs); // varsayılan: hepsini tut
       setVideoPreview(p.video || null);
-      setImagePreviews(p.images || []);
+      setRemoveExistingVideo(false);
+
+      // kapak: mevcutlardan ilkini varsayılan kapak yap
+      setExistingCoverIndex(imgs.length > 0 ? 0 : -1);
+      setNewCoverIndex(-1);
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   /* ---------------- Yeni seçilen medya için URL yönetimi ---------------- */
   useEffect(() => {
-    // images
     const urls = newImages.map((f) => URL.createObjectURL(f));
     setNewImageUrls(urls);
     return () => urls.forEach((u) => URL.revokeObjectURL(u));
@@ -217,8 +241,71 @@ export default function EditProductForm({ product, onClose, onSaved }) {
     setHasChanged(true);
   };
 
+  // ── Mevcut görseli kaldır
+  const removeExistingImageAt = (idx) => {
+    setKeepExistingImages((prev) => {
+      const next = prev.filter((_, i) => i !== idx);
+      setImagePreviews(next);
+
+      // kapak indeksi düzelt
+      if (existingCoverIndex === idx) {
+        // silinen kapaktı
+        setExistingCoverIndex(next.length ? 0 : -1);
+      } else if (existingCoverIndex > idx) {
+        // sağdaki indeksler sola kayar
+        setExistingCoverIndex(existingCoverIndex - 1);
+      }
+      return next;
+    });
+    setHasChanged(true);
+  };
+
+  // ── Mevcut videoyu kaldır
+  const removeCurrentVideo = () => {
+    setRemoveExistingVideo(true);
+    setVideoPreview(null);
+    setHasChanged(true);
+  };
+
+  // ── Yeni görseli kaldır
+  const removeNewImageAt = (idx) => {
+    setNewImages((prev) => {
+      const next = prev.filter((_, i) => i !== idx);
+
+      // yeni kapak indeksi düzelt
+      if (newCoverIndex === idx) {
+        setNewCoverIndex(next.length ? 0 : -1);
+      } else if (newCoverIndex > idx) {
+        setNewCoverIndex(newCoverIndex - 1);
+      }
+      return next;
+    });
+    setHasChanged(true);
+  };
+
+  // ── Yeni videoyu kaldır
+  const removeNewVideo = () => {
+    setNewVideo(null);
+    setHasChanged(true);
+  };
+
+  // En az bir medya var mı? (mevcut tutulacak + yeni)
+  const hasAnyMedia =
+    (keepExistingImages && keepExistingImages.length > 0) ||
+    (!!videoPreview && !removeExistingVideo) ||
+    (newImages && newImages.length > 0) ||
+    !!newVideo;
+
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (!hasAnyMedia) {
+      setToast({
+        msg: "En az bir görsel veya video bırakmalısınız.",
+        type: "error",
+      });
+      return;
+    }
+
     setSubmitting(true);
 
     const pricingResult = resolvePricingForSubmit({
@@ -238,6 +325,18 @@ export default function EditProductForm({ product, onClose, onSaved }) {
 
     const { values } = pricingResult;
 
+    // Kapak seçimine göre sıralamaları ayarla
+    let orderedKeep = [...keepExistingImages];
+    let orderedNew = [...newImages];
+
+    if (existingCoverIndex >= 0 && newCoverIndex === -1) {
+      orderedKeep = moveIndexToFront(orderedKeep, existingCoverIndex);
+    } else if (newCoverIndex >= 0 && existingCoverIndex === -1) {
+      orderedNew = moveIndexToFront(orderedNew, newCoverIndex);
+    }
+    // Not: Kapak ikisinden de seçili değilse (ikisi de -1) ya da ikisi birden seçiliyse,
+    // hiçbirini zorla öne çekmiyoruz. (UI ikisini aynı anda seçtirmiyor zaten.)
+
     const fd = new FormData();
     fd.append("name", formData.name || "");
     fd.append("price", values.price);
@@ -248,8 +347,14 @@ export default function EditProductForm({ product, onClose, onSaved }) {
     fd.append("sizes", JSON.stringify(formData.sizes || []));
     fd.append("category", subCat || mainCat);
 
+    // 🔸 Medya değişiklikleri:
+    // - mevcut görsellerden tutulacak liste (kapak varsa başa çekilmiş haliyle)
+    fd.append("keepImages", JSON.stringify(orderedKeep || []));
+    // - mevcut videoyu kaldır?
+    fd.append("removeVideo", removeExistingVideo ? "1" : "0");
+
     if (newVideo) fd.append("video", newVideo);
-    newImages.forEach((img) => fd.append("images", img));
+    orderedNew.forEach((img) => fd.append("images", img));
 
     const taskId = uuid();
     addTask({
@@ -453,7 +558,6 @@ export default function EditProductForm({ product, onClose, onSaved }) {
                   key={id}
                   className="grid grid-cols-4 gap-2 sm:gap-3 items-center"
                 >
-                  {/* mobil: 2 kolon — Beden(2) Stok(1) Sil(1) */}
                   <input
                     value={size}
                     placeholder="Beden"
@@ -486,7 +590,7 @@ export default function EditProductForm({ product, onClose, onSaved }) {
             </div>
           </div>
 
-          {/* Yeni Medya */}
+          {/* Yeni Medya Yükleyiciler */}
           <div className="space-y-3">
             <div>
               <label className="block text-sm font-medium mb-1">
@@ -514,6 +618,7 @@ export default function EditProductForm({ product, onClose, onSaved }) {
                   const { files } = e.target;
                   if (!files || files.length === 0) {
                     setNewImages([]);
+                    setNewCoverIndex(-1);
                     setHasChanged(true);
                     return;
                   }
@@ -536,6 +641,8 @@ export default function EditProductForm({ product, onClose, onSaved }) {
                   }
                   if (processed.length) {
                     setNewImages(processed);
+                    // yeni görsel geldiğinde kapak yeni taraftan seçilecekse buna izin ver
+                    setNewCoverIndex(-1);
                     setHasChanged(true);
                   }
                 }}
@@ -555,9 +662,11 @@ export default function EditProductForm({ product, onClose, onSaved }) {
             </button>
             <button
               type="submit"
-              disabled={!hasChanged || submitting || !pricingReady}
+              disabled={
+                !hasChanged || submitting || !pricingReady || !hasAnyMedia
+              }
               className={`px-4 py-2 rounded-lg text-white w-full sm:w-auto ${
-                !hasChanged || submitting || !pricingReady
+                !hasChanged || submitting || !pricingReady || !hasAnyMedia
                   ? "bg-gray-300 cursor-not-allowed"
                   : "bg-blue-600 hover:bg-blue-700"
               }`}
@@ -566,50 +675,23 @@ export default function EditProductForm({ product, onClose, onSaved }) {
             </button>
           </div>
 
+          {!hasAnyMedia && (
+            <p className="text-xs text-red-600">
+              En az bir görsel veya video bırakmalısınız.
+            </p>
+          )}
+
           {toast && <ToastAlert {...toast} onClose={() => setToast(null)} />}
         </div>
 
-        {/* SAĞ: ÖNİZLEME */}
+        {/* SAĞ: ÖNİZLEME & MEVCUT/YENİ MEDYA LİSTELERİ */}
         <div className="space-y-4">
-          {/* Görsel Önizleme */}
-          {(imagePreviews.length > 0 || newImageUrls.length > 0) && (
-            <section className="bg-white p-4 sm:p-6 rounded-lg shadow-md">
-              <label className="block mb-2 font-medium">Görsel Önizleme</label>
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-                {(newImageUrls.length ? newImageUrls : imagePreviews).map(
-                  (src, i) => (
-                    <img
-                      key={i}
-                      src={src}
-                      alt=""
-                      className="w-full aspect-square object-cover rounded-lg"
-                      loading="lazy"
-                    />
-                  )
-                )}
-              </div>
-            </section>
-          )}
-
-          {/* Video Önizleme */}
-          {(videoPreview || newVideoUrl) && (
-            <section className="bg-white p-4 sm:p-6 rounded-lg shadow-md">
-              <label className="block mb-2 font-medium">Video Önizleme</label>
-              <video
-                src={newVideoUrl || videoPreview}
-                controls
-                className="w-full rounded-lg shadow h-56 object-cover"
-              />
-            </section>
-          )}
-
-          {/* Kart Önizleme */}
+          {/* Kart Önizleme — üste aldım ki her zaman görünür olsun */}
           <div className="bg-white rounded-xl border overflow-hidden">
             <div className="p-4">
               <p className="font-medium line-clamp-1">
                 {formData.name || "Ürün adı"}
               </p>
-              {/* Fiyat görünümü — indirim varsa çizgili orijinal + indirimli */}
               <div className="mt-2 flex items-baseline gap-2">
                 {hasDiscount ? (
                   <>
@@ -633,6 +715,172 @@ export default function EditProductForm({ product, onClose, onSaved }) {
               </div>
             </div>
           </div>
+
+          {/* Mevcut Video */}
+          {videoPreview && !removeExistingVideo && !newVideoUrl && (
+            <section className="bg-white p-4 sm:p-6 rounded-lg shadow-md relative">
+              <label className="block mb-2 font-medium">Mevcut Video</label>
+              <div className="relative">
+                <video
+                  src={videoPreview}
+                  controls
+                  className="w-full rounded-lg shadow h-56 object-cover"
+                />
+                <button
+                  type="button"
+                  onClick={removeCurrentVideo}
+                  className="absolute -top-2 -right-2 w-6 h-6 bg-red-600 text-white rounded-full flex items-center justify-center shadow ring-2 ring-white"
+                  title="Mevcut videoyu kaldır"
+                >
+                  −
+                </button>
+              </div>
+            </section>
+          )}
+
+          {/* Yeni Video Önizleme */}
+          {newVideoUrl && (
+            <section className="bg-white p-4 sm:p-6 rounded-lg shadow-md relative">
+              <label className="block mb-2 font-medium">Yeni Video</label>
+              <div className="relative">
+                <video
+                  src={newVideoUrl}
+                  controls
+                  className="w-full rounded-lg shadow h-56 object-cover"
+                />
+                <button
+                  type="button"
+                  onClick={removeNewVideo}
+                  className="absolute -top-2 -right-2 w-6 h-6 bg-red-600 text-white rounded-full flex items-center justify-center shadow ring-2 ring-white"
+                  title="Yeni videoyu kaldır"
+                >
+                  −
+                </button>
+              </div>
+            </section>
+          )}
+
+          {/* Mevcut Görseller */}
+          {keepExistingImages.length > 0 && newImageUrls.length === 0 && (
+            <section className="bg-white p-4 sm:p-6 rounded-lg shadow-md">
+              <label className="block mb-2 font-medium">Mevcut Görseller</label>
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+                {keepExistingImages.map((src, i) => {
+                  const isCover =
+                    existingCoverIndex === i && newCoverIndex === -1;
+                  return (
+                    <div key={`ex-${i}`} className="relative group">
+                      <img
+                        src={src}
+                        alt=""
+                        className={`w-full aspect-square object-cover rounded-lg ${
+                          isCover ? "ring-2 ring-green-500" : ""
+                        }`}
+                        loading="lazy"
+                      />
+
+                      {/* Kapak yap butonu (sol üst) */}
+                      {!isCover && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setExistingCoverIndex(i);
+                            setNewCoverIndex(-1);
+                            setHasChanged(true);
+                          }}
+                          className="absolute top-2 left-2 px-2 py-1 text-[10px] rounded bg-white/90 hover:bg-white shadow"
+                          title="Kapak yap"
+                        >
+                          Kapak yap
+                        </button>
+                      )}
+
+                      {/* Kapak etiketi + şeffaf overlay */}
+                      {isCover && (
+                        <>
+                          <div className="absolute inset-0 bg-black/10 rounded-lg pointer-events-none" />
+                          <span className="absolute top-2 left-2 px-2 py-1 text-[10px] rounded bg-green-600 text-white shadow">
+                            Kapak
+                          </span>
+                        </>
+                      )}
+
+                      {/* Sil butonu (sağ üst) */}
+                      <button
+                        type="button"
+                        onClick={() => removeExistingImageAt(i)}
+                        className="absolute -top-2 -right-2 w-6 h-6 bg-red-600 text-white rounded-full flex items-center justify-center shadow ring-2 ring-white"
+                        title="Mevcut görseli kaldır"
+                      >
+                        −
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
+          )}
+
+          {/* Yeni Görseller */}
+          {newImageUrls.length > 0 && (
+            <section className="bg-white p-4 sm:p-6 rounded-lg shadow-md">
+              <label className="block mb-2 font-medium">Yeni Görseller</label>
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+                {newImageUrls.map((src, i) => {
+                  const isCover =
+                    newCoverIndex === i && existingCoverIndex === -1;
+                  return (
+                    <div key={`new-${i}`} className="relative group">
+                      <img
+                        src={src}
+                        alt=""
+                        className={`w-full aspect-square object-cover rounded-lg ${
+                          isCover ? "ring-2 ring-green-500" : ""
+                        }`}
+                        loading="lazy"
+                      />
+
+                      {/* Kapak yap butonu (sol üst) */}
+                      {!isCover && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setNewCoverIndex(i);
+                            setExistingCoverIndex(-1);
+                            setHasChanged(true);
+                          }}
+                          className="absolute top-2 left-2 px-2 py-1 text-[10px] rounded bg-white/90 hover:bg-white shadow"
+                          title="Kapak yap"
+                        >
+                          Kapak yap
+                        </button>
+                      )}
+
+                      {/* Kapak etiketi + overlay */}
+                      {isCover && (
+                        <>
+                          <div className="absolute inset-0 bg-black/10 rounded-lg pointer-events-none" />
+                          <span className="absolute top-2 left-2 px-2 py-1 text-[10px] rounded bg-green-600 text-white shadow">
+                            Kapak
+                          </span>
+                        </>
+                      )}
+
+                      {/* Sil butonu (sağ üst) */}
+                      <button
+                        type="button"
+                        onClick={() => removeNewImageAt(i)}
+                        className="absolute -top-2 -right-2 w-6 h-6 bg-red-600 text-white rounded-full flex items-center justify-center shadow ring-2 ring-white"
+                        title="Yeni görseli kaldır"
+                      >
+                        −
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
+          )}
         </div>
       </div>
     </form>

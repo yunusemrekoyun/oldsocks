@@ -55,10 +55,6 @@ export default function ProductDetailsPage() {
 
         {/* Sağ sidebar */}
         <aside className="lg:col-span-1 space-y-6">
-          <SimilarProducts
-            categoryId={rootCategoryId}
-            currentProductId={product._id}
-          />
           <AddToCart
             price={product.price}
             sizes={product.sizes}
@@ -67,6 +63,10 @@ export default function ProductDetailsPage() {
             productId={product._id}
             productName={product.name}
             image={product.images?.[0]}
+          />
+          <SimilarProducts
+            categoryId={rootCategoryId}
+            currentProductId={product._id}
           />
         </aside>
       </main>

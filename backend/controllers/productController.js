@@ -90,7 +90,7 @@ exports.getProducts = async (req, res) => {
     /* normal listeleme */
     const products = await Product.find()
       .select(
-        "name video images price originalPrice discount sizes color category"
+        "name video images price originalPrice discount sizes color category parentProductId"
       )
       .populate({
         path: "category",
@@ -150,7 +150,7 @@ exports.updateProduct = async (req, res) => {
     } = req.body;
 
     if (!name) {
-      return res.status(400).json({ message: "Ürün adı zorunlu." });
+      return res.status(400).json({ message: "Ürün adı zorunludur." });
     }
 
     /* Kategori doğrulaması (opsiyonel) */
@@ -158,11 +158,40 @@ exports.updateProduct = async (req, res) => {
       return res.status(400).json({ message: "Geçersiz kategori." });
     }
 
-    /* Dosyalar */
-    const newVideo = req.files?.video?.[0]?.path;
+    /* ---- Medya kontrol parametreleri (frontend'den gelir) ---- */
+    const keepImages = req.body.keepImages
+      ? JSON.parse(req.body.keepImages)
+      : null; // string[] | null
+    const removeVideo = req.body.removeVideo === "1"; // "1" → true
+
+    /* ---- Yeni yüklenen dosyalar ---- */
+    const newVideo = req.files?.video?.[0]?.path || null;
     const newImages = req.files?.images?.map((f) => f.path) || [];
 
-    /* Güncellenecek alanlar */
+    /* ---- Mevcut/yeninin birleştirilmesi ---- */
+    // Video
+    let nextVideo = existing.video || "";
+    if (removeVideo) nextVideo = "";
+    if (newVideo) nextVideo = newVideo; // yeni video varsa override
+
+    // Görseller
+    let nextImages = Array.isArray(existing.images) ? existing.images : [];
+    if (Array.isArray(keepImages)) {
+      // Frontend hangi mevcutları tutacağını net gönderiyorsa bunu baz al
+      nextImages = keepImages;
+    }
+    if (newImages.length) {
+      nextImages = [...nextImages, ...newImages];
+    }
+
+    // En az bir medya koruması (görsel veya video)
+    if (nextImages.length === 0 && !nextVideo) {
+      return res
+        .status(400)
+        .json({ message: "En az bir görsel veya video bırakmalısınız." });
+    }
+
+    /* ---- Güncellenecek alanlar ---- */
     const updates = {
       name,
       price: price !== undefined ? Number(price) : existing.price,
@@ -175,10 +204,10 @@ exports.updateProduct = async (req, res) => {
       description:
         description !== undefined ? description : existing.description,
       color: color !== undefined ? color : existing.color,
-      video: newVideo || existing.video,
-      images: newImages.length
-        ? [...existing.images, ...newImages]
-        : existing.images,
+
+      video: nextVideo,
+      images: nextImages,
+
       sizes: sizes ? parseSizes(sizes) : existing.sizes,
     };
 

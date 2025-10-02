@@ -15,6 +15,14 @@ const Badge = ({ children }) => (
   </span>
 );
 
+/* bir dizideki index’i başa taşı */
+const moveIndexToFront = (arr, idx) => {
+  if (!Array.isArray(arr) || idx <= 0 || idx >= arr.length) return arr;
+  const copy = [...arr];
+  const [picked] = copy.splice(idx, 1);
+  return [picked, ...copy];
+};
+
 export default function ProductFormModal({ product, onClose, onSaved }) {
   // Bu form normalde "yeni ürün" için kullanılıyor; yine de esneklik dursun
   const isEdit = Boolean(product?._id);
@@ -24,6 +32,13 @@ export default function ProductFormModal({ product, onClose, onSaved }) {
   const { addTask, updateTask, removeTask } = useUploadQueue();
   const [isNewColor, setIsNewColor] = useState(false);
   const [feedback, setFeedback] = useState(null);
+
+  // Yeni görseller için önizleme URL’leri ve kapak index’i
+  const [imageUrls, setImageUrls] = useState([]); // string[]
+  const [coverIndex, setCoverIndex] = useState(-1);
+
+  // Video önizleme ve kaldırma
+  const [videoUrl, setVideoUrl] = useState(null);
 
   const updatePricingField = (field, rawValue) => {
     setForm((prev) => (prev ? { ...prev, [field]: rawValue } : prev));
@@ -75,6 +90,9 @@ export default function ProductFormModal({ product, onClose, onSaved }) {
           color: "",
           parentProductId: p._id,
         });
+        setImageUrls([]);
+        setCoverIndex(-1);
+        setVideoUrl(null);
       });
     } else if (product && product._id) {
       // (Genelde EditProductForm kullanıyoruz; yine de uyumlu kalsın)
@@ -115,6 +133,9 @@ export default function ProductFormModal({ product, onClose, onSaved }) {
           color: p.color ?? "",
           parentProductId: p.parentProductId ?? "",
         });
+        setImageUrls([]);
+        setCoverIndex(-1);
+        setVideoUrl(null);
       });
     } else {
       // Yeni ürün
@@ -133,8 +154,34 @@ export default function ProductFormModal({ product, onClose, onSaved }) {
         color: "",
         parentProductId: "",
       });
+      setImageUrls([]);
+      setCoverIndex(-1);
+      setVideoUrl(null);
     }
   }, [product]);
+
+  /* --------- Yeni seçilen görseller için preview URL üret ----- */
+  useEffect(() => {
+    if (!form?.images) return;
+    const urls = form.images.map((f) => URL.createObjectURL(f));
+    setImageUrls(urls);
+    // varsayılan kapak ilk görsel
+    setCoverIndex(urls.length ? 0 : -1);
+    return () => urls.forEach((u) => URL.revokeObjectURL(u));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form?.images]);
+
+  /* --------- Video için preview URL ----- */
+  useEffect(() => {
+    if (!form?.video) {
+      setVideoUrl(null);
+      return;
+    }
+    const url = URL.createObjectURL(form.video);
+    setVideoUrl(url);
+    return () => URL.revokeObjectURL(url);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form?.video]);
 
   /* --------- Parent/Child kategori seçimi --------- */
   const parentCats = useMemo(
@@ -165,9 +212,8 @@ export default function ProductFormModal({ product, onClose, onSaved }) {
   const original = originalNumber ?? 0;
   const finalPrice = priceNumber ?? 0;
 
-  const numericFieldCount = (form
-    ? [form.originalPrice, form.price, form.discount]
-    : []
+  const numericFieldCount = (
+    form ? [form.originalPrice, form.price, form.discount] : []
   ).reduce((count, val) => {
     if (val === "" || val === null || val === undefined) return count;
     const num = Number(val);
@@ -225,7 +271,9 @@ export default function ProductFormModal({ product, onClose, onSaved }) {
           type: "error",
           message: `${failed
             .map((f) => f.name)
-            .join(", ")} görseli sıkıştırılamadı. Lütfen ${maxMb}MB altında dosyalar seçin.`,
+            .join(
+              ", "
+            )} görseli sıkıştırılamadı. Lütfen ${maxMb}MB altında dosyalar seçin.`,
         });
       }
       if (processed.length) {
@@ -251,12 +299,28 @@ export default function ProductFormModal({ product, onClose, onSaved }) {
       return { ...f, sizes: copy };
     });
 
+  // Görsel sil (kırmızı daire −)
+  const removeImageAt = (idx) =>
+    setForm((f) => {
+      const next = [...(f.images || [])];
+      next.splice(idx, 1);
+      // kapak index düzenle
+      if (coverIndex === idx) {
+        setCoverIndex(next.length ? 0 : -1);
+      } else if (coverIndex > idx) {
+        setCoverIndex((c) => c - 1);
+      }
+      return { ...f, images: next };
+    });
+
+  // Video sil (kırmızı daire −)
+  const removeVideo = () => {
+    setForm((f) => ({ ...f, video: undefined }));
+  };
+
   /* --------- Validasyon --------- */
   const isValid =
-    form &&
-    form.name.trim() &&
-    (form.category || form.parent) &&
-    pricingReady;
+    form && form.name.trim() && (form.category || form.parent) && pricingReady;
 
   /* --------- Submit --------- */
   const handleSubmit = async (e) => {
@@ -285,10 +349,16 @@ export default function ProductFormModal({ product, onClose, onSaved }) {
 
     const { values } = pricingResult;
 
+    // Kapak seçiliyse görselleri submit’te başa taşı
+    const orderedImages =
+      (form.images?.length || 0) > 0 && coverIndex >= 0
+        ? moveIndexToFront(form.images, coverIndex)
+        : form.images || [];
+
     const fd = new FormData();
     fd.append("name", form.name);
     if (form.video) fd.append("video", form.video);
-    form.images.forEach((img) => fd.append("images", img));
+    orderedImages.forEach((img) => fd.append("images", img));
 
     // 🎯 Backend'e giden alanlar:
     fd.append("price", values.price);
@@ -403,7 +473,9 @@ export default function ProductFormModal({ product, onClose, onSaved }) {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium">İndirimli Fiyat</label>
+              <label className="block text-sm font-medium">
+                İndirimli Fiyat
+              </label>
               <input
                 name="price"
                 type="number"
@@ -552,6 +624,7 @@ export default function ProductFormModal({ product, onClose, onSaved }) {
 
           {/* Medya */}
           <div className="space-y-3">
+            {/* Video input + önizleme */}
             <div>
               <label className="block text-sm font-medium">
                 Video (Opsiyonel)
@@ -562,10 +635,30 @@ export default function ProductFormModal({ product, onClose, onSaved }) {
                 accept="video/*"
                 onChange={handleChange}
               />
+              {videoUrl && (
+                <div className="relative mt-2">
+                  <video
+                    src={videoUrl}
+                    controls
+                    className="w-full rounded-lg shadow max-h-64 object-cover"
+                  />
+                  <button
+                    type="button"
+                    onClick={removeVideo}
+                    className="absolute -top-2 -right-2 w-6 h-6 bg-red-600 text-white rounded-full flex items-center justify-center shadow ring-2 ring-white"
+                    title="Videoyu kaldır"
+                    aria-label="Videoyu kaldır"
+                  >
+                    −
+                  </button>
+                </div>
+              )}
             </div>
+
+            {/* Görseller input */}
             <div>
               <label className="block text-sm font-medium">
-                Yeni Görseller (1–4)
+                Yeni Görseller
               </label>
               <label className="border-2 border-dashed rounded-xl p-4 flex items-center justify-center gap-2 cursor-pointer hover:bg-gray-50">
                 <span className="text-sm">
@@ -582,11 +675,54 @@ export default function ProductFormModal({ product, onClose, onSaved }) {
                   onChange={handleChange}
                 />
               </label>
-              {form.images?.length > 0 && (
-                <div className="flex flex-wrap gap-2 mt-2">
-                  {Array.from(form.images).map((f, i) => (
-                    <Badge key={i}>{f.name}</Badge>
-                  ))}
+
+              {/* Görsel grid + Kapak yap + Sil */}
+              {imageUrls.length > 0 && (
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 mt-3">
+                  {imageUrls.map((src, i) => {
+                    const isCover = i === coverIndex;
+                    return (
+                      <div key={i} className="relative">
+                        <img
+                          src={src}
+                          alt=""
+                          className={`w-full aspect-square object-cover rounded-lg border ${
+                            isCover ? "ring-2 ring-green-500" : ""
+                          }`}
+                        />
+                        {/* Kapak yap */}
+                        {!isCover && (
+                          <button
+                            type="button"
+                            onClick={() => setCoverIndex(i)}
+                            className="absolute top-2 left-2 px-2 py-1 text-[10px] rounded bg-white/90 hover:bg-white shadow"
+                            title="Kapak yap"
+                          >
+                            Kapak yap
+                          </button>
+                        )}
+                        {/* Kapak etiketi + overlay */}
+                        {isCover && (
+                          <>
+                            <div className="absolute inset-0 bg-black/10 rounded-lg pointer-events-none" />
+                            <span className="absolute top-2 left-2 px-2 py-1 text-[10px] rounded bg-green-600 text-white shadow">
+                              Kapak
+                            </span>
+                          </>
+                        )}
+                        {/* Sil */}
+                        <button
+                          type="button"
+                          onClick={() => removeImageAt(i)}
+                          className="absolute -top-2 -right-2 w-6 h-6 bg-red-600 text-white rounded-full flex items-center justify-center shadow ring-2 ring-white"
+                          title="Görseli kaldır"
+                          aria-label="Görseli kaldır"
+                        >
+                          −
+                        </button>
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </div>
@@ -598,7 +734,13 @@ export default function ProductFormModal({ product, onClose, onSaved }) {
           <p className="text-sm text-gray-600">Canlı Önizleme</p>
           <div className="rounded-xl border overflow-hidden">
             <div className="relative h-48">
-              {form.images?.[0] ? (
+              {imageUrls[coverIndex] ? (
+                <img
+                  src={imageUrls[coverIndex]}
+                  alt="Önizleme"
+                  className="w-full h-full object-cover"
+                />
+              ) : form.images?.[0] ? (
                 <img
                   src={URL.createObjectURL(form.images[0])}
                   alt="Önizleme"
@@ -638,7 +780,11 @@ export default function ProductFormModal({ product, onClose, onSaved }) {
                   </>
                 ) : (
                   <span className="text-blue-700 font-semibold">
-                    {finalPrice ? fmt(finalPrice) : original ? fmt(original) : "Fiyat"}
+                    {finalPrice
+                      ? fmt(finalPrice)
+                      : original
+                      ? fmt(original)
+                      : "Fiyat"}
                   </span>
                 )}
                 {form.color && <Badge>{form.color}</Badge>}
