@@ -8,6 +8,7 @@ import {
   compressImageFileList,
   MAX_IMAGE_BYTES,
 } from "../../utils/imageCompression";
+import { normalizePricing, resolvePricingForSubmit } from "../../utils/pricing";
 
 const Badge = ({ children }) => (
   <span className="inline-flex items-center px-2 py-0.5 rounded text-xs bg-gray-100 text-gray-700">
@@ -20,6 +21,7 @@ export default function EditProductForm({ product, onClose, onSaved }) {
     name: "",
     originalPrice: "",
     discount: "",
+    price: "",
     description: "",
     color: "",
     sizes: [],
@@ -56,10 +58,20 @@ export default function EditProductForm({ product, onClose, onSaved }) {
       setMainCat(isSub ? p.category.parent._id : p.category._id);
       setSubCat(isSub ? p.category._id : "");
 
+      const pricing = normalizePricing(
+        {
+          originalPrice: p.originalPrice ?? "",
+          discount: p.discount ?? "",
+          price: p.price ?? "",
+        },
+        undefined
+      );
+
       setFormData({
         name: p.name || "",
-        originalPrice: p.originalPrice ?? "",
-        discount: p.discount ?? "",
+        originalPrice: pricing.values.originalPrice,
+        discount: pricing.values.discount,
+        price: pricing.values.price,
         description: p.description || "",
         color: p.color || "",
         sizes: (p.sizes || []).map((s) => ({ ...s, id: uuid() })),
@@ -99,23 +111,73 @@ export default function EditProductForm({ product, onClose, onSaved }) {
     );
   }, [cats, mainCat]);
 
-  /* ---------- Fiyat hesaplama (yeni mantık) ---------- */
-  const num = (v) => {
-    const n = Number(v);
-    return Number.isFinite(n) ? n : 0;
+  /* ---------- Fiyat alanları ---------- */
+  const toNumber = (value) => {
+    if (value === null || value === undefined || value === "") return null;
+    const num = Number(value);
+    return Number.isFinite(num) ? num : null;
   };
-  const original = num(formData.originalPrice);
-  const discountPct = Math.max(0, Math.min(100, num(formData.discount)));
-  const hasDiscount = discountPct > 0;
-  const computedPrice = useMemo(() => {
-    if (!original) return 0;
-    const discounted = original * (1 - discountPct / 100);
-    return Number(discounted.toFixed(2));
-  }, [original, discountPct]);
+
+  const originalNumber = toNumber(formData.originalPrice);
+  const priceNumber = toNumber(formData.price);
+
+  const pricingReady = originalNumber !== null && priceNumber !== null;
+  const hasDiscount =
+    pricingReady && priceNumber !== null && originalNumber !== null
+      ? priceNumber < originalNumber - 0.005
+      : false;
+  const original = originalNumber ?? 0;
+  const finalPrice = priceNumber ?? 0;
+
+  const numericFieldCount = [
+    formData.originalPrice,
+    formData.price,
+    formData.discount,
+  ].reduce((count, val) => {
+    if (val === "" || val === null || val === undefined) return count;
+    const num = Number(val);
+    return Number.isFinite(num) ? count + 1 : count;
+  }, 0);
+
+  const canComputePricing = numericFieldCount >= 2;
+
+  const handleComputePricing = () => {
+    setToast(null);
+    const result = normalizePricing(
+      {
+        originalPrice: formData.originalPrice,
+        discount: formData.discount,
+        price: formData.price,
+      },
+      undefined
+    );
+
+    const numbers = result.numbers;
+    if (numbers.original === null || numbers.price === null) {
+      setToast({
+        msg: "Geçerli iki fiyat değeri girin (örn. orijinal + indirimli veya orijinal + indirim).",
+        type: "error",
+      });
+      return;
+    }
+
+    setFormData((prev) => ({ ...prev, ...result.values }));
+    setHasChanged(true);
+  };
 
   /* ---------------- Handlers ---------------- */
+  const updatePricingField = (field, rawValue) => {
+    setToast(null);
+    setFormData((prev) => ({ ...prev, [field]: rawValue }));
+    setHasChanged(true);
+  };
+
   const handleInput = (e) => {
     const { name, value } = e.target;
+    if (name === "originalPrice" || name === "discount" || name === "price") {
+      updatePricingField(name, value);
+      return;
+    }
     setFormData((p) => ({ ...p, [name]: value }));
     setHasChanged(true);
   };
@@ -159,12 +221,28 @@ export default function EditProductForm({ product, onClose, onSaved }) {
     e.preventDefault();
     setSubmitting(true);
 
+    const pricingResult = resolvePricingForSubmit({
+      originalPrice: formData.originalPrice,
+      discount: formData.discount,
+      price: formData.price,
+    });
+
+    if (!pricingResult.valid) {
+      setToast({
+        msg: "Fiyatı hesaplamak için en az iki alanı doldurup 'Fiyatı Hesapla' butonuna basın.",
+        type: "error",
+      });
+      setSubmitting(false);
+      return;
+    }
+
+    const { values } = pricingResult;
+
     const fd = new FormData();
-    // Backend alanları: price → computed, originalPrice & discount → girildiği gibi
     fd.append("name", formData.name || "");
-    fd.append("price", String(hasDiscount ? computedPrice : original));
-    fd.append("originalPrice", String(original));
-    fd.append("discount", String(discountPct || 0));
+    fd.append("price", values.price);
+    fd.append("originalPrice", values.originalPrice);
+    fd.append("discount", values.discount || "0.00");
     fd.append("description", formData.description || "");
     fd.append("color", formData.color || "");
     fd.append("sizes", JSON.stringify(formData.sizes || []));
@@ -268,11 +346,11 @@ export default function EditProductForm({ product, onClose, onSaved }) {
                 <label className="text-sm font-medium">İndirim (%)</label>
                 <input
                   type="number"
-                  inputMode="numeric"
+                  inputMode="decimal"
                   name="discount"
                   min="0"
                   max="100"
-                  step="1"
+                  step="0.01"
                   value={formData.discount}
                   onChange={handleInput}
                   className="w-full px-4 py-2 border rounded-lg"
@@ -280,16 +358,33 @@ export default function EditProductForm({ product, onClose, onSaved }) {
                 />
               </div>
               <div className="space-y-1 min-w-0">
-                <label className="text-sm font-medium">
-                  Hesaplanan Fiyat (otomatik)
-                </label>
+                <label className="text-sm font-medium">İndirimli Fiyat</label>
                 <input
-                  readOnly
-                  value={hasDiscount ? computedPrice : original}
-                  className="w-full px-4 py-2 border rounded-lg bg-gray-50 text-gray-700"
-                  aria-readonly="true"
+                  type="number"
+                  inputMode="decimal"
+                  name="price"
+                  min="0"
+                  step="0.01"
+                  value={formData.price}
+                  onChange={handleInput}
+                  className="w-full px-4 py-2 border rounded-lg"
+                  placeholder="Örn. 599.90"
                 />
               </div>
+            </div>
+            <div className="sm:col-span-2 flex justify-end mt-2">
+              <button
+                type="button"
+                onClick={handleComputePricing}
+                disabled={!canComputePricing}
+                className={`px-4 py-2 rounded-lg text-sm font-medium border ${
+                  canComputePricing
+                    ? "border-blue-600 text-blue-600 hover:bg-blue-50"
+                    : "border-gray-300 text-gray-400 cursor-not-allowed"
+                }`}
+              >
+                Fiyatı Hesapla
+              </button>
             </div>
 
             {/* Kategori */}
@@ -428,11 +523,14 @@ export default function EditProductForm({ product, onClose, onSaved }) {
                   );
                   e.target.value = "";
                   if (failed.length) {
-                    const maxMb = Math.round((MAX_IMAGE_BYTES / (1024 * 1024)) * 10) / 10;
+                    const maxMb =
+                      Math.round((MAX_IMAGE_BYTES / (1024 * 1024)) * 10) / 10;
                     setToast({
                       msg: `Aşağıdaki görseller sıkıştırılamadı: ${failed
                         .map((f) => f.name)
-                        .join(", ")}. Lütfen ${maxMb}MB altında dosyalar seçin.`,
+                        .join(
+                          ", "
+                        )}. Lütfen ${maxMb}MB altında dosyalar seçin.`,
                       type: "error",
                     });
                   }
@@ -457,9 +555,9 @@ export default function EditProductForm({ product, onClose, onSaved }) {
             </button>
             <button
               type="submit"
-              disabled={!hasChanged || submitting || !original}
+              disabled={!hasChanged || submitting || !pricingReady}
               className={`px-4 py-2 rounded-lg text-white w-full sm:w-auto ${
-                !hasChanged || submitting || !original
+                !hasChanged || submitting || !pricingReady
                   ? "bg-gray-300 cursor-not-allowed"
                   : "bg-blue-600 hover:bg-blue-700"
               }`}
@@ -519,12 +617,16 @@ export default function EditProductForm({ product, onClose, onSaved }) {
                       {original ? fmt(original) : "—"}
                     </span>
                     <span className="text-blue-700 font-semibold">
-                      {computedPrice ? fmt(computedPrice) : "—"}
+                      {finalPrice ? fmt(finalPrice) : "—"}
                     </span>
                   </>
                 ) : (
                   <span className="text-blue-700 font-semibold">
-                    {original ? fmt(original) : "Fiyat"}
+                    {finalPrice
+                      ? fmt(finalPrice)
+                      : original
+                      ? fmt(original)
+                      : "Fiyat"}
                   </span>
                 )}
                 {formData.color && <Badge>{formData.color}</Badge>}

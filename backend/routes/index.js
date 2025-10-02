@@ -60,4 +60,6 @@ router.use("/shipping", require("./shipping"));
 // /api/v1/discount-rules altında hizmet verir
 // router.use("/discount-rules", require("./discountRuleRoutes"));
 
+router.use("/announcement-bar", require("./announcementBar"));
+
 module.exports = router;

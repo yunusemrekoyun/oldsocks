@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&display=swap');
+@import url("https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&display=swap");
 
 @tailwind base;
 @tailwind components;
@@ -10,4 +10,82 @@
 .no-scrollbar {
   -ms-overflow-style: none;
   scrollbar-width: none;
+}
+
+/* --- AnnouncementBar --- */
+.announcement-bar {
+  overflow: hidden;
+  position: relative;
+  white-space: nowrap;
+}
+
+.marquee__track {
+  display: inline-block;
+  will-change: transform;
+  animation: marquee-jump var(--dur, 12s) linear infinite;
+}
+
+/* Mesaj tek kopya */
+.marquee__msg {
+  display: inline-block;
+  padding: 0 1rem;
+}
+
+/* Başlangıç: sağ dış (container genişliği kadar), Bitiş: sol dış (mesaj genişliği kadar) */
+@keyframes marquee-jump {
+  0% {
+    transform: translateX(var(--cw, 100vw));
+  }
+  100% {
+    transform: translateX(calc(-1 * var(--mw, 100%)));
+  }
+}
+
+/* --- Range slider thumb/track --- */
+.range-thumb::-webkit-slider-runnable-track {
+  height: 8px;
+  background: transparent;
+}
+.range-thumb::-moz-range-track {
+  height: 8px;
+  background: transparent;
+}
+
+.range-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 32px; /* etkileşim alanı (geniş tut) */
+  background: transparent;
+}
+
+.range-thumb::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 9999px;
+  background: #111;
+  border: 2px solid #fff;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.15);
+  margin-top: 0; /* <<< ÖNEMLİ: -5px yerine 0, tam ortaya oturur */
+  cursor: pointer;
+}
+
+.range-thumb::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 9999px;
+  background: #111;
+  border: 2px solid #fff;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.15);
+  cursor: pointer;
+}
+.range-thumb {
+  pointer-events: none;
+}
+.range-thumb::-webkit-slider-thumb {
+  pointer-events: auto;
+}
+.range-thumb::-moz-range-thumb {
+  pointer-events: auto;
 }

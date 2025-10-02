@@ -1,4 +1,4 @@
-// ✅ Redesigned CategoryFilter Component — Mobile Dropdown Friendly (fixed)
+// ✅ CategoryFilter — fixed price slider (global range, doesn’t reset)
 import React, { useState, useEffect } from "react";
 import { FaChevronDown, FaXmark } from "react-icons/fa6";
 
@@ -18,20 +18,37 @@ export default function CategoryFilter({
     priceRange: false,
   });
   const [expandedMobile, setExpandedMobile] = useState(false);
-  const [priceInput, setPriceInput] = useState({ min: "", max: "" });
 
-  // Fiyat aralığı
-  const prices = products.map((p) => Number(p.price || 0));
-  const minPrice = prices.length ? Math.min(...prices) : 0;
-  const maxPrice = prices.length ? Math.max(...prices) : 0;
+  // Slider local state (always numbers)
+  const [priceInput, setPriceInput] = useState({ min: 0, max: 0 });
 
+  // 🔒 Global (sabit) fiyat aralığı – filtrelerden bağımsız
+  const [baseRange, setBaseRange] = useState({ min: 0, max: 0 });
   useEffect(() => {
-    const [low, high] = filters.priceRange;
+    const list = products
+      .map((p) => Number(p.price || 0))
+      .filter((n) => Number.isFinite(n));
+    if (!list.length) return;
+
+    const curMin = Math.min(...list);
+    const curMax = Math.max(...list);
+
+    // Sadece genişlet (ilk yükleme veya ürün yelpazesi büyürse)
+    setBaseRange((prev) => ({
+      min: prev.min === 0 ? curMin : Math.min(prev.min, curMin),
+      max: prev.max === 0 ? curMax : Math.max(prev.max, curMax),
+    }));
+  }, [products]);
+
+  // filters.priceRange → slider’a sayısal senkron
+  useEffect(() => {
+    if (!baseRange.min && !baseRange.max) return;
+    const [low, high] = filters.priceRange || [];
     setPriceInput({
-      min: low === minPrice ? "" : low,
-      max: high === maxPrice ? "" : high,
+      min: Number.isFinite(low) ? low : baseRange.min,
+      max: Number.isFinite(high) ? high : baseRange.max,
     });
-  }, [filters.priceRange, minPrice, maxPrice]);
+  }, [filters.priceRange, baseRange]);
 
   // Toggle helper
   const toggleFilter = (key, val) => {
@@ -51,13 +68,12 @@ export default function CategoryFilter({
       parent: String(p._id),
     }))
   );
-  // Duplicate clean
   const subCats = Array.from(new Map(allSub.map((i) => [i.value, i])).values());
   const subOptions = filters.category.length
     ? subCats.filter((s) => filters.category.includes(s.parent))
     : [];
 
-  // ✅ BEDENLERİ string'e çevirip eşsiz hale getir
+  // Beden & Renk
   const sizeValues = Array.from(
     new Set(
       products
@@ -70,7 +86,6 @@ export default function CategoryFilter({
     )
   ).sort((a, b) => a.localeCompare(b, "tr"));
 
-  // ✅ RENKLERİ normalize et
   const colorValues = Array.from(
     new Set(
       products
@@ -98,6 +113,10 @@ export default function CategoryFilter({
     },
   ];
 
+  const fmt = (n) =>
+    Number(n).toLocaleString("tr-TR", { maximumFractionDigits: 0 });
+
+  // ------ Render ------
   return (
     <aside
       className={`bg-white border border-light2 rounded-2xl shadow-md overflow-hidden transition-all duration-300 
@@ -143,20 +162,18 @@ export default function CategoryFilter({
             </button>
 
             {open[key] && (
-              <div className="px-6 py-2 grid grid-cols-2 gap-3">
+              <div className="px-6 py-2 flex flex-col gap-2">
                 {options.length === 0 ? (
-                  <p className="col-span-2 text-sm text-dark2 italic">
-                    Seçenek yok
-                  </p>
+                  <p className="text-sm text-dark2 italic">Seçenek yok</p>
                 ) : (
                   options.map(({ value, label }) => {
                     const valueStr = String(value);
                     const checked = (filters[key] || []).includes(valueStr);
                     return (
                       <button
-                        key={valueStr} // ✅ benzersiz string key
+                        key={valueStr}
                         onClick={() => toggleFilter(key, valueStr)}
-                        className={`text-sm px-3 py-1 rounded-full border transition-all duration-200 ${
+                        className={`text-sm px-3 py-2 rounded-full border transition-all duration-200 flex items-center justify-center ${
                           checked
                             ? "bg-dark1 text-white border-dark1"
                             : "border-light2 text-dark2 hover:bg-light2"
@@ -188,41 +205,83 @@ export default function CategoryFilter({
             />
           </button>
 
-          {open.priceRange && (
-            <div className="px-6 pb-4 pt-2 space-y-3">
-              <div className="flex gap-2">
-                <input
-                  type="number"
-                  placeholder={minPrice}
-                  value={priceInput.min}
-                  onChange={(e) =>
-                    setPriceInput((p) => ({ ...p, min: e.target.value }))
-                  }
-                  className="w-1/2 px-3 py-2 rounded border border-light2 bg-light1 text-dark1"
-                />
-                <input
-                  type="number"
-                  placeholder={maxPrice}
-                  value={priceInput.max}
-                  onChange={(e) =>
-                    setPriceInput((p) => ({ ...p, max: e.target.value }))
-                  }
-                  className="w-1/2 px-3 py-2 rounded border border-light2 bg-light1 text-dark1"
-                />
-              </div>
-              <button
-                onClick={() => {
-                  const low = Number(priceInput.min) || minPrice;
-                  const high = Number(priceInput.max) || maxPrice;
-                  onFilterChange({ ...filters, priceRange: [low, high] });
-                }}
-                className="w-full bg-dark1 hover:bg-dark2 text-white py-2 rounded-lg font-semibold"
-              >
-                Uygula
-              </button>
-              <p className="text-xs text-dark2">
-                (min: {minPrice}, max: {maxPrice})
-              </p>
+          {open.priceRange && baseRange.min !== baseRange.max && (
+            <div className="px-6 pb-4 pt-2 space-y-4">
+              {(() => {
+                const bMin = baseRange.min;
+                const bMax = baseRange.max;
+                const minVal = Math.max(bMin, Math.min(priceInput.min, bMax));
+                const maxVal = Math.max(minVal, Math.min(priceInput.max, bMax));
+                const total = Math.max(1, bMax - bMin);
+
+                const leftPct = ((minVal - bMin) / total) * 100;
+                const widthPct = ((maxVal - minVal) / total) * 100;
+
+                return (
+                  <>
+                    {/* Slider */}
+                    <div className="relative h-10">
+                      {/* Track */}
+                      <div className="absolute left-0 right-0 top-1/2 -translate-y-1/2 h-2 bg-light2 rounded-full" />
+                      {/* Selected */}
+                      <div
+                        className="absolute top-1/2 -translate-y-1/2 h-2 bg-dark1 rounded-full"
+                        style={{ left: `${leftPct}%`, width: `${widthPct}%` }}
+                      />
+                      {/* Min */}
+                      <input
+                        type="range"
+                        min={bMin}
+                        max={bMax}
+                        step="1"
+                        value={minVal}
+                        onChange={(e) => {
+                          const v = Math.min(Number(e.target.value), maxVal);
+                          setPriceInput((p) => ({ ...p, min: v }));
+                        }}
+                        className="range-thumb absolute inset-0 w-full h-full appearance-none bg-transparent"
+                        style={{ zIndex: 3 }} // ⬅️ min başlığı üstte
+                      />
+
+                      {/* Max slider (altta) */}
+                      <input
+                        type="range"
+                        min={bMin}
+                        max={bMax}
+                        step="1"
+                        value={maxVal}
+                        onChange={(e) => {
+                          const v = Math.max(Number(e.target.value), minVal);
+                          setPriceInput((p) => ({ ...p, max: v }));
+                        }}
+                        className="range-thumb absolute inset-0 w-full h-full appearance-none bg-transparent"
+                        style={{ zIndex: 2 }} // ⬅️ max altta
+                      />
+                    </div>
+
+                    {/* Values */}
+                    <div className="flex justify-between text-sm font-medium">
+                      <span>Min: {fmt(minVal)}</span>
+                      <span>Max: {fmt(maxVal)}</span>
+                    </div>
+
+                    <button
+                      onClick={() =>
+                        onFilterChange({
+                          ...filters,
+                          priceRange: [minVal, maxVal],
+                        })
+                      }
+                      className="w-full bg-dark1 hover:bg-dark2 text-white py-2 rounded-lg font-semibold"
+                    >
+                      Uygula
+                    </button>
+                    <p className="text-xs text-dark2">
+                      (Aralık: {fmt(bMin)} – {fmt(bMax)})
+                    </p>
+                  </>
+                );
+              })()}
             </div>
           )}
         </div>

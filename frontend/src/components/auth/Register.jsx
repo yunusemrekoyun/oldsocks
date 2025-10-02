@@ -1,8 +1,9 @@
-import React, { useState } from "react";
-
+// src/components/auth/Register.jsx
+import React, { useState, useMemo } from "react";
 import api from "../../../api";
 // eslint-disable-next-line no-unused-vars
 import { motion } from "framer-motion";
+import { IMaskInput } from "react-imask";
 
 const Register = ({ onSwitch }) => {
   const [formData, setFormData] = useState({
@@ -10,16 +11,51 @@ const Register = ({ onSwitch }) => {
     lastName: "",
     email: "",
     password: "",
-    phone: "",
+    confirmPassword: "",
+    phone: "", // maskeli gösterim
   });
 
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+
+  // ---------- ŞİFRE KURALLARI ----------
+  const passwordRules = useMemo(
+    () => [
+      { id: "min8", label: "En az 8 karakter", test: (s) => s.length >= 8 },
+      {
+        id: "upper",
+        label: "En az 1 büyük harf",
+        test: (s) => /[A-ZÇĞİÖŞÜ]/.test(s),
+      },
+      {
+        id: "lower",
+        label: "En az 1 küçük harf",
+        test: (s) => /[a-zçğıöşü]/.test(s),
+      },
+      { id: "digit", label: "En az 1 rakam", test: (s) => /\d/.test(s) },
+    ],
+    []
+  );
+
+  const passwordValidation = useMemo(() => {
+    const s = formData.password || "";
+    const results = passwordRules.map((r) => ({ ...r, ok: r.test(s) }));
+    const allOk = results.every((r) => r.ok);
+    return { results, allOk };
+  }, [formData.password, passwordRules]);
 
   const handleChange = (e) => {
-    const { name, value } = e.target;
+    const { name, value } = e.target; // IMaskInput da target.value verir
     setFormData((prev) => ({ ...prev, [name]: value }));
+  };
+
+  // E.164 normalize: +90 + son 10 hane (5xxxxxxxxx)
+  const toE164IfAny = (masked) => {
+    const digits = String(masked || "").replace(/\D/g, "");
+    const last10 = digits.slice(-10);
+    return last10 ? `+90${last10}` : "";
   };
 
   const handleSubmit = async (e) => {
@@ -28,8 +64,26 @@ const Register = ({ onSwitch }) => {
     setError("");
     setSuccess(false);
 
+    if (formData.password !== formData.confirmPassword) {
+      setError("Şifreler eşleşmiyor.");
+      setLoading(false);
+      return;
+    }
+    if (!passwordValidation.allOk) {
+      setError("Şifre güvenlik kurallarını sağlamıyor.");
+      setLoading(false);
+      return;
+    }
+
     try {
-      const res = await api.post("/auth/register", formData);
+      const res = await api.post("/auth/register", {
+        firstName: formData.firstName.trim(),
+        lastName: formData.lastName.trim(),
+        email: formData.email.trim(),
+        password: formData.password,
+        phone: toE164IfAny(formData.phone) || undefined, // opsiyonel
+      });
+
       if (res.status === 201) {
         setSuccess(true);
         setFormData({
@@ -37,11 +91,9 @@ const Register = ({ onSwitch }) => {
           lastName: "",
           email: "",
           password: "",
+          confirmPassword: "",
           phone: "",
         });
-
-        // İsteğe göre otomatik geçiş:
-        // setTimeout(() => navigate("/profile"), 1500);
       }
     } catch (err) {
       setError(
@@ -67,44 +119,109 @@ const Register = ({ onSwitch }) => {
       )}
 
       <form onSubmit={handleSubmit} className="space-y-5">
-        {/* Form alanları */}
-        {["firstName", "lastName", "email", "password", "phone"].map(
-          (field, i) => {
-            const labels = {
-              firstName: "Adınız",
-              lastName: "Soyadınız",
-              email: "E-posta",
-              password: "Şifre",
-              phone: "Telefon (örneğin: +905xx...)",
-            };
-            const types = {
-              email: "email",
-              password: "password",
-              phone: "text",
-            };
+        {/* firstName, lastName, email */}
+        {["firstName", "lastName", "email"].map((field) => {
+          const labels = {
+            firstName: "Adınız",
+            lastName: "Soyadınız",
+            email: "E-posta",
+          };
+          const types = { email: "email" };
+          return (
+            <div key={field}>
+              <label htmlFor={field} className="block text-sm mb-1 text-dark2">
+                {labels[field]}
+              </label>
+              <input
+                id={field}
+                name={field}
+                type={types[field] || "text"}
+                placeholder={labels[field]}
+                value={formData[field]}
+                onChange={handleChange}
+                required
+                className="w-full px-4 py-3 rounded-lg border border-light2 bg-light1 text-dark1 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-dark1 transition"
+              />
+            </div>
+          );
+        })}
 
-            return (
-              <div key={i}>
-                <label
-                  htmlFor={field}
-                  className="block text-sm mb-1 text-dark2"
-                >
-                  {labels[field]}
-                </label>
-                <input
-                  id={field}
-                  name={field}
-                  type={types[field] || "text"}
-                  placeholder={labels[field]}
-                  value={formData[field]}
-                  onChange={handleChange}
-                  required={field !== "phone"}
-                  className="w-full px-4 py-3 rounded-lg border border-light2 bg-light1 text-dark1 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-dark1 transition"
-                />
-              </div>
-            );
-          }
-        )}
+        {/* Telefon (maskeli) */}
+        <div>
+          <label htmlFor="phone" className="block text-sm mb-1 text-dark2">
+            Telefon
+          </label>
+
+          <IMaskInput
+            id="phone"
+            name="phone"
+            /* +90 5xx xxx xx xx — ‘5’ten sonra boşluk YOK */
+            mask="+{90} 500 000 00 00"
+            definitions={{ 0: /[0-9]/ }}
+            value={formData.phone}
+            onAccept={(val) => setFormData((p) => ({ ...p, phone: val }))}
+            unmask={false}
+            inputMode="tel"
+            placeholder="+90 5__ ___ __ __"
+            className="w-full px-4 py-3 rounded-lg border border-light2 bg-light1 text-dark1 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-dark1 transition"
+          />
+        </div>
+
+        {/* Şifre */}
+        <div>
+          <label htmlFor="password" className="block text-sm mb-1 text-dark2">
+            Şifre
+          </label>
+          <div className="relative">
+            <input
+              id="password"
+              name="password"
+              type={showPassword ? "text" : "password"}
+              placeholder="Şifre"
+              value={formData.password}
+              onChange={handleChange}
+              required
+              className="w-full px-4 py-3 rounded-lg border border-light2 bg-light1 text-dark1 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-dark1 transition pr-16"
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword((s) => !s)}
+              className="absolute inset-y-0 right-3 text-sm text-gray-600"
+            >
+              {showPassword ? "Gizle" : "Göster"}
+            </button>
+          </div>
+          <ul className="mt-2 text-xs space-y-1">
+            {passwordValidation.results.map((r) => (
+              <li
+                key={r.id}
+                className={r.ok ? "text-emerald-600" : "text-gray-500"}
+              >
+                {r.ok ? "✓ " : "• "} {r.label}
+              </li>
+            ))}
+          </ul>
+        </div>
+
+        {/* Şifre tekrar */}
+        <div>
+          <label
+            htmlFor="confirmPassword"
+            className="block text-sm mb-1 text-dark2"
+          >
+            Şifre (Tekrar)
+          </label>
+          <input
+            id="confirmPassword"
+            name="confirmPassword"
+            type={showPassword ? "text" : "password"}
+            placeholder="Şifre (Tekrar)"
+            value={formData.confirmPassword}
+            onChange={handleChange}
+            required
+            className="w-full px-4 py-3 rounded-lg border border-light2 bg-light1 text-dark1 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-dark1 transition"
+          />
+        </div>
 
         {success ? (
           <div className="w-full text-center text-sm font-semibold text-green-600 bg-green-50 border border-green-200 rounded-lg py-3 px-4">

@@ -7,6 +7,7 @@ import {
   compressImageFileList,
   MAX_IMAGE_BYTES,
 } from "../../utils/imageCompression";
+import { normalizePricing, resolvePricingForSubmit } from "../../utils/pricing";
 
 const Badge = ({ children }) => (
   <span className="inline-flex items-center px-2 py-0.5 rounded text-xs bg-gray-100 text-gray-700">
@@ -24,6 +25,10 @@ export default function ProductFormModal({ product, onClose, onSaved }) {
   const [isNewColor, setIsNewColor] = useState(false);
   const [feedback, setFeedback] = useState(null);
 
+  const updatePricingField = (field, rawValue) => {
+    setForm((prev) => (prev ? { ...prev, [field]: rawValue } : prev));
+  };
+
   /* --------- Kategoriler --------- */
   useEffect(() => {
     api.get("/categories").then((res) => setCategories(res.data));
@@ -37,6 +42,14 @@ export default function ProductFormModal({ product, onClose, onSaved }) {
       api.get(`/products/${product.parentProductId}`).then((res) => {
         const p = res.data;
         const cat = p.category || {};
+        const pricing = normalizePricing(
+          {
+            originalPrice: p.originalPrice ?? "",
+            discount: p.discount ?? "",
+            price: p.price ?? "",
+          },
+          undefined
+        );
         let parent = "",
           category = "";
         if (cat.parent && typeof cat.parent === "object") {
@@ -52,9 +65,9 @@ export default function ProductFormModal({ product, onClose, onSaved }) {
           category,
           video: undefined,
           images: [],
-          // 🎯 Yeni mantıkta 'price' alanını kullanıcı girmez → otomatik hesaplanacak
-          originalPrice: p.originalPrice ?? "",
-          discount: p.discount ?? "",
+          originalPrice: pricing.values.originalPrice,
+          discount: pricing.values.discount,
+          price: pricing.values.price,
           sizes: Array.isArray(p.sizes)
             ? p.sizes.map((s) => ({ size: s.size, stock: s.stock }))
             : [],
@@ -69,6 +82,14 @@ export default function ProductFormModal({ product, onClose, onSaved }) {
       api.get(`/products/${product._id}`).then((res) => {
         const p = res.data;
         const cat = p.category || {};
+        const pricing = normalizePricing(
+          {
+            originalPrice: p.originalPrice ?? "",
+            discount: p.discount ?? "",
+            price: p.price ?? "",
+          },
+          undefined
+        );
         let parent = "",
           category = "";
         if (cat.parent && typeof cat.parent === "object") {
@@ -84,8 +105,9 @@ export default function ProductFormModal({ product, onClose, onSaved }) {
           category,
           video: undefined,
           images: [],
-          originalPrice: p.originalPrice ?? "",
-          discount: p.discount ?? "",
+          originalPrice: pricing.values.originalPrice,
+          discount: pricing.values.discount,
+          price: pricing.values.price,
           sizes: Array.isArray(p.sizes)
             ? p.sizes.map((s) => ({ size: s.size, stock: s.stock }))
             : [],
@@ -105,6 +127,7 @@ export default function ProductFormModal({ product, onClose, onSaved }) {
         images: [],
         originalPrice: "",
         discount: "",
+        price: "",
         sizes: [],
         description: "",
         color: "",
@@ -124,22 +147,58 @@ export default function ProductFormModal({ product, onClose, onSaved }) {
   );
   const childCats = selectedParent?.children || [];
 
-  /* --------- Türev fiyat (yeni mantık) --------- */
-  const numeric = (v) => {
-    const n = Number(v);
-    return Number.isFinite(n) ? n : 0;
+  /* --------- Fiyat türetme (üçlü) --------- */
+  const toNumber = (value) => {
+    if (value === null || value === undefined || value === "") return null;
+    const num = Number(value);
+    return Number.isFinite(num) ? num : null;
   };
-  const original = numeric(form?.originalPrice);
-  const discountPct = numeric(form?.discount);
-  const hasDiscount = discountPct > 0;
 
-  const computedPrice = useMemo(() => {
-    if (!original) return 0;
-    const pct = Math.max(0, Math.min(100, discountPct || 0));
-    const discounted = original * (1 - pct / 100);
-    // 2 ondalık hassasiyet
-    return Number(discounted.toFixed(2));
-  }, [original, discountPct]);
+  const originalNumber = toNumber(form?.originalPrice);
+  const priceNumber = toNumber(form?.price);
+
+  const pricingReady = originalNumber !== null && priceNumber !== null;
+  const hasDiscount =
+    pricingReady && priceNumber !== null && originalNumber !== null
+      ? priceNumber < originalNumber - 0.005
+      : false;
+  const original = originalNumber ?? 0;
+  const finalPrice = priceNumber ?? 0;
+
+  const numericFieldCount = (form
+    ? [form.originalPrice, form.price, form.discount]
+    : []
+  ).reduce((count, val) => {
+    if (val === "" || val === null || val === undefined) return count;
+    const num = Number(val);
+    return Number.isFinite(num) ? count + 1 : count;
+  }, 0);
+
+  const canComputePricing = numericFieldCount >= 2;
+
+  const handleComputePricing = () => {
+    if (!form) return;
+    setFeedback(null);
+    const result = normalizePricing(
+      {
+        originalPrice: form.originalPrice,
+        discount: form.discount,
+        price: form.price,
+      },
+      undefined
+    );
+
+    const numbers = result.numbers;
+    if (numbers.original === null || numbers.price === null) {
+      setFeedback({
+        type: "error",
+        message: "En az iki fiyat alanı için geçerli sayılar girin.",
+      });
+      return;
+    }
+
+    setForm((prev) => (prev ? { ...prev, ...result.values } : prev));
+  };
 
   /* --------- Handlers --------- */
   const handleChange = async (e) => {
@@ -174,6 +233,11 @@ export default function ProductFormModal({ product, onClose, onSaved }) {
       }
       return;
     }
+    setFeedback(null);
+    if (name === "originalPrice" || name === "discount" || name === "price") {
+      updatePricingField(name, value);
+      return;
+    }
     setForm((f) => ({ ...f, [name]: value }));
   };
 
@@ -192,7 +256,7 @@ export default function ProductFormModal({ product, onClose, onSaved }) {
     form &&
     form.name.trim() &&
     (form.category || form.parent) &&
-    numeric(form.originalPrice) > 0; // price zorunlu değil; otomatik hesaplanıyor
+    pricingReady;
 
   /* --------- Submit --------- */
   const handleSubmit = async (e) => {
@@ -203,16 +267,33 @@ export default function ProductFormModal({ product, onClose, onSaved }) {
     const id = uuidv4();
     addTask({ id, name: form.name || "Yeni Ürün", progress: 0 });
 
+    const pricingResult = resolvePricingForSubmit({
+      originalPrice: form.originalPrice,
+      discount: form.discount,
+      price: form.price,
+    });
+
+    if (!pricingResult.valid) {
+      setFeedback({
+        type: "error",
+        message:
+          "Fiyatı tamamlamak için en az iki alanı doldurun ve 'Fiyatı Hesapla' butonuna basın.",
+      });
+      setLoading(false);
+      return;
+    }
+
+    const { values } = pricingResult;
+
     const fd = new FormData();
     fd.append("name", form.name);
     if (form.video) fd.append("video", form.video);
     form.images.forEach((img) => fd.append("images", img));
 
     // 🎯 Backend'e giden alanlar:
-    // price → computedPrice, originalPrice → girilen, discount → girilen veya 0
-    fd.append("price", String(hasDiscount ? computedPrice : original));
-    fd.append("originalPrice", String(original));
-    fd.append("discount", String(discountPct || 0));
+    fd.append("price", values.price);
+    fd.append("originalPrice", values.originalPrice);
+    fd.append("discount", values.discount || "0.00");
     fd.append("description", form.description || "");
     fd.append("color", form.color || "");
     fd.append("parentProductId", form.parentProductId || "");
@@ -312,7 +393,7 @@ export default function ProductFormModal({ product, onClose, onSaved }) {
               <input
                 name="discount"
                 type="number"
-                step="1"
+                step="0.01"
                 min="0"
                 max="100"
                 value={form.discount}
@@ -322,15 +403,32 @@ export default function ProductFormModal({ product, onClose, onSaved }) {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium">
-                Hesaplanan Fiyat (otomatik)
-              </label>
+              <label className="block text-sm font-medium">İndirimli Fiyat</label>
               <input
-                value={hasDiscount ? computedPrice : original}
-                readOnly
-                className="w-full border px-3 py-2 rounded-lg bg-gray-50 text-gray-700"
+                name="price"
+                type="number"
+                step="0.01"
+                min="0"
+                value={form.price}
+                onChange={handleChange}
+                className="w-full border px-3 py-2 rounded-lg"
+                placeholder="Örn. 599.90"
               />
             </div>
+          </div>
+          <div className="flex justify-end mt-2">
+            <button
+              type="button"
+              onClick={handleComputePricing}
+              disabled={!canComputePricing}
+              className={`px-4 py-2 rounded-lg text-sm font-medium border ${
+                canComputePricing
+                  ? "border-blue-600 text-blue-600 hover:bg-blue-50"
+                  : "border-gray-300 text-gray-400 cursor-not-allowed"
+              }`}
+            >
+              Fiyatı Hesapla
+            </button>
           </div>
 
           {/* Renk */}
@@ -535,12 +633,12 @@ export default function ProductFormModal({ product, onClose, onSaved }) {
                       {fmt(original)}
                     </span>
                     <span className="text-blue-700 font-semibold">
-                      {fmt(computedPrice)}
+                      {fmt(finalPrice)}
                     </span>
                   </>
                 ) : (
                   <span className="text-blue-700 font-semibold">
-                    {original ? fmt(original) : "Fiyat"}
+                    {finalPrice ? fmt(finalPrice) : original ? fmt(original) : "Fiyat"}
                   </span>
                 )}
                 {form.color && <Badge>{form.color}</Badge>}

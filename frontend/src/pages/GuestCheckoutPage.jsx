@@ -68,7 +68,6 @@ export default function GuestCheckoutPage() {
     buyer.lastName &&
     buyer.email &&
     buyer.phone &&
-    buyer.identityNumber &&
     address.mainaddress &&
     address.street &&
     address.city;
@@ -87,7 +86,8 @@ export default function GuestCheckoutPage() {
           lastName: buyer.lastName.trim(),
           email: buyer.email.trim(),
           phone: buyer.phone.trim(),
-          identityNumber: buyer.identityNumber.trim(),
+          // TCKN boş ise fallback değeri gönder
+          identityNumber: buyer.identityNumber.trim() || "11111111111",
           registrationAddress: address.mainaddress.trim(),
         },
         address: {
@@ -103,7 +103,6 @@ export default function GuestCheckoutPage() {
       const { data } = await api.post("/payment/start-guest", payload);
 
       if (data?.conversationId) {
-        // PaymentPage'e özet bilgileri de gönder
         const summary = {
           subTotal,
           shippingFee,
@@ -131,7 +130,6 @@ export default function GuestCheckoutPage() {
       setLoading(false);
     }
   };
-
   if (items.length === 0) {
     navigate("/cart", { replace: true });
     return null;
@@ -188,7 +186,7 @@ export default function GuestCheckoutPage() {
 
           {/* TCKN */}
           <div className="sm:col-span-2">
-            <label className="block text-sm mb-1">T.C. Kimlik No</label>
+            <label className="block text-sm mb-1">T.C. Kimlik No (Opsiyonel)</label>
             <input
               className="w-full border rounded px-3 py-2"
               value={buyer.identityNumber}

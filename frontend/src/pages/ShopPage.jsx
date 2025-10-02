@@ -207,9 +207,6 @@ export default function ShopPage() {
             <h1 className="text-4xl font-playfair font-bold text-black">
               {presetTitle || miniTitle || campaignTitle || ""}
             </h1>
-            <p className="text-dark2 text-sm mt-1">
-              {filtered.length} ürün listeleniyor
-            </p>
           </header>
 
           <Products products={filtered.slice(0, visibleCount)} />

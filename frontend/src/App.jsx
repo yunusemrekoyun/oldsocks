@@ -28,6 +28,7 @@ import PaymentPage from "./pages/PaymentPage";
 import ScrollToTop from "./components/common/ScrollToTop";
 import AgreementPage from "./pages/AgreementPage";
 import KvkkPage from "./pages/KvkkPage";
+import CookiePolicyPage from "./pages/CookiePolicyPage";
 // Admin sayfaları
 // import ProductsPage from "./admin/pages/ProductsPage";
 import UsersPage from "./admin/pages/UsersPage";
@@ -45,6 +46,7 @@ import AdminUsersPage from "./admin/pages/UsersPage";
 import DiscountsPage from "./admin/pages/DiscountsPage";
 import HeroVideoPage from "./admin/pages/HeroVideoPage";
 import ShippingMethodsPage from "./admin/pages/ShippingMethodsPage";
+import AnnouncementBarPage from "./admin/pages/AnnouncementBarPage";
 export default function App() {
   return (
     <BrowserRouter>
@@ -69,6 +71,7 @@ export default function App() {
           <Route path="/agreement" element={<AgreementPage />} />
           <Route path="/payment" element={<PaymentPage />} />
           <Route path="/kvkk" element={<KvkkPage />} />
+          <Route path="/cookies" element={<CookiePolicyPage />} />
           <Route
             path="/checkout"
             element={
@@ -106,6 +109,7 @@ export default function App() {
             <Route path="instagram-posts" element={<InstagramPostsPage />} />
             <Route path="hero-videos" element={<HeroVideoPage />} />
             <Route path="shipping" element={<ShippingMethodsPage />} />
+            <Route path="announcement-bar" element={<AnnouncementBarPage />} />
             <Route path="*" element={<Navigate to="/admin" replace />} />
           </Route>
         </Route>

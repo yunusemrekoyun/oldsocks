@@ -1,5 +1,5 @@
 // src/pages/admin/forms/AddNewColorForm.jsx
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 import api from "../../../api";
 import ToastAlert from "../../components/ui/ToastAlert";
 import { v4 as uuid } from "uuid";
@@ -8,6 +8,7 @@ import {
   compressImageFileList,
   MAX_IMAGE_BYTES,
 } from "../../utils/imageCompression";
+import { normalizePricing, resolvePricingForSubmit } from "../../utils/pricing";
 
 const Badge = ({ children }) => (
   <span className="inline-flex items-center px-2 py-0.5 rounded text-xs bg-gray-100 text-gray-700">
@@ -20,6 +21,7 @@ export default function AddNewColorForm({ product, onClose, onSaved }) {
     name: "",
     originalPrice: "",
     discount: "",
+    price: "",
     description: "",
     color: "",
     sizes: [],
@@ -39,10 +41,20 @@ export default function AddNewColorForm({ product, onClose, onSaved }) {
     (async () => {
       try {
         const { data } = await api.get(`/products/${product._id}`);
+        const pricing = normalizePricing(
+          {
+            originalPrice: data.originalPrice ?? "",
+            discount: data.discount ?? "",
+            price: data.price ?? "",
+          },
+          undefined
+        );
+
         setFormData({
           name: data.name ?? "",
-          originalPrice: data.originalPrice ?? "",
-          discount: data.discount ?? "",
+          originalPrice: pricing.values.originalPrice,
+          discount: pricing.values.discount,
+          price: pricing.values.price,
           description: data.description ?? "",
           color: "",
           sizes: data.sizes?.length ? data.sizes : [],
@@ -55,28 +67,78 @@ export default function AddNewColorForm({ product, onClose, onSaved }) {
     })();
   }, [product]);
 
-  /* ---------- Fiyat hesaplama (yeni mantık) ---------- */
-  const num = (v) => {
-    const n = Number(v);
-    return Number.isFinite(n) ? n : 0;
+  /* ---------- Fiyat hesaplama (üçlü) ---------- */
+  const toNumber = (value) => {
+    if (value === null || value === undefined || value === "") return null;
+    const num = Number(value);
+    return Number.isFinite(num) ? num : null;
   };
-  const original = num(formData.originalPrice);
-  const discountPct = Math.max(0, Math.min(100, num(formData.discount)));
-  const hasDiscount = discountPct > 0;
-  const computedPrice = useMemo(() => {
-    if (!original) return 0;
-    const discounted = original * (1 - discountPct / 100);
-    return Number(discounted.toFixed(2));
-  }, [original, discountPct]);
+
+  const originalNumber = toNumber(formData.originalPrice);
+  const priceNumber = toNumber(formData.price);
+
+  const pricingReady = originalNumber !== null && priceNumber !== null;
+  const hasDiscount =
+    pricingReady && priceNumber !== null && originalNumber !== null
+      ? priceNumber < originalNumber - 0.005
+      : false;
+  const original = originalNumber ?? 0;
+  const finalPrice = priceNumber ?? 0;
+
+  const numericFieldCount = [
+    formData.originalPrice,
+    formData.price,
+    formData.discount,
+  ].reduce((count, val) => {
+    if (val === "" || val === null || val === undefined) return count;
+    const num = Number(val);
+    return Number.isFinite(num) ? count + 1 : count;
+  }, 0);
+
+  const canComputePricing = numericFieldCount >= 2;
+
+  const handleComputePricing = () => {
+    setToast(null);
+    const result = normalizePricing(
+      {
+        originalPrice: formData.originalPrice,
+        discount: formData.discount,
+        price: formData.price,
+      },
+      undefined
+    );
+
+    const numbers = result.numbers;
+    if (numbers.original === null || numbers.price === null) {
+      setToast({
+        msg: "Fiyatı hesaplamak için geçerli iki alan girin.",
+        type: "error",
+      });
+      return;
+    }
+
+    setFormData((prev) => ({ ...prev, ...result.values }));
+  };
 
   const fmt = (n) =>
     `₺${Number(n || 0).toLocaleString("tr-TR", {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
     })}`;
+  const updatePricingField = (field, rawValue) => {
+    setToast(null);
+    setFormData((prev) => ({ ...prev, [field]: rawValue }));
+  };
 
-  const handleInput = (e) =>
-    setFormData((p) => ({ ...p, [e.target.name]: e.target.value }));
+  const handleInput = (e) => {
+    const { name, value } = e.target;
+    setToast(null);
+    if (name === "originalPrice" || name === "discount" || name === "price") {
+      updatePricingField(name, value);
+      return;
+    }
+    setFormData((p) => ({ ...p, [name]: value }));
+  };
 
   const handleSizeChange = (i, key, value) =>
     setFormData((p) => {
@@ -104,18 +166,25 @@ export default function AddNewColorForm({ product, onClose, onSaved }) {
         msg: "En az bir beden satırı ekleyin.",
         type: "error",
       });
-    if (!original)
+    const pricingResult = resolvePricingForSubmit({
+      originalPrice: formData.originalPrice,
+      discount: formData.discount,
+      price: formData.price,
+    });
+
+    if (!pricingResult.valid) {
       return setToast({
-        msg: "Orijinal fiyat zorunludur.",
+        msg: "Fiyatı hesaplamak için en az iki alanı doldurup 'Fiyatı Hesapla' butonuna basın.",
         type: "error",
       });
+    }
 
     const fd = new FormData();
     // Backend şeması: price = hesaplanan; originalPrice & discount olduğu gibi
     fd.append("name", formData.name || "");
-    fd.append("price", String(hasDiscount ? computedPrice : original));
-    fd.append("originalPrice", String(original));
-    fd.append("discount", String(discountPct || 0));
+    fd.append("price", pricingResult.values.price);
+    fd.append("originalPrice", pricingResult.values.originalPrice);
+    fd.append("discount", pricingResult.values.discount || "0.00");
     fd.append("description", formData.description || "");
     fd.append("color", formData.color.trim());
     fd.append(
@@ -218,7 +287,7 @@ export default function AddNewColorForm({ product, onClose, onSaved }) {
                 name="discount"
                 min="0"
                 max="100"
-                step="1"
+                step="0.01"
                 value={formData.discount}
                 onChange={handleInput}
                 className="w-full px-4 py-2 border rounded-lg"
@@ -227,14 +296,33 @@ export default function AddNewColorForm({ product, onClose, onSaved }) {
             </div>
             <div>
               <label className="block text-sm font-medium mb-1">
-                Hesaplanan Fiyat
+                İndirimli Fiyat
               </label>
               <input
-                readOnly
-                value={hasDiscount ? computedPrice : original}
-                className="w-full px-4 py-2 border rounded-lg bg-gray-50 text-gray-700"
+                type="number"
+                name="price"
+                min="0"
+                step="0.01"
+                value={formData.price}
+                onChange={handleInput}
+                className="w-full px-4 py-2 border rounded-lg"
+                placeholder="Örn. 559.90"
               />
             </div>
+          </div>
+          <div className="flex justify-end mt-2">
+            <button
+              type="button"
+              onClick={handleComputePricing}
+              disabled={!canComputePricing}
+              className={`px-4 py-2 rounded-lg text-sm font-medium border ${
+                canComputePricing
+                  ? "border-blue-600 text-blue-600 hover:bg-blue-50"
+                  : "border-gray-300 text-gray-400 cursor-not-allowed"
+              }`}
+            >
+              Fiyatı Hesapla
+            </button>
           </div>
 
           {/* Bedensiz toggle */}
@@ -392,9 +480,9 @@ export default function AddNewColorForm({ product, onClose, onSaved }) {
             </button>
             <button
               type="submit"
-              disabled={submitting || !original}
+              disabled={submitting || !pricingReady}
               className={`px-4 py-2 rounded-lg text-white ${
-                submitting || !original
+                submitting || !pricingReady
                   ? "bg-gray-300 cursor-not-allowed"
                   : "bg-green-600 hover:bg-green-700"
               }`}
@@ -419,12 +507,12 @@ export default function AddNewColorForm({ product, onClose, onSaved }) {
                     {original ? fmt(original) : "—"}
                   </span>
                   <span className="text-blue-700 font-semibold">
-                    {computedPrice ? fmt(computedPrice) : "—"}
+                    {finalPrice ? fmt(finalPrice) : "—"}
                   </span>
                 </>
               ) : (
                 <span className="text-blue-700 font-semibold">
-                  {original ? fmt(original) : "Fiyat"}
+                  {finalPrice ? fmt(finalPrice) : original ? fmt(original) : "Fiyat"}
                 </span>
               )}
               {formData.color && <Badge>{formData.color}</Badge>}

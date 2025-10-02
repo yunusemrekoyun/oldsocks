@@ -1,4 +1,3 @@
-// src/components/layout/AdminLayout.jsx
 import React, { useEffect, useMemo, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import useUnseenOrders from "../../hooks/useUnseenOrders";
@@ -26,6 +25,7 @@ import {
   ChevronDownIcon,
   ChevronRightIcon,
   TruckIcon,
+  MegaphoneIcon, // ⬅️ yeni
 } from "@heroicons/react/24/solid";
 
 /* --------- Küçük yardımcı --------- */
@@ -117,6 +117,12 @@ export default function AdminLayout({ children }) {
         label: "Siparişler",
         icon: <ShoppingBagIcon className="w-5 h-5" />,
         path: "/admin/orders",
+      },
+      // ⬇️ YENİ NAV ITEM
+      {
+        label: "Duyuru Barı",
+        icon: <MegaphoneIcon className="w-5 h-5" />,
+        path: "/admin/announcement-bar",
       },
     ],
     []
@@ -399,6 +405,7 @@ export default function AdminLayout({ children }) {
       replies: "Yanıtlar",
       "instagram-posts": "Instagram",
       discounts: "İndirimler",
+      "announcement-bar": "Duyuru Barı", // ⬅️ breadcrumb
     };
     return parts.map((p) => map[p] || p);
   }, [location.pathname]);

@@ -26,14 +26,32 @@ const Login = ({ onSwitch }) => {
 
     try {
       const { data } = await api.post("/auth/login", form);
+      // httpOnly refresh cookie backend tarafından set ediliyor
       localStorage.setItem("accessToken", data.accessToken);
       setIsLoggedIn(true);
       setSuccess(true);
       setForm({ email: "", password: "" });
-
-      setTimeout(() => navigate("/profile"), 1000);
+      setTimeout(() => navigate("/profile"), 800);
     } catch (err) {
-      setError(err.response?.data?.message || "Giriş başarısız");
+      const status = err?.response?.status;
+      const rawMsg = String(err?.response?.data?.message || "").toLowerCase();
+
+      // Yanlış kimlik bilgileri → 401 (backend öyle ayarlı)
+      if (status === 401 || /geçersiz|invalid|credential/.test(rawMsg)) {
+        setError("E-posta veya şifre hatalı.");
+      }
+      // Ağ/CORS hatası (response yok)
+      else if (err.request && !err.response) {
+        setError("Ağ hatası. Bağlantınızı kontrol edip tekrar deneyin.");
+      }
+      // Sunucu hataları
+      else if (status >= 500) {
+        setError("Sunucu hatası. Lütfen biraz sonra tekrar deneyin.");
+      }
+      // Diğer durumlar (ör. beklenmedik 400)
+      else {
+        setError("Giriş başarısız. Lütfen tekrar deneyin.");
+      }
     } finally {
       setLoading(false);
     }
@@ -55,9 +73,7 @@ const Login = ({ onSwitch }) => {
         </div>
       )}
       {error && (
-        <div className="text-red-600 text-sm text-center mb-4">
-          Hata: {error}
-        </div>
+        <div className="text-red-600 text-sm text-center mb-4">{error}</div>
       )}
 
       <form onSubmit={handleSubmit} className="space-y-5">
