@@ -109,9 +109,6 @@ export default function CheckoutPage() {
     try {
       const { data } = await api.post("/payment/start", {
         cartItems: items,
-        totalPrice: grandTotal,
-        shippingFee,
-        shippingName: shipping?.name || null,
         addressId: selectedAddress,
         useFallback,
       });
@@ -121,16 +118,26 @@ export default function CheckoutPage() {
       }
 
       if (data?.conversationId) {
-        // PaymentPage'e özet bilgileri de gönder
-        const summary = {
-          subTotal,
-          shippingFee,
-          grandTotal,
-          isFree,
-          shippingName: shipping?.name || null,
-          freeShippingThreshold: shipping?.freeShippingThreshold ?? null,
-        };
-
+        const serverSummary = data.summary || null;
+        const summary = serverSummary
+          ? {
+              subTotal: Number(serverSummary.subTotal ?? 0),
+              shippingFee: Number(serverSummary.shippingFee ?? 0),
+              grandTotal: Number(serverSummary.grandTotal ?? 0),
+              isFree: Boolean(serverSummary.isFree),
+              shippingName: serverSummary.shippingName ?? null,
+              freeShippingThreshold:
+                serverSummary.freeShippingThreshold ?? null,
+            }
+          : {
+              subTotal,
+              shippingFee,
+              grandTotal,
+              isFree,
+              shippingName: shipping?.name || null,
+              freeShippingThreshold:
+                shipping?.freeShippingThreshold ?? null,
+            };
         navigate("/payment", {
           state: {
             conversationId: data.conversationId,
@@ -146,6 +153,11 @@ export default function CheckoutPage() {
       console.error("Ödeme başlatılamadı:", err);
       if (err.response?.status === 401) {
         setShowLoginModal(true);
+      } else if (err.response?.status === 422) {
+        const msg =
+          err.response?.data?.message ||
+          "Ödeme başlatılamadı. Lütfen bilgilerinizi kontrol edin.";
+        alert(msg);
       } else {
         alert("Ödeme başlatılamadı. Lütfen tekrar deneyin.");
       }

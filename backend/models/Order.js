@@ -18,6 +18,7 @@ const GuestSchema = new mongoose.Schema(
     phone: { type: String, trim: true },
     identityNumber: { type: String, trim: true },
     registrationAddress: { type: String, trim: true },
+    identityFallbackUsed: { type: Boolean, default: false },
   },
   { _id: false }
 );
@@ -43,6 +44,16 @@ const OrderSchema = new mongoose.Schema(
       city: { type: String, required: true },
       postalCode: { type: String },
     },
+
+    shipping: {
+      name: { type: String, default: null },
+      fee: { type: Number, default: 0 },
+    },
+
+    identityFallbackUsed: { type: Boolean, default: false },
+
+    cancelReason: { type: String, default: null },
+    cancelledAt: { type: Date, default: null },
 
     paymentId: { type: String },
     conversationId: { type: String, required: true, unique: true },

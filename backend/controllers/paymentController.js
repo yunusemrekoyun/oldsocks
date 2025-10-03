@@ -3,6 +3,8 @@ const crypto = require("crypto");
 const { v4: uuidv4 } = require("uuid");
 const User = require("../models/User");
 const Order = require("../models/Order");
+const Product = require("../models/Product");
+const ShippingMethod = require("../models/ShippingMethod");
 const fallbackData = require("../config/fallback.json");
 const { sendOrderPlacedMail } = require("../utils/mailer");
 const { applyStockChanges } = require("../utils/updateStock");
@@ -45,9 +47,138 @@ function safeLogPaytrInput(inp) {
   } catch {}
 }
 
+class HttpError extends Error {
+  constructor(status, message) {
+    super(message);
+    this.status = status;
+  }
+}
+
+function normalizeSize(size) {
+  if (size === null || size === undefined) return "";
+  return String(size).trim();
+}
+
+async function calculateCartPricing(rawItems) {
+  if (!Array.isArray(rawItems) || rawItems.length === 0) {
+    throw new HttpError(400, "Sepet boş veya geçersiz.");
+  }
+
+  const aggregated = new Map();
+  rawItems.forEach((item) => {
+    const id = String(item?.id || item?.productId || "");
+    if (!id) throw new HttpError(400, "Geçersiz ürün (id eksik).");
+    const qty = Number(item?.qty);
+    if (!Number.isFinite(qty) || qty <= 0) {
+      throw new HttpError(400, "Geçersiz adet değeri.");
+    }
+    const normalizedQty = Math.floor(qty);
+    if (normalizedQty <= 0) {
+      throw new HttpError(400, "Geçersiz adet değeri.");
+    }
+    const sizeKey = normalizeSize(item?.size);
+    const key = `${id}:::${sizeKey}`;
+    if (!aggregated.has(key)) {
+      aggregated.set(key, {
+        id,
+        size: sizeKey,
+        qty: normalizedQty,
+        color: item?.color ?? null,
+      });
+    } else {
+      aggregated.get(key).qty += normalizedQty;
+    }
+  });
+
+  const productIds = Array.from(
+    new Set(Array.from(aggregated.values()).map((it) => it.id))
+  );
+  const products = await Product.find({ _id: { $in: productIds } })
+    .select("name price sizes color")
+    .lean();
+  const productMap = new Map(products.map((p) => [String(p._id), p]));
+
+  let subTotal = 0;
+  const orderItems = [];
+
+  for (const entry of aggregated.values()) {
+    const product = productMap.get(entry.id);
+    if (!product) {
+      throw new HttpError(400, "Sepetteki ürün bulunamadı.");
+    }
+
+    const unitPrice = Number(product.price);
+    if (!Number.isFinite(unitPrice) || unitPrice < 0) {
+      throw new HttpError(400, `Ürünün fiyatı geçersiz: ${product.name}`);
+    }
+
+    const sizes = Array.isArray(product.sizes) ? product.sizes : [];
+    const sizeRecord = sizes.find((s) => normalizeSize(s?.size) === entry.size);
+
+    if (!sizeRecord) {
+      throw new HttpError(409, `Seçilen beden stokta yok: ${product.name}`);
+    }
+
+    const available = Number(sizeRecord.stock || 0);
+    if (entry.qty > available) {
+      throw new HttpError(409, `Yetersiz stok: ${product.name}`);
+    }
+
+    subTotal += unitPrice * entry.qty;
+    orderItems.push({
+      productId: product._id,
+      name: product.name,
+      price: unitPrice,
+      qty: entry.qty,
+      size: sizeRecord.size || "",
+      color: entry.color ?? product.color ?? "",
+    });
+  }
+
+  const shippingMethod = await ShippingMethod.findOne()
+    .sort({ createdAt: -1 })
+    .lean();
+
+  let shippingFee = 0;
+  let shippingName = null;
+  let freeShippingThreshold = null;
+  if (shippingMethod) {
+    shippingName = shippingMethod.name || null;
+    const baseFee = Number(shippingMethod.fee || 0);
+    const threshold =
+      shippingMethod.freeShippingThreshold === null ||
+      shippingMethod.freeShippingThreshold === undefined
+        ? null
+        : Number(shippingMethod.freeShippingThreshold);
+    const qualifiesForFree =
+      threshold !== null && Number.isFinite(threshold) && subTotal >= threshold;
+    shippingFee = qualifiesForFree ? 0 : baseFee;
+    if (threshold !== null && Number.isFinite(threshold)) {
+      freeShippingThreshold = threshold;
+    }
+  }
+
+  const grandTotal = subTotal + shippingFee;
+
+  return {
+    items: orderItems.map((it) => ({
+      ...it,
+      productId: it.productId,
+    })),
+    summary: {
+      subTotal,
+      shippingFee,
+      shippingName,
+      grandTotal,
+      isFree: shippingFee === 0,
+      freeShippingThreshold,
+    },
+  };
+}
+
 exports.startGuestPaymentSession = async (req, res) => {
   try {
-    const { cartItems, totalPrice, address, guest } = req.body || {};
+    const { cartItems, address, guest } = req.body || {};
 
     // 1) Basit zorunlu alan kontrolü (fallback YOK)
     const missing = [];
@@ -55,7 +186,6 @@ exports.startGuestPaymentSession = async (req, res) => {
     if (!guest?.lastName) missing.push("guest.lastName");
     if (!guest?.email) missing.push("guest.email");
     if (!guest?.phone) missing.push("guest.phone");
-    if (!guest?.identityNumber) missing.push("guest.identityNumber");
     if (!guest?.registrationAddress) missing.push("guest.registrationAddress");
 
     if (!address?.title) missing.push("address.title");
@@ -65,13 +195,23 @@ exports.startGuestPaymentSession = async (req, res) => {
 
     if (!Array.isArray(cartItems) || cartItems.length === 0)
       missing.push("cartItems");
-    if (typeof totalPrice !== "number") missing.push("totalPrice");
 
     if (missing.length) {
       return res.status(400).json({
         message: "Eksik/Geçersiz alanlar var.",
         missing,
       });
+    }
+
+    let pricing;
+    try {
+      pricing = await calculateCartPricing(cartItems);
+    } catch (err) {
+      const status = err?.status || 500;
+      const message = err?.status
+        ? err.message
+        : "Sepet doğrulanamadı.";
+      return res.status(status).json({ message });
     }
 
     // 2) merchant_oid / orderNumber üret
@@ -82,6 +222,9 @@ exports.startGuestPaymentSession = async (req, res) => {
     const orderNumber = Math.floor(1e9 + Math.random() * 9e9).toString();
 
     // 3) Order yarat (user YOK, guest DOLU)
+    const identityNumber = String(guest.identityNumber || "").trim();
+    const identityFallbackUsed = identityNumber === "";
+
     await Order.create({
       orderNumber,
       user: undefined,
@@ -90,34 +233,35 @@ exports.startGuestPaymentSession = async (req, res) => {
         lastName: guest.lastName,
         email: guest.email,
         phone: guest.phone,
-        identityNumber: guest.identityNumber,
+        identityNumber:
+          identityNumber || fallbackData.identityNumber,
         registrationAddress: guest.registrationAddress,
+        identityFallbackUsed,
       },
-      items: cartItems.map((it) => ({
-        productId: it.id,
-        name: it.name,
-        price: it.price,
-        qty: it.qty,
-        size: it.size,
-        color: it.color,
-      })),
-      totalPrice,
+      items: pricing.items,
+      totalPrice: pricing.summary.grandTotal,
       address: {
-        title: address.title,
-        mainaddress: address.mainaddress,
-        street: address.street,
-        district: address.district || "",
-        city: address.city,
-        postalCode: address.postalCode || "",
+        title: String(address.title || "Teslimat Adresi").trim() || "Teslimat Adresi",
+        mainaddress: String(address.mainaddress || "").trim(),
+        street: String(address.street || "").trim(),
+        district: String(address.district || "").trim(),
+        city: String(address.city || "").trim(),
+        postalCode: String(address.postalCode || "").trim(),
       },
       conversationId,
       status: "pending",
       iyzInit: null,
+      shipping: {
+        name: pricing.summary.shippingName,
+        fee: pricing.summary.shippingFee,
+      },
+      identityFallbackUsed,
     });
 
     return res.json({
       conversationId,
       inlineUrl: `${process.env.BACKEND_PUBLIC_URL}/api/v1/payment/inline/${conversationId}`,
+      summary: pricing.summary,
     });
   } catch (e) {
     console.error("[PAYMENT][start-guest] Hata:", e);
@@ -129,48 +273,74 @@ exports.startPaymentSession = async (req, res) => {
   try {
     console.log("[PAYMENT][start] user:", req.user?.userId, "body:", req.body);
 
-    const { cartItems, totalPrice, addressId, useFallback } = req.body;
+    const { cartItems, addressId, useFallback } = req.body;
     const userId = req.user.userId;
     const userDoc = await User.findById(userId).lean();
 
     // Adres seçimi
     const addr = userDoc?.addresses?.find(
       (a) => String(a._id) === String(addressId)
-    ) ||
-      userDoc?.addresses?.[0] || {
-        title: "Varsayılan Adres",
-        mainaddress: fallbackData.registrationAddress,
-        street: "",
-        district: "",
-        city: fallbackData.city,
-        postalCode: "",
-      };
+    ) || userDoc?.addresses?.[0];
 
     // Eksik müşteri verisi kontrolü
-    const missing = [];
-    const firstName =
-      userDoc?.firstName ||
-      (missing.push("firstName") && fallbackData.firstName);
-    const lastName =
-      userDoc?.lastName || (missing.push("lastName") && fallbackData.lastName);
-    const phone =
-      userDoc?.phone || (missing.push("phone") && fallbackData.phone);
-    const email =
-      userDoc?.email || (missing.push("email") && fallbackData.email);
-    const identityNumber =
-      userDoc?.identityNumber ||
-      (missing.push("identityNumber") && fallbackData.identityNumber);
-    const registrationAddress =
-      addr?.mainaddress ||
-      (missing.push("registrationAddress") && fallbackData.registrationAddress);
-    const city = addr?.city || (missing.push("city") && fallbackData.city);
+    const requiredMissing = [];
+    const firstName = String(userDoc?.firstName || "").trim();
+    if (!firstName) requiredMissing.push("firstName");
+    const lastName = String(userDoc?.lastName || "").trim();
+    if (!lastName) requiredMissing.push("lastName");
+    const phone = String(userDoc?.phone || "").trim();
+    if (!phone) requiredMissing.push("phone");
+    const email = String(userDoc?.email || "").trim();
+    if (!email) requiredMissing.push("email");
 
-    if (!useFallback && missing.length) {
-      return res.status(206).json({
-        message: "Eksik kullanıcı verisi var.",
-        missing,
-        fallbackData,
+    if (!addr) {
+      return res.status(422).json({
+        message:
+          "Siparişe devam etmek için en az bir gönderim adresi eklemelisiniz.",
+        missing: ["address"],
       });
+    }
+
+    const registrationAddress = String(addr?.mainaddress || "").trim();
+    if (!registrationAddress) requiredMissing.push("address.mainaddress");
+    const street = String(addr?.street || "").trim();
+    if (!street) requiredMissing.push("address.street");
+    const city = String(addr?.city || "").trim();
+    if (!city) requiredMissing.push("address.city");
+    const district = String(addr?.district || "").trim();
+    const postalCode = String(addr?.postalCode || "").trim();
+
+    if (requiredMissing.length) {
+      return res.status(422).json({
+        message: "Lütfen profilinizdeki eksik bilgileri tamamlayın.",
+        missing: requiredMissing,
+      });
+    }
+
+    let identityNumber = String(userDoc?.identityNumber || "").trim();
+    const identityMissing = !identityNumber;
+
+    if (identityMissing && !useFallback) {
+      return res.status(206).json({
+        message: "Kimlik numaranız eksik. Devam etmek için onay verin.",
+        missing: ["identityNumber"],
+        fallbackData: { identityNumber: fallbackData.identityNumber },
+      });
+    }
+
+    if (identityMissing) {
+      identityNumber = fallbackData.identityNumber;
+    }
+
+    let pricing;
+    try {
+      pricing = await calculateCartPricing(cartItems);
+    } catch (err) {
+      const status = err?.status || 500;
+      const message = err?.status
+        ? err.message
+        : "Sepet doğrulanamadı.";
+      return res.status(status).json({ message });
     }
 
     // PayTR merchant_oid şartına uygun benzersiz ID (alfanümerik, 64 max)
@@ -184,31 +354,30 @@ exports.startPaymentSession = async (req, res) => {
     await Order.create({
       orderNumber,
       user: userId,
-      items: (cartItems || []).map((it) => ({
-        productId: it.id,
-        name: it.name,
-        price: it.price,
-        qty: it.qty,
-        size: it.size,
-        color: it.color,
-      })),
-      totalPrice,
+      items: pricing.items,
+      totalPrice: pricing.summary.grandTotal,
       address: {
-        title: addr.title,
-        mainaddress: addr.mainaddress,
-        street: addr.street,
-        district: addr.district,
-        city: addr.city,
-        postalCode: addr.postalCode,
+        title: String(addr.title || "Adres").trim() || "Adres",
+        mainaddress: registrationAddress,
+        street,
+        district,
+        city,
+        postalCode,
       },
       conversationId,
       status: "pending",
       iyzInit: null,
+      shipping: {
+        name: pricing.summary.shippingName,
+        fee: pricing.summary.shippingFee,
+      },
+      identityFallbackUsed: identityMissing,
     });
 
     return res.json({
       conversationId,
       inlineUrl: `${process.env.BACKEND_PUBLIC_URL}/api/v1/payment/inline/${conversationId}`,
+      summary: pricing.summary,
     });
   } catch (e) {
     console.error("[Payment][start] Hata:", e);
@@ -552,6 +721,12 @@ exports.paytrCallback = async (req, res) => {
         order.stockUpdated = true;
       } catch (e) {
         console.error("[PAYTR][callback] stock error:", e);
+        order.status = "cancelled";
+        order.cancelReason = "stock_unavailable";
+        order.cancelledAt = new Date();
+        order.stockUpdated = false;
+        await order.save();
+        return res.send("OK");
       }
 
       // Mail (tek sefer)
@@ -575,6 +750,6 @@ exports.paytrCallback = async (req, res) => {
     return res.send("OK");
   } catch (e) {
     console.error("[PAYTR][callback] Hata:", e);
-    return res.status(500).send("OK");
+    return res.status(200).send("OK");
   }
 };

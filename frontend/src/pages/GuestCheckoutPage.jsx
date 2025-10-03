@@ -78,9 +78,6 @@ export default function GuestCheckoutPage() {
     try {
       const payload = {
         cartItems: items,
-        totalPrice: grandTotal, // genel toplam (kargo dahil)
-        shippingFee,
-        shippingName: shipping?.name || null,
         guest: {
           firstName: buyer.firstName.trim(),
           lastName: buyer.lastName.trim(),
@@ -103,14 +100,26 @@ export default function GuestCheckoutPage() {
       const { data } = await api.post("/payment/start-guest", payload);
 
       if (data?.conversationId) {
-        const summary = {
-          subTotal,
-          shippingFee,
-          grandTotal,
-          isFree,
-          shippingName: shipping?.name || null,
-          freeShippingThreshold: shipping?.freeShippingThreshold ?? null,
-        };
+        const serverSummary = data.summary || null;
+        const summary = serverSummary
+          ? {
+              subTotal: Number(serverSummary.subTotal ?? 0),
+              shippingFee: Number(serverSummary.shippingFee ?? 0),
+              grandTotal: Number(serverSummary.grandTotal ?? 0),
+              isFree: Boolean(serverSummary.isFree),
+              shippingName: serverSummary.shippingName ?? null,
+              freeShippingThreshold:
+                serverSummary.freeShippingThreshold ?? null,
+            }
+          : {
+              subTotal,
+              shippingFee,
+              grandTotal,
+              isFree,
+              shippingName: shipping?.name || null,
+              freeShippingThreshold:
+                shipping?.freeShippingThreshold ?? null,
+            };
 
         navigate("/payment", {
           state: {
@@ -125,7 +134,14 @@ export default function GuestCheckoutPage() {
       alert("Ödeme başlatılamadı.");
     } catch (e) {
       console.error("guest payment start error:", e);
-      alert("Ödeme başlatılamadı. Lütfen tekrar deneyin.");
+      if (e.response?.status === 422) {
+        const msg =
+          e.response?.data?.message ||
+          "Ödeme başlatılamadı. Lütfen bilgilerinizi kontrol edin.";
+        alert(msg);
+      } else {
+        alert("Ödeme başlatılamadı. Lütfen tekrar deneyin.");
+      }
     } finally {
       setLoading(false);
     }
