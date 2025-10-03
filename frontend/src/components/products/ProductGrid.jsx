@@ -32,7 +32,11 @@ function shuffleWithSeed(arr, seed) {
   return a;
 }
 
-export default function ProductGrid({ limit = 4, seed = "default" }) {
+export default function ProductGrid({
+  limit = 4,
+  seed = "default",
+  title = "Ürünler",
+}) {
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -84,7 +88,8 @@ export default function ProductGrid({ limit = 4, seed = "default" }) {
     <section className="bg-light1 py-12">
       <div className="container mx-auto px-4">
         <h2 className="text-center font-playfair text-3xl md:text-4xl text-black uppercase mb-8">
-          ÇOK SATAN UÜRÜNLER        </h2>
+          {title}
+        </h2>
 
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-6">
           {products.map((p) => {

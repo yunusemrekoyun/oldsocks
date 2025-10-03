@@ -12,9 +12,9 @@ const HomePage = () => (
     <Hero />
     <NewProducts />
     <Categories />
-    <ProductGrid seed="A" />
+    <ProductGrid seed="A" title="ÖNE ÇIKAN ÜRÜNLER" />
     <SecondHero />
-    <ProductGrid seed="B" />
+    <ProductGrid seed="B" title="ÇOK SATAN ÜRÜNLER" />
     <Campaigns />
     <Services />
   </>

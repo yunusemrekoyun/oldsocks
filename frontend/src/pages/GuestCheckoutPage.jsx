@@ -330,7 +330,7 @@ export default function GuestCheckoutPage() {
                 : "bg-dark1 hover:bg-dark2"
             }`}
           >
-            {loading ? "Yönlendiriliyor…" : "Öde (Üye olmadan)"}
+            {loading ? "Yönlendiriliyor…" : "Ödemeye Geç (Üye olmadan)"}
           </button>
         </div>
       </div>

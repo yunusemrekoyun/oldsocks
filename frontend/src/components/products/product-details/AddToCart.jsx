@@ -14,20 +14,20 @@ export default function AddToCart({
   image,
   parentProductId,
 }) {
-  /* ---------------- State ---------------- */
   const [selectedSize, setSelectedSize] = useState(null);
   const [selectedColor, setSelectedColor] = useState(color || null);
   const [colorOptions, setColorOptions] = useState([]);
   const [qty, setQty] = useState(1);
   const [available, setAvailable] = useState(Infinity);
   const [warn, setWarn] = useState("");
-  const [showAdded, setShowAdded] = useState(false);
+  const [showAdded, setShowAdded] = useState(false); // sadece yazı için
+  const [hasAddedToCart, setHasAddedToCart] = useState(false); // buton için
 
   const { addToCart } = useCart();
   const navigate = useNavigate();
   const sentWarnRef = useRef(false);
 
-  /* ------------- Varyant renkleri ------------- */
+  /* varyant renkleri çek */
   useEffect(() => {
     (async () => {
       try {
@@ -40,12 +40,12 @@ export default function AddToCart({
     })();
   }, [productId, parentProductId]);
 
-  /* ------------- Ürün değişince rengi resetle ------------- */
+  /* ürün değişince seçili rengi sıfırla */
   useEffect(() => {
     setSelectedColor(color || null);
   }, [productId, color]);
 
-  /* ------------- Seçilen bedene göre stok güncelle ------------- */
+  /* seçilen bedene göre stok */
   useEffect(() => {
     if (sizes.length === 0) {
       setAvailable(Infinity);
@@ -57,7 +57,7 @@ export default function AddToCart({
     setQty((q) => Math.min(q, stock || 1));
   }, [selectedSize, sizes]);
 
-  /* ---------------- Qty Kontrolleri ---------------- */
+  /* adet kontrolleri */
   const increment = () => {
     setQty((q) => {
       if (q + 1 > available) {
@@ -79,7 +79,7 @@ export default function AddToCart({
     }, 2000);
   };
 
-  /* ---------------- Sepete ekle ---------------- */
+  /* sepete ekle */
   const canAdd =
     (sizes.length === 0 || selectedSize !== null) &&
     (colorOptions.length === 0 || selectedColor !== null);
@@ -100,8 +100,11 @@ export default function AddToCart({
       qty,
     });
 
+    // geçici yazı
     setShowAdded(true);
     setTimeout(() => setShowAdded(false), 2000);
+    // kalıcı buton
+    setHasAddedToCart(true);
 
     const cartIcon = document.getElementById("cart-icon");
     if (cartIcon) {
@@ -110,7 +113,7 @@ export default function AddToCart({
     }
   };
 
-  /* ---------------- Dropdown component ---------------- */
+  /* dropdown component */
   const CustomDropdown = ({
     label,
     options,
@@ -164,7 +167,7 @@ export default function AddToCart({
     );
   };
 
-  /* ---------------- Renk değiştir ---------------- */
+  /* renk değiştir */
   const handleColorChange = (newColor) => {
     const found = colorOptions.find((opt) => opt.color === newColor);
     if (!found) return;
@@ -175,13 +178,12 @@ export default function AddToCart({
     }
   };
 
-  /* ---------------- JSX ---------------- */
   return (
     <div className="bg-white p-6 rounded-lg shadow-md space-y-6">
-      {/* Fiyat */}
+      {/* fiyat */}
       <div className="text-3xl font-bold text-dark1">{price.toFixed(2)}₺</div>
 
-      {/* Beden */}
+      {/* beden */}
       {sizes.length > 0 && (
         <CustomDropdown
           label="Beden"
@@ -193,7 +195,7 @@ export default function AddToCart({
         />
       )}
 
-      {/* Renk */}
+      {/* renk */}
       {colorOptions.some((opt) => opt._id !== productId) && (
         <CustomDropdown
           label="Renk"
@@ -204,7 +206,7 @@ export default function AddToCart({
         />
       )}
 
-      {/* Adet */}
+      {/* adet */}
       <div>
         <label className="block text-sm font-medium text-dark2 mb-2">
           Adet
@@ -234,7 +236,7 @@ export default function AddToCart({
         )}
       </div>
 
-      {/* Sepete Ekle */}
+      {/* sepete ekle */}
       <button
         onClick={handleAddToCart}
         disabled={!canAdd}
@@ -251,14 +253,14 @@ export default function AddToCart({
         )}
       </button>
 
-      {/* Sepete Git — sadece eklendikten sonra göster */}
-      {showAdded && (
+      {/* alışverişi tamamla — sayfadan çıkana kadar görünür */}
+      {hasAddedToCart && (
         <button
           type="button"
           onClick={() => navigate("/cart")}
           className="w-full py-3 rounded-lg border border-dark1 text-dark1 font-semibold hover:bg-dark1 hover:text-white transition"
         >
-          Sepete Git
+          Alışverişi Tamamla
         </button>
       )}
     </div>

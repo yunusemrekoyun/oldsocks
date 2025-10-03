@@ -1,23 +1,28 @@
-// src/components/Categories.jsx
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../../../api";
 import CategoryItem from "./CategoryItem";
 
-const PAGE_SIZE = 4;
+const PAGE_SIZE_DESKTOP = 4;
+const PAGE_SIZE_MOBILE = 2;
+const AUTO_SCROLL_DELAY = 7000;
 
 export default function Categories() {
   const [categories, setCategories] = useState([]);
-  const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const containerRef = useRef(null);
   const navigate = useNavigate();
+  const isMobile = window.innerWidth < 640;
+  const PAGE_SIZE = isMobile ? PAGE_SIZE_MOBILE : PAGE_SIZE_DESKTOP;
+  const totalPages = Math.max(1, Math.ceil(categories.length / PAGE_SIZE));
 
+  // Kategorileri çek
   useEffect(() => {
     api
       .get("/categories")
       .then((res) => {
         const roots = res.data.filter((c) => c.parent === null);
-        // sıralı — random yok
         roots.sort((a, b) => a.name.localeCompare(b.name, "tr"));
         setCategories(roots);
         setPage(0);
@@ -26,16 +31,69 @@ export default function Categories() {
       .finally(() => setLoading(false));
   }, []);
 
-  const totalPages = Math.max(1, Math.ceil(categories.length / PAGE_SIZE));
+  useEffect(() => {
+    const timeout = setTimeout(() => {
+      setPage((prev) => (prev + 1) % totalPages);
+    }, AUTO_SCROLL_DELAY);
 
-  const pageItems = useMemo(() => {
-    const start = page * PAGE_SIZE;
-    return categories.slice(start, start + PAGE_SIZE);
-  }, [categories, page]);
+    return () => clearTimeout(timeout);
+  }, [page, totalPages]);
 
-  const goPrev = () => setPage((p) => Math.max(0, p - 1));
-  const goNext = () => setPage((p) => Math.min(totalPages - 1, p + 1));
-  const goTo = (i) => setPage(i);
+  // Sayfa scroll davranışı
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    el.scrollTo({
+      left: el.clientWidth * page,
+      behavior: "smooth",
+    });
+  }, [page]);
+
+  // Swipe hareketi ile geçiş
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+
+    let startX = 0;
+
+    const handleTouchStart = (e) => (startX = e.touches[0].clientX);
+    const handleTouchEnd = (e) => {
+      const deltaX = e.changedTouches[0].clientX - startX;
+      if (deltaX > 50) {
+        setPage((prev) => Math.max(0, prev - 1));
+      } else if (deltaX < -50) {
+        setPage((prev) => Math.min(totalPages - 1, prev + 1));
+      }
+    };
+
+    let mouseDown = false;
+    const handleMouseDown = (e) => {
+      mouseDown = true;
+      startX = e.clientX;
+    };
+    const handleMouseUp = (e) => {
+      if (!mouseDown) return;
+      mouseDown = false;
+      const deltaX = e.clientX - startX;
+      if (deltaX > 50) {
+        setPage((prev) => Math.max(0, prev - 1));
+      } else if (deltaX < -50) {
+        setPage((prev) => Math.min(totalPages - 1, prev + 1));
+      }
+    };
+
+    el.addEventListener("touchstart", handleTouchStart);
+    el.addEventListener("touchend", handleTouchEnd);
+    el.addEventListener("mousedown", handleMouseDown);
+    el.addEventListener("mouseup", handleMouseUp);
+
+    return () => {
+      el.removeEventListener("touchstart", handleTouchStart);
+      el.removeEventListener("touchend", handleTouchEnd);
+      el.removeEventListener("mousedown", handleMouseDown);
+      el.removeEventListener("mouseup", handleMouseUp);
+    };
+  }, [totalPages]);
 
   if (loading) {
     return (
@@ -53,82 +111,58 @@ export default function Categories() {
     );
   }
 
+  // Sayfa sayfa slide'ları oluştur
+  const slides = [];
+  for (let i = 0; i < totalPages; i++) {
+    const slice = categories.slice(i * PAGE_SIZE, (i + 1) * PAGE_SIZE);
+    slides.push(slice);
+  }
+
   return (
     <section className="bg-light2/60 backdrop-blur-sm py-10">
-      <div className="container mx-auto px-4">
-        {/* GRID + animasyon */}
+      <div className="container mx-auto px-4 overflow-hidden">
         <div
-          key={page} // page değiştikçe fade/slide tetikler
-          className="grid grid-cols-2 sm:grid-cols-4 gap-6 
-                     transition-all duration-500 ease-in-out 
-                     animate-fadeSlide"
+          ref={containerRef}
+          className="flex transition-all duration-500 ease-in-out no-scrollbar"
+          style={{ scrollSnapType: "x mandatory", overflowX: "auto" }}
         >
-          {pageItems.map((c) => (
-            <CategoryItem
-              key={c._id}
-              image={c.image}
-              alt={c.name}
-              onClick={() =>
-                navigate("/shop", {
-                  state: { preset: { category: [c._id], subCategory: [] } },
-                })
-              }
-            />
-          ))}
-        </div>
-
-        {totalPages > 1 && (
-          <div className="mt-6 flex items-center justify-between">
-            <div className="flex gap-2">
-              <button
-                onClick={goPrev}
-                disabled={page === 0}
-                className={`px-3 py-2 rounded-lg border text-sm transition ${
-                  page === 0
-                    ? "text-gray-400 border-gray-200 cursor-not-allowed bg-white"
-                    : "text-gray-700 border-gray-300 hover:bg-gray-50 bg-white"
-                }`}
-              >
-                ← Önceki
-              </button>
-              <button
-                onClick={goNext}
-                disabled={page === totalPages - 1}
-                className={`px-3 py-2 rounded-lg border text-sm transition ${
-                  page === totalPages - 1
-                    ? "text-gray-400 border-gray-200 cursor-not-allowed bg-white"
-                    : "text-gray-700 border-gray-300 hover:bg-gray-50 bg-white"
-                }`}
-              >
-                Sonraki →
-              </button>
-            </div>
-
-            <div className="flex items-center gap-2">
-              {Array.from({ length: totalPages }).map((_, i) => (
-                <button
-                  key={i}
-                  onClick={() => goTo(i)}
-                  className={`h-2.5 w-2.5 rounded-full transition ${
-                    i === page
-                      ? "bg-gray-900 scale-110"
-                      : "bg-gray-300 hover:bg-gray-400"
-                  }`}
-                />
+          {slides.map((group, idx) => (
+            <div
+              key={idx}
+              className="min-w-full snap-start grid grid-cols-2 sm:grid-cols-4 gap-6 px-1"
+            >
+              {group.map((c) => (
+                <div key={c._id} className="select-none">
+                  <CategoryItem
+                    image={c.image}
+                    alt={c.name}
+                    onClick={() =>
+                      navigate("/shop", {
+                        state: {
+                          preset: { category: [c._id], subCategory: [] },
+                        },
+                      })
+                    }
+                  />
+                </div>
               ))}
             </div>
-          </div>
-        )}
+          ))}
+        </div>
       </div>
 
-      {/* Tailwind’e küçük animasyon ekleyelim */}
       <style>{`
-        @keyframes fadeSlide {
-          0% { opacity: 0; transform: translateY(10px); }
-          100% { opacity: 1; transform: translateY(0); }
+        .no-scrollbar::-webkit-scrollbar {
+          display: none;
         }
-        .animate-fadeSlide {
-          animation: fadeSlide 0.4s ease-in-out;
+        .no-scrollbar {
+          -ms-overflow-style: none;
+          scrollbar-width: none;
+        }
+        .select-none img {
+          user-drag: none;
+          -webkit-user-drag: none;
+          pointer-events: none;
         }
       `}</style>
     </section>
