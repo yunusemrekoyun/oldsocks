@@ -2,14 +2,32 @@
 const Category = require("../models/Category");
 const Product = require("../models/Product");
 
+const CATEGORIES_CACHE_TTL = 60 * 1000; // 60 sn
+let categoriesCache = { data: null, expiry: 0 };
+
+function invalidateCategoriesCache() {
+  categoriesCache = { data: null, expiry: 0 };
+}
+
 // — Public —
 
 // Sadece ana kategorileri getir, children ile birlikte
 exports.getCategories = async (req, res) => {
   try {
+    const now = Date.now();
+    if (categoriesCache.data && now < categoriesCache.expiry) {
+      return res.json(categoriesCache.data);
+    }
+
     const roots = await Category.find({ parent: null })
       .populate("children", "name image")
-      .sort("name");
+      .sort("name")
+      .lean();
+
+    categoriesCache = {
+      data: roots,
+      expiry: Date.now() + CATEGORIES_CACHE_TTL,
+    };
     res.json(roots);
   } catch (err) {
     console.error(err);
@@ -58,10 +76,10 @@ exports.createCategory = async (req, res) => {
     }
 
     // dönerken populate et
-    const populated = await Category.findById(newCat._id).populate(
-      "children",
-      "name image"
-    );
+    const populated = await Category.findById(newCat._id)
+      .populate("children", "name image")
+      .lean();
+    invalidateCategoriesCache();
     res.status(201).json(populated);
   } catch (err) {
     // 🔴 Yalnızca dosya boyutu hatasını yakala
@@ -175,8 +193,10 @@ exports.updateCategory = async (req, res) => {
 
         const populated = await Category.findById(updated._id)
           .populate("children", "name image")
-          .populate("parent", "name");
+          .populate("parent", "name")
+          .lean();
 
+        invalidateCategoriesCache();
         return res.status(409).json({
           message:
             "Bazı alt kategoriler ürüne bağlı olduğu için silinmedi. Lütfen önce bu ürünleri taşıyın ya da alt kategorileri yeniden düzenleyin.",
@@ -189,8 +209,10 @@ exports.updateCategory = async (req, res) => {
 
     const populated = await Category.findById(updated._id)
       .populate("children", "name image")
-      .populate("parent", "name");
+      .populate("parent", "name")
+      .lean();
 
+    invalidateCategoriesCache();
     res.json(populated);
   } catch (err) {
     // 🔴 Güncellemede de aynı kontrol
@@ -214,6 +236,7 @@ exports.deleteCategory = async (req, res) => {
   try {
     const cat = await Category.findByIdAndDelete(req.params.id);
     if (!cat) return res.status(404).json({ message: "Kategori bulunamadı." });
+    invalidateCategoriesCache();
     res.json({ message: "Kategori silindi." });
   } catch (err) {
     console.error(err);

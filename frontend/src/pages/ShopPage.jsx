@@ -5,6 +5,8 @@ import BreadCrumb from "../components/breadCrumb/BreadCrumb";
 import CategoryFilter from "../components/categories/CategoryFilter";
 import Products from "../components/products/Products";
 import api from "../../api";
+import useProductsCache from "../hooks/useProductsCache";
+import useCategoriesCache from "../hooks/useCategoriesCache";
 
 export default function ShopPage() {
   const { state } = useLocation();
@@ -16,9 +18,9 @@ export default function ShopPage() {
   const miniItems = state?.miniCampaignItems;
   const miniTitle = state?.miniCampaignTitle;
 
-  const [allProducts, setAllProducts] = useState([]);
-  const [categories, setCategories] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const { data: cachedProducts, loading: productsLoading } = useProductsCache();
+  const { data: cachedCategories, loading: categoriesLoading } =
+    useCategoriesCache();
 
   // Header’dan gelen preset (kategori/alt kategori/indirim)
   const [presetTitle, setPresetTitle] = useState("");
@@ -38,28 +40,6 @@ export default function ShopPage() {
     priceRange: [0, Infinity],
   };
   const [filters, setFilters] = useState(defaultFilters);
-
-  /* 1) Kategoriler */
-  useEffect(() => {
-    api
-      .get("/categories")
-      .then(({ data }) => setCategories(data))
-      .catch(console.error);
-  }, []);
-
-  /* 2) Ürünler (kampanya yoksa) */
-  useEffect(() => {
-    if (campaignItems || miniItems) {
-      setLoading(false);
-      return;
-    }
-    setLoading(true);
-    api
-      .get("/products")
-      .then(({ data }) => setAllProducts(Array.isArray(data) ? data : []))
-      .catch(console.error)
-      .finally(() => setLoading(false));
-  }, [campaignItems, miniItems]);
 
   /* 3) Header preset */
   useEffect(() => {
@@ -102,7 +82,11 @@ export default function ShopPage() {
   }, [state?.preset]);
 
   /* 4) Hangi liste? */
-  const baseList = miniItems || campaignItems || allProducts;
+const allProducts = Array.isArray(cachedProducts) ? cachedProducts : [];
+const categories = Array.isArray(cachedCategories) ? cachedCategories : [];
+const baseList = miniItems || campaignItems || allProducts;
+const pageLoading =
+  campaignItems || miniItems ? false : productsLoading || categoriesLoading;
 
   /* 5) Kampanya varsa priceRange ayarla */
   useEffect(() => {
@@ -179,7 +163,7 @@ export default function ShopPage() {
     setVisibleCount(20);
   };
 
-  if (loading) return <div className="py-10 text-center">Yükleniyor…</div>;
+  if (pageLoading) return <div className="py-10 text-center">Yükleniyor…</div>;
 
   return (
     <div className="bg-white text-dark1">

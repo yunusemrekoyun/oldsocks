@@ -1,35 +1,17 @@
 // src/components/products/Products.jsx
-import React, { useState, useEffect } from "react";
+import React from "react";
 import ProductItem from "./ProductItem";
-import api from "../../../api";
+import useProductsCache from "../../hooks/useProductsCache";
 
 export default function Products({ products: propProducts }) {
-  const [products, setProducts] = useState([]);
-  const [loading, setLoading] = useState(false);
+  const { data: cachedProducts, loading } = useProductsCache();
+  const products = Array.isArray(propProducts)
+    ? propProducts
+    : cachedProducts || [];
 
-  useEffect(() => {
-    if (Array.isArray(propProducts)) {
-      setProducts(propProducts);
-      setLoading(false);
-    } else {
-      fetchProducts();
-    }
-  }, [propProducts]);
-
-  const fetchProducts = async () => {
-    setLoading(true);
-    try {
-      const { data } = await api.get("/products");
-      setProducts(data);
-    } catch (err) {
-      console.error("Ürünler alınamadı:", err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  if (loading)
+  if (!Array.isArray(propProducts) && loading) {
     return <div className="text-center py-10">Ürünler yükleniyor…</div>;
+  }
 
   if (products.length === 0) {
     return <div className="text-center py-10">Ürün bulunamadı.</div>;

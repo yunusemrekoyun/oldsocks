@@ -1,35 +1,38 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import api from "../../../api";
 import CategoryItem from "./CategoryItem";
+import useCategoriesCache from "../../hooks/useCategoriesCache";
 
 const PAGE_SIZE_DESKTOP = 4;
 const PAGE_SIZE_MOBILE = 2;
 const AUTO_SCROLL_DELAY = 7000;
 
 export default function Categories() {
-  const [categories, setCategories] = useState([]);
+  const { data: cachedCategories, loading } = useCategoriesCache();
   const [page, setPage] = useState(0);
-  const [loading, setLoading] = useState(true);
   const containerRef = useRef(null);
   const navigate = useNavigate();
   const isMobile = window.innerWidth < 640;
   const PAGE_SIZE = isMobile ? PAGE_SIZE_MOBILE : PAGE_SIZE_DESKTOP;
-  const totalPages = Math.max(1, Math.ceil(categories.length / PAGE_SIZE));
+  const roots = Array.isArray(cachedCategories)
+    ? cachedCategories
+        .filter((c) => c.parent === null)
+        .sort((a, b) => a.name.localeCompare(b.name, "tr"))
+    : [];
+  const categories = roots;
+  const maxStartIndex = Math.max(0, categories.length - PAGE_SIZE);
+  const totalPages = Math.max(1, maxStartIndex + 1);
+  const itemWidthPercent = 100 / PAGE_SIZE;
 
-  // Kategorileri çek
   useEffect(() => {
-    api
-      .get("/categories")
-      .then((res) => {
-        const roots = res.data.filter((c) => c.parent === null);
-        roots.sort((a, b) => a.name.localeCompare(b.name, "tr"));
-        setCategories(roots);
-        setPage(0);
-      })
-      .catch((err) => console.error("Kategoriler getirilirken hata:", err))
-      .finally(() => setLoading(false));
-  }, []);
+    if (categories.length) {
+      setPage(0);
+    }
+  }, [categories.length]);
+
+  useEffect(() => {
+    setPage((prev) => Math.min(prev, totalPages - 1));
+  }, [totalPages]);
 
   useEffect(() => {
     const timeout = setTimeout(() => {
@@ -43,11 +46,13 @@ export default function Categories() {
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
+    const item = el.querySelector("[data-category-item]");
+    const itemWidth = item ? item.clientWidth : el.clientWidth / PAGE_SIZE;
     el.scrollTo({
-      left: el.clientWidth * page,
+      left: itemWidth * page,
       behavior: "smooth",
     });
-  }, [page]);
+  }, [page, PAGE_SIZE]);
 
   // Swipe hareketi ile geçiş
   useEffect(() => {
@@ -111,13 +116,6 @@ export default function Categories() {
     );
   }
 
-  // Sayfa sayfa slide'ları oluştur
-  const slides = [];
-  for (let i = 0; i < totalPages; i++) {
-    const slice = categories.slice(i * PAGE_SIZE, (i + 1) * PAGE_SIZE);
-    slides.push(slice);
-  }
-
   return (
     <section className="bg-light2/60 backdrop-blur-sm py-10">
       <div className="container mx-auto px-4 overflow-hidden">
@@ -126,26 +124,27 @@ export default function Categories() {
           className="flex transition-all duration-500 ease-in-out no-scrollbar"
           style={{ scrollSnapType: "x mandatory", overflowX: "auto" }}
         >
-          {slides.map((group, idx) => (
+          {categories.map((c) => (
             <div
-              key={idx}
-              className="min-w-full snap-start grid grid-cols-2 sm:grid-cols-4 gap-6 px-1"
+              key={c._id}
+              data-category-item
+              className="px-1 select-none"
+              style={{
+                flex: `0 0 ${itemWidthPercent}%`,
+                scrollSnapAlign: "start",
+              }}
             >
-              {group.map((c) => (
-                <div key={c._id} className="select-none">
-                  <CategoryItem
-                    image={c.image}
-                    alt={c.name}
-                    onClick={() =>
-                      navigate("/shop", {
-                        state: {
-                          preset: { category: [c._id], subCategory: [] },
-                        },
-                      })
-                    }
-                  />
-                </div>
-              ))}
+              <CategoryItem
+                image={c.image}
+                alt={c.name}
+                onClick={() =>
+                  navigate("/shop", {
+                    state: {
+                      preset: { category: [c._id], subCategory: [] },
+                    },
+                  })
+                }
+              />
             </div>
           ))}
         </div>

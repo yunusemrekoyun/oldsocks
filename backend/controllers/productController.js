@@ -2,6 +2,13 @@
 const Product = require("../models/Product");
 const Category = require("../models/Category");
 
+const PRODUCTS_CACHE_TTL = 60 * 1000; // 60 saniye
+let productsCache = { data: null, expiry: 0 };
+
+function invalidateProductsCache() {
+  productsCache = { data: null, expiry: 0 };
+}
+
 /* ------------------------------------------------------------------ */
 /*  Yardımcı Fonksiyonlar                                             */
 /* ------------------------------------------------------------------ */
@@ -66,6 +73,7 @@ exports.createProduct = async (req, res) => {
       parentProductId: null, // base ürün
     });
 
+    invalidateProductsCache();
     res.status(201).json(product);
   } catch (err) {
     console.error(err);
@@ -88,6 +96,11 @@ exports.getProducts = async (req, res) => {
     }
 
     /* normal listeleme */
+    const now = Date.now();
+    if (productsCache.data && now < productsCache.expiry) {
+      return res.json(productsCache.data);
+    }
+
     const products = await Product.find()
       .select(
         "name video images price originalPrice discount sizes color category parentProductId"
@@ -96,8 +109,13 @@ exports.getProducts = async (req, res) => {
         path: "category",
         select: "name image parent",
         populate: { path: "parent", select: "name" },
-      });
+      })
+      .lean();
 
+    productsCache = {
+      data: products,
+      expiry: Date.now() + PRODUCTS_CACHE_TTL,
+    };
     res.json(products);
   } catch (err) {
     console.error(err);
@@ -215,6 +233,7 @@ exports.updateProduct = async (req, res) => {
       new: true,
     });
 
+    invalidateProductsCache();
     res.json(updated);
   } catch (err) {
     console.error(err);
@@ -231,6 +250,7 @@ exports.deleteProduct = async (req, res) => {
     if (!result) {
       return res.status(404).json({ message: "Ürün bulunamadı." });
     }
+    invalidateProductsCache();
     res.json({ message: "Ürün silindi." });
   } catch (err) {
     console.error(err);
@@ -305,6 +325,7 @@ exports.createProductWithNewColor = async (req, res) => {
       sizes: parseSizes(sizes) || base.sizes,
     });
 
+    invalidateProductsCache();
     res.status(201).json(newProduct);
   } catch (err) {
     console.error("Yeni renk ekleme hatası:", err);

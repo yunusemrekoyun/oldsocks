@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import api from "../../../api";
+import useProductsCache from "../../hooks/useProductsCache";
 import ProductGridItem from "./ProductGridItem";
 
 /* Seed'li PRNG (mulberry32) */
@@ -38,28 +38,16 @@ export default function ProductGrid({
   title = "Ürünler",
 }) {
   const [products, setProducts] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const { data: allProducts, loading } = useProductsCache();
 
   useEffect(() => {
-    let alive = true;
-    api
-      .get("/products")
-      .then((res) => {
-        const list = Array.isArray(res.data) ? res.data : [];
-        const shuffled = shuffleWithSeed(list, seed);
-        const picked = shuffled.slice(0, Math.max(0, limit));
-        if (alive) setProducts(picked);
-      })
-      .catch((err) => console.error("Ürünler getirilirken hata:", err))
-      .finally(() => {
-        if (alive) setLoading(false);
-      });
-    return () => {
-      alive = false;
-    };
-  }, [seed, limit]); // seed değişirse farklı set üret
+    if (!allProducts) return;
+    const shuffled = shuffleWithSeed(allProducts, seed);
+    const picked = shuffled.slice(0, Math.max(0, limit));
+    setProducts(picked);
+  }, [allProducts, seed, limit]);
 
-  if (loading) {
+  if (loading || !allProducts) {
     return (
       <section className="bg-light1 py-12 text-center">
         Ürünler yükleniyor…

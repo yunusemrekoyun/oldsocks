@@ -1,6 +1,6 @@
 // src/components/products/product-details/SimilarProducts.jsx
 import React, { useState, useEffect } from "react";
-import api from "../../../../api";
+import useProductsCache from "../../../hooks/useProductsCache";
 import SimilarProductsItem from "./SimilarProductsItem";
 import { Swiper, SwiperSlide } from "swiper/react";
 import { Autoplay, FreeMode } from "swiper/modules";
@@ -9,61 +9,51 @@ import "swiper/css/free-mode";
 
 export default function SimilarProducts({ categoryId, currentProductId }) {
   const [items, setItems] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const { data: allProducts, loading } = useProductsCache();
   const [error, setError] = useState("");
 
   useEffect(() => {
-    if (!categoryId) {
+    if (!categoryId || !allProducts) {
       setItems([]);
-      setLoading(false);
       return;
     }
 
-    setLoading(true);
+    const isInStock = (product) => {
+      const totalStock = Array.isArray(product.sizes)
+        ? product.sizes.reduce((sum, s) => sum + (s.stock || 0), 0)
+        : 0;
+      return totalStock > 0;
+    };
 
-    api
-      .get("/products")
-      .then(({ data }) => {
-        const isInStock = (product) => {
-          const totalStock = Array.isArray(product.sizes)
-            ? product.sizes.reduce((sum, s) => sum + (s.stock || 0), 0)
-            : 0;
-          return totalStock > 0;
-        };
+    const filtered = (Array.isArray(allProducts) ? allProducts : []).filter(
+      (p) => p._id !== currentProductId && isInStock(p)
+    );
 
-        const filtered = (Array.isArray(data) ? data : []).filter(
-          (p) => p._id !== currentProductId && isInStock(p)
-        );
+    const sameSub = filtered.filter((p) => {
+      const cid = p.category?._id || p.category;
+      return cid === categoryId;
+    });
 
-        const sameSub = filtered.filter((p) => {
-          const cid = p.category?._id || p.category;
-          return cid === categoryId;
-        });
+    const sameParent = filtered.filter((p) => {
+      const pid = p.category?.parent?._id || p.category?.parent;
+      return pid === categoryId;
+    });
 
-        const sameParent = filtered.filter((p) => {
-          const pid = p.category?.parent?._id || p.category?.parent;
-          return pid === categoryId;
-        });
+    let result = [];
+    if (sameSub.length > 0) result = sameSub;
+    else if (sameParent.length > 0) result = sameParent;
+    else result = filtered;
 
-        let result = [];
-        if (sameSub.length > 0) result = sameSub;
-        else if (sameParent.length > 0) result = sameParent;
-        else result = filtered;
+    for (let i = result.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [result[i], result[j]] = [result[j], result[i]];
+    }
 
-        // Basit shuffle
-        for (let i = result.length - 1; i > 0; i--) {
-          const j = Math.floor(Math.random() * (i + 1));
-          [result[i], result[j]] = [result[j], result[i]];
-        }
+    setItems(result.slice(0, 5));
+    setError("");
+  }, [allProducts, categoryId, currentProductId]);
 
-        setItems(result.slice(0, 5));
-        setError("");
-      })
-      .catch(() => setError("Benzer ürünler yüklenemedi."))
-      .finally(() => setLoading(false));
-  }, [categoryId, currentProductId]);
-
-  if (loading)
+  if (!allProducts || (loading && !categoryId))
     return <div className="text-center py-4">Benzer ürünler yükleniyor…</div>;
   if (error)
     return <div className="text-center py-4 text-red-600">{error}</div>;

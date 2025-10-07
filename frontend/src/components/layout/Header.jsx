@@ -15,7 +15,7 @@ import Logout from "../auth/Logout";
 import { AuthContext } from "../../context/AuthContext";
 import { useCart } from "../../context/useCart";
 import SearchModal from "../search/SearchModal";
-import api from "../../../api";
+import useCategoriesCache from "../../hooks/useCategoriesCache";
 import logo from "../../assets/logo/logo.png";
 const Header = () => {
   const { isLoggedIn } = useContext(AuthContext);
@@ -28,7 +28,6 @@ const Header = () => {
   const [drawerVisible, setDrawerVisible] = useState(false); // animasyon
 
   // Mağaza dropdown (desktop)
-  const [cats, setCats] = useState([]);
   const [shopOpen, setShopOpen] = useState(false);
   const [hoverParent, setHoverParent] = useState(null);
   const closeTimer = useRef(null);
@@ -37,12 +36,11 @@ const Header = () => {
   // Mobil akordeon: açık parent id'leri
   const [openParents, setOpenParents] = useState(() => new Set());
 
-  useEffect(() => {
-    api
-      .get("/categories")
-      .then(({ data }) => setCats(Array.isArray(data) ? data : []))
-      .catch(console.error);
-  }, []);
+  const { data: cachedCategories } = useCategoriesCache();
+  const cats = useMemo(
+    () => (Array.isArray(cachedCategories) ? cachedCategories : []),
+    [cachedCategories]
+  );
 
   // id helper
   const getId = (maybeObj) =>

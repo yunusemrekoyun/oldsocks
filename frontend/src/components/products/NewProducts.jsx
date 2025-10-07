@@ -1,6 +1,6 @@
 // src/components/products/NewProducts.jsx
-import React, { useEffect, useMemo, useState } from "react";
-import api from "../../../api";
+import React, { useMemo } from "react";
+import useProductsCache from "../../hooks/useProductsCache";
 import NewProductItem from "./NewProductItem";
 
 // createdAt yoksa ObjectId'den zaman türet (Mongo ObjectId ilk 4 byte epoch seconds)
@@ -34,26 +34,8 @@ const toCardPricing = (p) => {
 };
 
 export default function NewProducts() {
-  const [all, setAll] = useState([]);
-  const [loading, setLoading] = useState(true);
-
-  // Tek istek, hafif state
-  useEffect(() => {
-    let alive = true;
-    (async () => {
-      try {
-        const { data } = await api.get("/products");
-        if (alive) setAll(Array.isArray(data) ? data : []);
-      } catch (err) {
-        console.error("Ürünler alınamadı:", err);
-      } finally {
-        if (alive) setLoading(false);
-      }
-    })();
-    return () => {
-      alive = false;
-    };
-  }, []);
+  const { data: allProducts, loading } = useProductsCache();
+  const all = allProducts || [];
 
   const now = Date.now();
   const WEEK = 7 * 24 * 60 * 60 * 1000;
@@ -84,7 +66,7 @@ export default function NewProducts() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [all, now]);
 
-  if (loading) {
+  if (loading || !allProducts) {
     return (
       <section className="bg-light1 py-12 text-center">
         Ürünler yükleniyor…
