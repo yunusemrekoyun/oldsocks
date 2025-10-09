@@ -39,6 +39,12 @@ exports.register = async (req, res) => {
       role,
     } = req.body;
 
+    if (role && role !== "user") {
+      console.warn(
+        `[Auth][Register] Role override attempt blocked for email ${email}`
+      );
+    }
+
     // 1) e-posta zaten var mı?
     if (await User.findOne({ email })) {
       console.log(`[Auth][Register] E-posta zaten kullanımda: ${email}`);
@@ -57,7 +63,7 @@ exports.register = async (req, res) => {
       phone,
       address,
       avatar,
-      role,
+      role: "user",
     });
 
     // 4) token’ları üret
@@ -124,27 +130,18 @@ exports.login = async (req, res) => {
 exports.refresh = async (req, res) => {
   try {
     const { refreshToken } = req.cookies;
-    console.log(
-      "[Auth][Refresh] İstek alındı, refreshToken cookie:",
-      refreshToken
-    );
-
     if (!refreshToken) {
-      console.log("[Auth][Refresh] Başarısız: refreshToken yok");
       return res.status(401).json({ message: "Token yok." });
     }
 
     // 1) DB’de kayıtlı mı?
     const user = await User.findOne({ refreshTokens: refreshToken });
     if (!user) {
-      console.log("[Auth][Refresh] Başarısız: Token DB’de bulunamadı");
       return res.status(403).json({ message: "Geçersiz token." });
     }
 
     // 2) token’ı doğrula
     jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET);
-
-    console.log(`[Auth][Refresh] Token geçerli, userId=${user._id}`);
 
     // 3) yeni token’lar
     const newAccessToken = createAccessToken(user);
@@ -155,14 +152,12 @@ exports.refresh = async (req, res) => {
     user.refreshTokens.push(newRefreshToken);
     await user.save();
 
-    console.log(`[Auth][Refresh] Yeni tokenlar üretildi, userId=${user._id}`);
-
     // 5) yanıt
     res
       .cookie("refreshToken", newRefreshToken, COOKIE_OPTIONS)
       .json({ accessToken: newAccessToken });
   } catch (err) {
-    console.error("[Auth][Refresh] Token yenileme hatası:", err);
+    console.error("[Auth][Refresh] Token yenileme hatası:", err?.message || err);
     res.status(403).json({ message: "Token yenileme başarısız." });
   }
 };
@@ -171,13 +166,7 @@ exports.refresh = async (req, res) => {
 exports.logout = async (req, res) => {
   try {
     const { refreshToken } = req.cookies;
-    console.log(
-      "[Auth][Logout] İstek alındı, refreshToken cookie:",
-      refreshToken
-    );
-
     if (!refreshToken) {
-      console.log("[Auth][Logout] Cookie’de token yok, 204 dönülüyor");
       return res.sendStatus(204);
     }
 
@@ -186,8 +175,6 @@ exports.logout = async (req, res) => {
       { refreshTokens: refreshToken },
       { $pull: { refreshTokens: refreshToken } }
     );
-
-    console.log(`[Auth][Logout] Token DB’den silindi, token=${refreshToken}`);
 
     res.clearCookie("refreshToken", COOKIE_OPTIONS).sendStatus(204);
   } catch (err) {

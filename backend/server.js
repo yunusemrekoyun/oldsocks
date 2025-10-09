@@ -19,72 +19,122 @@ const app = express();
 connectDB();
 
 /* 2) Güven / Proxy (Render, Railway vb. için) */
-app.set("trust proxy", 1);
+app.set("trust proxy", 1); // gerçek istemci IP’si için
 app.disable("x-powered-by");
 
-/* 3) CORS (çoklu origin whitelist) */
 /* 3) CORS (çoklu origin whitelist) */
 const ALLOWED_ORIGINS = (process.env.FRONTEND_ORIGIN || "")
   .split(",")
   .map((s) => s.trim())
   .filter(Boolean);
 
-// Delegate ile path + origin’e göre karar verelim
 const corsOptionsDelegate = (req, cb) => {
   const origin = req.header("Origin");
   const path = req.path || "";
-
-  // Payment rotaları → her zaman izin ver
   const isPaymentRoute = path.startsWith("/api/v1/payment/");
-
-  // Varsayılan seçenekler
   const opts = { credentials: true, origin: true };
 
-  // Origin yoksa (null) → izin ver (iyzico callback bu şekilde gelir)
   if (!origin) return cb(null, opts);
-
-  // Payment rotaları → izin ver
   if (isPaymentRoute) return cb(null, opts);
-
-  // Whitelist kontrolü
   if (ALLOWED_ORIGINS.includes(origin)) return cb(null, opts);
 
-  // Diğer her şey → engelle
   return cb(new Error(`CORS blocked for origin: ${origin}`));
 };
 
 app.use(cors(corsOptionsDelegate));
 
-/* 4) Güvenlik başlıkları (CSP koymadık—SPA/Cloudinary kırmasın) */
+/* 4) Güvenlik başlıkları */
 app.use(
   helmet({
-    crossOriginResourcePolicy: false, // Cloudinary görüntülerinde sorun çıkmasın
+    crossOriginResourcePolicy: false,
   })
 );
 
 /* 5) Sıkıştırma */
 app.use(compression());
 
-/* 6) Loglama (prod: combined, dev: dev) */
+/* 6) Loglama */
 if (process.env.NODE_ENV !== "test") {
   app.use(morgan(process.env.NODE_ENV === "production" ? "combined" : "dev"));
 }
 
-/* 7) Rate limit (genel) */
-const apiLimiter = rateLimit({
-  windowMs: 10 * 60 * 1000, // 10 dk
-  max: 600, // 10 dk'da 600 istek
+/* --- Rate Limit Helpers --- */
+const skipPreflight = (req) =>
+  req.method === "OPTIONS" || req.method === "HEAD";
+const keyByIp = (req) => req.ip;
+
+/* 7) Rate limit (rotaya göre) */
+
+/**
+ * Genel limit (catch-all)
+ * - 10 dakikada 600 istek/IP
+ * - OPTIONS/HEAD sayılmaz
+ * - Başarılı (2xx/3xx) istekler sayılmaz → 304 yağmuru kotayı yemez
+ */
+const generalLimiter = rateLimit({
+  windowMs: 10 * 60 * 1000,
+  max: 600,
   standardHeaders: true,
   legacyHeaders: false,
+  skip: skipPreflight,
+  keyGenerator: keyByIp,
+  skipSuccessfulRequests: true,
 });
-app.use("/api/v1", apiLimiter);
+
+/**
+ * Okuma-ağırlıklı uçlar (daha geniş)
+ * - 1 dakikada 300 istek/IP
+ * - Başarılılar sayılmaz
+ */
+const readHeavyLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 300,
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: skipPreflight,
+  keyGenerator: keyByIp,
+  skipSuccessfulRequests: true,
+});
+
+/**
+ * Kritik uçlar (auth/payment/admin) — daha sıkı
+ */
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 80,
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: skipPreflight,
+  keyGenerator: keyByIp,
+  skipSuccessfulRequests: true,
+});
+
+const paymentLimiter = rateLimit({
+  windowMs: 10 * 60 * 1000,
+  max: 120,
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: skipPreflight,
+  keyGenerator: keyByIp,
+  skipSuccessfulRequests: true,
+});
+
+const adminLimiter = rateLimit({
+  windowMs: 10 * 60 * 1000,
+  max: 200,
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: skipPreflight,
+  keyGenerator: keyByIp,
+  skipSuccessfulRequests: true,
+});
 
 /* 8) Body parsers */
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 app.use(cookieParser());
 
-/* 9) Healthcheck */
+/* 9) Healthcheck (limitleme yok) */
 app.get("/healthz", (req, res) => {
   res.json({
     ok: true,
@@ -93,15 +143,36 @@ app.get("/healthz", (req, res) => {
   });
 });
 
-/* 10) API routes */
+/* 10) Rate limit uygulaması (sıra önemli) */
+/* Okuma-ağırlıklı GET uçları: daha geniş limiter */
+app.use(
+  [
+    "/api/v1/products",
+    "/api/v1/categories",
+    "/api/v1/mini-campaigns",
+    "/api/v1/shipping",
+    "/api/v1/announcement-bar",
+  ],
+  readHeavyLimiter
+);
+
+/* Kritik uçlar */
+app.use("/api/v1/auth", authLimiter);
+app.use("/api/v1/payment", paymentLimiter);
+app.use("/api/v1/admin", adminLimiter);
+
+/* Geri kalan tüm API: genel limiter */
+app.use("/api/v1", generalLimiter);
+
+/* 11) API routes */
 app.use("/api/v1", apiRoutes);
 
-/* 11) 404 */
+/* 12) 404 */
 app.use((req, res) => {
   res.status(404).json({ message: "Route not found" });
 });
 
-/* 12) Global error handler (CORS vb.) */
+/* 13) Global error handler (CORS vb.) */
 app.use((err, req, res, next) => {
   console.error("Unhandled error:", err?.message || err);
   if (err && String(err.message || "").startsWith("CORS blocked")) {
@@ -110,7 +181,7 @@ app.use((err, req, res, next) => {
   res.status(500).json({ message: "Internal Server Error" });
 });
 
-/* 13) Server */
+/* 14) Server */
 const PORT = process.env.PORT || 5000;
 const server = app.listen(PORT, () => {
   console.log(`✅ Sunucu ayakta, port: ${PORT}`);
@@ -123,18 +194,21 @@ const server = app.listen(PORT, () => {
   }
 });
 
-/* 14) Graceful shutdown (Render sigterm/sigint) */
+/* 15) Graceful shutdown */
 function shutdown(signal) {
   console.log(`\n${signal} alındı. Kapanıyor...`);
-  server.close(() => {
+  server.close(async () => {
     console.log("🔻 HTTP sunucusu kapandı.");
-    mongoose.connection.close(false, () => {
+    try {
+      await mongoose.connection.close();
       console.log("🔻 Mongo bağlantısı kapandı.");
       process.exit(0);
-    });
+    } catch (err) {
+      console.error("❌ Mongo bağlantısı kapatılırken hata:", err);
+      process.exit(1);
+    }
   });
 
-  // 10 sn sonra zorla çık
   setTimeout(() => {
     console.warn("⏱  Zorunlu çıkış (timeout).");
     process.exit(1);

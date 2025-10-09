@@ -82,11 +82,11 @@ export default function ShopPage() {
   }, [state?.preset]);
 
   /* 4) Hangi liste? */
-const allProducts = Array.isArray(cachedProducts) ? cachedProducts : [];
-const categories = Array.isArray(cachedCategories) ? cachedCategories : [];
-const baseList = miniItems || campaignItems || allProducts;
-const pageLoading =
-  campaignItems || miniItems ? false : productsLoading || categoriesLoading;
+  const allProducts = Array.isArray(cachedProducts) ? cachedProducts : [];
+  const categories = Array.isArray(cachedCategories) ? cachedCategories : [];
+  const baseList = miniItems || campaignItems || allProducts;
+  const pageLoading =
+    campaignItems || miniItems ? false : productsLoading || categoriesLoading;
 
   /* 5) Kampanya varsa priceRange ayarla */
   useEffect(() => {
@@ -195,22 +195,21 @@ const pageLoading =
 
           <Products products={filtered.slice(0, visibleCount)} />
 
-          {visibleCount < filtered.length &&
-            !(presetTitle || miniTitle || campaignTitle) && (
-              <div ref={browseRef} className="mt-10 text-center">
-                <button
-                  className="px-6 py-2 border border-dark1 text-dark1 rounded-full hover:bg-dark1 hover:text-white transition"
-                  onClick={() => {
-                    setVisibleCount((prev) => prev + 20);
-                    setTimeout(() => {
-                      browseRef.current?.scrollIntoView({ behavior: "smooth" });
-                    }, 100);
-                  }}
-                >
-                  Browse More
-                </button>
-              </div>
-            )}
+          {visibleCount < filtered.length && !(campaignItems || miniItems) && (
+            <div ref={browseRef} className="mt-10 text-center">
+              <button
+                className="px-6 py-2 border border-dark1 text-dark1 rounded-full hover:bg-dark1 hover:text-white transition"
+                onClick={() => {
+                  setVisibleCount((prev) => prev + 20);
+                  setTimeout(() => {
+                    browseRef.current?.scrollIntoView({ behavior: "smooth" });
+                  }, 100);
+                }}
+              >
+                Daha Fazla Yükle
+              </button>
+            </div>
+          )}
         </section>
       </main>
     </div>

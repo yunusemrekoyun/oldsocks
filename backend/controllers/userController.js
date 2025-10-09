@@ -22,12 +22,33 @@ exports.getMe = async (req, res) => {
 // Profil güncelleme
 exports.updateMe = async (req, res) => {
   try {
-    const updates = { ...req.body };
+    const allowedFields = [
+      "firstName",
+      "lastName",
+      "email",
+      "phone",
+      "password",
+      "avatar",
+    ];
+
+    const updates = {};
+    for (const field of allowedFields) {
+      if (Object.prototype.hasOwnProperty.call(req.body, field)) {
+        updates[field] = req.body[field];
+      }
+    }
+
+    if (Object.keys(updates).length === 0) {
+      return res.status(400).json({ message: "Güncellenecek alan bulunamadı." });
+    }
+
     if (updates.password) {
       updates.password = await bcrypt.hash(updates.password, 10);
     }
+
     const user = await User.findByIdAndUpdate(req.user.userId, updates, {
       new: true,
+      runValidators: true,
     }).select("-password -refreshTokens");
     res.json(user);
   } catch (err) {

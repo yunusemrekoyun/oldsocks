@@ -35,18 +35,6 @@ function getClientIp(req) {
   ip = ip.split(":").slice(-1)[0]; // son parçayı al (port vs)
   return ip;
 }
-function safeLogPaytrInput(inp) {
-  try {
-    const copy = { ...inp };
-    if (copy.user_basket && copy.user_basket.length > 30) {
-      copy.user_basket_preview =
-        copy.user_basket.slice(0, 30) + "...(" + copy.user_basket.length + ")";
-      delete copy.user_basket;
-    }
-    console.log("[PAYTR][debug]", copy);
-  } catch {}
-}
-
 class HttpError extends Error {
   constructor(status, message) {
     super(message);
@@ -271,8 +259,6 @@ exports.startGuestPaymentSession = async (req, res) => {
 /** 1) Ödeme oturumunu başlat (pending Order) */
 exports.startPaymentSession = async (req, res) => {
   try {
-    console.log("[PAYMENT][start] user:", req.user?.userId, "body:", req.body);
-
     const { cartItems, addressId, useFallback } = req.body;
     const userId = req.user.userId;
     const userDoc = await User.findById(userId).lean();
@@ -601,23 +587,6 @@ exports.inlineCheckoutHtml = async (req, res) => {
     }
 
     if (!data || data.status !== "success" || !data.token) {
-      safeLogPaytrInput({
-        reason: (data && data.reason) || "unknown",
-        merchant_id: MERCHANT_ID,
-        user_ip,
-        merchant_oid,
-        email,
-        payment_amount: String(payment_amount),
-        test_mode: TEST_MODE === "1" ? 1 : 0,
-        non_3d,
-        currency,
-        okUrl,
-        failUrl,
-        user_name,
-        user_basket: user_basket,
-        paytr_token_len: paytr_token?.length || 0,
-      });
-
       console.error("[PAYTR][get-token] Hata:", data || rawText);
       return res.status(500).json({
         message: (data && data.reason) || "Ödeme başlatılamadı (PayTR).",
