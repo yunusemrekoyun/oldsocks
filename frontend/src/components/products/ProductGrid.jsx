@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useMemo } from "react";
 import useProductsCache from "../../hooks/useProductsCache";
 import ProductGridItem from "./ProductGridItem";
 
@@ -17,7 +17,6 @@ function mulberry32(seed) {
 function shuffleWithSeed(arr, seed) {
   const a = arr.slice();
   const rand = mulberry32(
-    // string/number seed kabul et
     typeof seed === "number"
       ? seed
       : Array.from(String(seed || "default")).reduce(
@@ -32,19 +31,16 @@ function shuffleWithSeed(arr, seed) {
   return a;
 }
 
-export default function ProductGrid({
-  limit = 4,
-  seed = "default",
-  title = "Ürünler",
-}) {
-  const [products, setProducts] = useState([]);
+export default function ProductGrid({ limit = 4, title = "Ürünler" }) {
   const { data: allProducts, loading } = useProductsCache();
 
-  useEffect(() => {
-    if (!allProducts) return;
+  // Her mount’ta tek seferlik rastgele seed üret
+  const [seed] = useState(() => Math.floor(Math.random() * 1_000_000));
+
+  const products = useMemo(() => {
+    if (!allProducts) return [];
     const shuffled = shuffleWithSeed(allProducts, seed);
-    const picked = shuffled.slice(0, Math.max(0, limit));
-    setProducts(picked);
+    return shuffled.slice(0, Math.max(0, limit));
   }, [allProducts, seed, limit]);
 
   if (loading || !allProducts) {
@@ -55,20 +51,18 @@ export default function ProductGrid({
     );
   }
 
-  // Kart için fiyat verilerini normalize et
   const toCardPricing = (p) => {
-    const final = Number(p.price ?? 0); // backend'in final fiyatı
+    const final = Number(p.price ?? 0);
     const original = Number(p.originalPrice ?? 0);
-
     const hasDiscount = original > 0 && final > 0 && final < original;
     const computedRate = hasDiscount
       ? Math.round(100 - (final / original) * 100)
       : 0;
 
     return {
-      price: hasDiscount ? original : final, // üstü çizilecek fiyat
-      discountedPrice: hasDiscount ? final : null, // indirimli fiyat
-      discountRate: hasDiscount ? computedRate : 0, // rozet için
+      price: hasDiscount ? original : final,
+      discountedPrice: hasDiscount ? final : null,
+      discountRate: hasDiscount ? computedRate : 0,
     };
   };
 
@@ -82,10 +76,8 @@ export default function ProductGrid({
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-6">
           {products.map((p) => {
             const { price, discountedPrice, discountRate } = toCardPricing(p);
-
             const posterUrl =
               p.poster || (Array.isArray(p.images) ? p.images[0] : null);
-
             const stock = Array.isArray(p.sizes)
               ? p.sizes.reduce((sum, s) => sum + (s.stock || 0), 0)
               : 0;
