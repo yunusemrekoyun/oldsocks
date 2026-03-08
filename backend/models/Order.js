@@ -5,6 +5,7 @@ const OrderItemSchema = new mongoose.Schema({
   productId: { type: mongoose.Types.ObjectId, ref: "Product", required: true },
   name: { type: String, required: true },
   price: { type: Number, required: true },
+  originalPrice: { type: Number, default: null },
   qty: { type: Number, required: true },
   size: { type: String },
   color: { type: String },
@@ -48,6 +49,22 @@ const OrderSchema = new mongoose.Schema(
     shipping: {
       name: { type: String, default: null },
       fee: { type: Number, default: 0 },
+    },
+
+    campaign: {
+      campaignId: { type: mongoose.Types.ObjectId, ref: "CartCampaign", default: null },
+      name: { type: String, default: null },
+      templateType: { type: String, default: null },
+      savings: { type: Number, default: 0 },
+      details: { type: Object, default: null },
+    },
+
+    pricing: {
+      subTotal: { type: Number, default: 0 },
+      campaignDiscount: { type: Number, default: 0 },
+      discountedSubTotal: { type: Number, default: 0 },
+      shippingFee: { type: Number, default: 0 },
+      grandTotal: { type: Number, default: 0 },
     },
 
     identityFallbackUsed: { type: Boolean, default: false },

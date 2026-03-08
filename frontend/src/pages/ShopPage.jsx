@@ -26,6 +26,7 @@ export default function ShopPage() {
   const [presetTitle, setPresetTitle] = useState("");
   const [discountOnly, setDiscountOnly] = useState(false);
   const [discountProductIdSet, setDiscountProductIdSet] = useState(null); // Set<string> | null
+  const [presetProductIdSet, setPresetProductIdSet] = useState(null); // Set<string> | null
 
   // lazy-load
   const [visibleCount, setVisibleCount] = useState(20);
@@ -50,6 +51,11 @@ export default function ShopPage() {
     );
 
     setDiscountOnly(Boolean(preset?.discountOnly));
+    setPresetProductIdSet(
+      Array.isArray(preset?.productIds)
+        ? new Set(preset.productIds.map(String))
+        : null
+    );
 
     setFilters((f) => ({
       ...f,
@@ -113,6 +119,11 @@ export default function ShopPage() {
       if (!discountProductIdSet.has(String(p._id))) return false;
     }
 
+    // Header kampanya preset ürünleri
+    if (presetProductIdSet) {
+      if (!presetProductIdSet.has(String(p._id))) return false;
+    }
+
     // Genel "İndirimdekiler"
     if (!discountProductIdSet && discountOnly) {
       const rate = Number(p.discount || 0);
@@ -159,6 +170,7 @@ export default function ShopPage() {
     setFilters(defaultFilters);
     setDiscountOnly(false);
     setDiscountProductIdSet(null);
+    setPresetProductIdSet(null);
     setPresetTitle("");
     setVisibleCount(20);
   };

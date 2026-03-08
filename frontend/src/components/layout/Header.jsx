@@ -17,6 +17,10 @@ import { useCart } from "../../context/useCart";
 import SearchModal from "../search/SearchModal";
 import useCategoriesCache from "../../hooks/useCategoriesCache";
 import logo from "../../assets/logo/logo.png";
+import api from "../../../api";
+
+const DISCOUNT_HOVER_KEY = "__discount_campaigns__";
+
 const Header = () => {
   const { isLoggedIn } = useContext(AuthContext);
   const { items } = useCart();
@@ -35,12 +39,30 @@ const Header = () => {
 
   // Mobil akordeon: açık parent id'leri
   const [openParents, setOpenParents] = useState(() => new Set());
+  const [headerCampaigns, setHeaderCampaigns] = useState([]);
 
   const { data: cachedCategories } = useCategoriesCache();
   const cats = useMemo(
     () => (Array.isArray(cachedCategories) ? cachedCategories : []),
     [cachedCategories]
   );
+
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const { data } = await api.get("/cart-campaigns/header");
+        if (!alive) return;
+        setHeaderCampaigns(Array.isArray(data) ? data : []);
+      } catch (e) {
+        console.error("Header kampanyaları alınamadı:", e);
+        if (alive) setHeaderCampaigns([]);
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   // id helper
   const getId = (maybeObj) =>
@@ -51,12 +73,27 @@ const Header = () => {
   const parents = useMemo(() => cats.filter((c) => !c.parent), [cats]);
   const childrenOf = (parentId) =>
     cats.filter((c) => c.parent && getId(c.parent) === String(parentId));
+  const topPanelCampaigns = useMemo(
+    () => headerCampaigns.filter((c) => c.headerPlacement === "top_panel"),
+    [headerCampaigns]
+  );
+  const subPanelCampaigns = useMemo(
+    () => headerCampaigns.filter((c) => c.headerPlacement === "sub_panel"),
+    [headerCampaigns]
+  );
+  const allMobileCampaigns = useMemo(
+    () => [...topPanelCampaigns, ...subPanelCampaigns],
+    [topPanelCampaigns, subPanelCampaigns]
+  );
 
   // Desktop hover’lı menüde children
-  const hoveredParentObj = cats.find(
-    (x) => getId(x._id) === String(hoverParent)
-  );
-  const currentChildren = hoveredParentObj?.children?.length
+  const isDiscountHover = hoverParent === DISCOUNT_HOVER_KEY;
+  const hoveredParentObj = isDiscountHover
+    ? null
+    : cats.find((x) => getId(x._id) === String(hoverParent));
+  const currentChildren = isDiscountHover
+    ? subPanelCampaigns
+    : hoveredParentObj?.children?.length
     ? hoveredParentObj.children
     : childrenOf(hoverParent);
   const hasChildren = (currentChildren || []).length > 0;
@@ -178,12 +215,43 @@ const Header = () => {
                       {/* Fırsatlar */}
                       <div className="mb-4">
                         <button
+                          onMouseEnter={() => {
+                            if (subPanelCampaigns.length > 0) {
+                              setHoverParent(DISCOUNT_HOVER_KEY);
+                            } else {
+                              setHoverParent(null);
+                            }
+                          }}
                           onClick={() => goShopWith({ discountOnly: true })}
-                          className="w-full text-left px-3 py-2 font-medium text-red-600 animate-pulse"
+                          className={`w-full text-left px-3 py-2 font-medium text-red-600 ${
+                            hoverParent === DISCOUNT_HOVER_KEY
+                              ? "bg-red-50 rounded-lg"
+                              : "animate-pulse"
+                          }`}
                           title="İndirimdeki tüm ürünler"
                         >
                           İndirim
                         </button>
+
+                        {topPanelCampaigns.length > 0 && (
+                          <ul className="mt-2 space-y-1">
+                            {topPanelCampaigns.map((c) => (
+                              <li key={c._id}>
+                                <button
+                                  onClick={() =>
+                                    goShopWith({
+                                      title: c.name,
+                                      productIds: c.productIds || [],
+                                    })
+                                  }
+                                  className="w-full text-left px-3 py-1.5 text-red-600 hover:bg-red-50 rounded-lg transition text-sm"
+                                >
+                                  {c.name}
+                                </button>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
                       </div>
 
                       <div className="text-xs uppercase text-dark2 mb-2">
@@ -217,25 +285,45 @@ const Header = () => {
                     {hasRightPanel && (
                       <div className="pl-2">
                         <div className="text-xs uppercase text-dark2 mb-2">
-                          Alt Kategoriler
+                          {isDiscountHover ? "Kampanyalar" : "Alt Kategoriler"}
                         </div>
-                        <ul className="grid grid-cols-2 gap-2">
-                          {currentChildren.map((sc) => (
-                            <li key={sc._id}>
-                              <button
-                                onClick={() =>
-                                  goShopWith({
-                                    category: [],
-                                    subCategory: [sc._id],
-                                  })
-                                }
-                                className="w-full text-left px-3 py-2 rounded-lg hover:bg-light1 transition"
-                              >
-                                {sc.name}
-                              </button>
-                            </li>
-                          ))}
-                        </ul>
+                        {isDiscountHover ? (
+                          <ul className="space-y-2">
+                            {currentChildren.map((c) => (
+                              <li key={c._id}>
+                                <button
+                                  onClick={() =>
+                                    goShopWith({
+                                      title: c.name,
+                                      productIds: c.productIds || [],
+                                    })
+                                  }
+                                  className="w-full text-left px-3 py-2 rounded-lg hover:bg-red-50 text-red-600 transition"
+                                >
+                                  {c.name}
+                                </button>
+                              </li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <ul className="grid grid-cols-2 gap-2">
+                            {currentChildren.map((sc) => (
+                              <li key={sc._id}>
+                                <button
+                                  onClick={() =>
+                                    goShopWith({
+                                      category: [],
+                                      subCategory: [sc._id],
+                                    })
+                                  }
+                                  className="w-full text-left px-3 py-2 rounded-lg hover:bg-light1 transition"
+                                >
+                                  {sc.name}
+                                </button>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
                       </div>
                     )}
                   </div>
@@ -379,6 +467,33 @@ const Header = () => {
                 Ara
               </button>
             </div>
+
+            {allMobileCampaigns.length > 0 && (
+              <div className="px-4 py-2">
+                <div className="rounded-xl border border-red-100 bg-red-50/50 p-3">
+                  <div className="text-xs font-semibold text-red-600 mb-2 uppercase">
+                    Kampanyalar
+                  </div>
+                  <div className="space-y-1">
+                    {allMobileCampaigns.map((c) => (
+                      <button
+                        key={c._id}
+                        onClick={() => {
+                          setMobileMenuOpen(false);
+                          goShopWith({
+                            title: c.name,
+                            productIds: c.productIds || [],
+                          });
+                        }}
+                        className="w-full text-left px-2 py-1.5 rounded-lg text-sm text-red-700 hover:bg-red-100 transition"
+                      >
+                        {c.name}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Links */}
             <nav className="px-4 py-2 space-y-2 overflow-y-auto">

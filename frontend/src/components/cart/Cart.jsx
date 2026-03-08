@@ -9,13 +9,25 @@ import AuthRequiredModal from "../auth/AuthRequireModal";
 import api from "../../../api";
 
 export default function Cart() {
-  const { items, clearCart } = useCart();
+  const {
+    items,
+    clearCart,
+    selectedCampaignId,
+    setSelectedCampaignId,
+  } = useCart();
   const { isLoggedIn } = useAuth();
   const navigate = useNavigate();
   const [showLoginModal, setShowLoginModal] = useState(false);
 
   // Tek onay (KVKK + sözleşme)
   const [consentChecked, setConsentChecked] = useState(false);
+
+  // Kampanya/pricing preview
+  const [pricingSummary, setPricingSummary] = useState(null);
+  const [eligibleCampaigns, setEligibleCampaigns] = useState([]);
+  const [appliedCampaign, setAppliedCampaign] = useState(null);
+  const [pricingLoading, setPricingLoading] = useState(false);
+  const [pricingError, setPricingError] = useState(null);
 
   // Kargo metodu (tek kayıt varsayımı)
   const [shipping, setShipping] = useState(null); // { _id, name, fee, freeShippingThreshold }
@@ -42,29 +54,88 @@ export default function Cart() {
     })();
     return () => {
       alive = false;
-    };
+      };
   }, []);
 
+  useEffect(() => {
+    if (items.length === 0) {
+      setPricingSummary(null);
+      setEligibleCampaigns([]);
+      setAppliedCampaign(null);
+      setPricingError(null);
+      if (selectedCampaignId) setSelectedCampaignId(null);
+      return;
+    }
+
+    let alive = true;
+    (async () => {
+      try {
+        setPricingLoading(true);
+        const { data } = await api.post("/cart-campaigns/preview", {
+          cartItems: items,
+          selectedCampaignId: selectedCampaignId || null,
+        });
+        if (!alive) return;
+        const eligible = Array.isArray(data?.eligibleCampaigns)
+          ? data.eligibleCampaigns
+          : [];
+        const applied = data?.appliedCampaign || null;
+
+        setPricingSummary(data?.summary || null);
+        setEligibleCampaigns(eligible);
+        setAppliedCampaign(applied);
+        setPricingError(null);
+      } catch (e) {
+        console.error("Sepet fiyatlandırması alınamadı:", e);
+        const message =
+          e?.response?.data?.message || "Kampanya hesaplanamadı.";
+        setPricingError(message);
+        setPricingSummary(null);
+        setEligibleCampaigns([]);
+        setAppliedCampaign(null);
+
+        if (e?.response?.status === 409 && selectedCampaignId) {
+          setSelectedCampaignId(null);
+        }
+      } finally {
+        if (alive) setPricingLoading(false);
+      }
+    })();
+
+    return () => {
+      alive = false;
+    };
+  }, [items, selectedCampaignId, setSelectedCampaignId]);
+
   // Ara toplam
-  const subTotal = useMemo(
+  const localSubTotal = useMemo(
     () => items.reduce((total, item) => total + item.price * item.qty, 0),
     [items]
   );
 
   // Ücretsiz kargo koşulu
-  const isFree =
+  const localIsFree =
     shipping?.freeShippingThreshold != null &&
-    subTotal >= Number(shipping.freeShippingThreshold);
+    localSubTotal >= Number(shipping.freeShippingThreshold);
 
   // Ödenecek kargo bedeli
-  const payableShipping = !shipping
+  const localShippingFee = !shipping
     ? 0
-    : isFree
+    : localIsFree
     ? 0
     : Number(shipping.fee || 0);
 
-  // Genel toplam
-  const grandTotal = subTotal + payableShipping;
+  const subTotal = Number(pricingSummary?.subTotal ?? localSubTotal);
+  const campaignDiscount = Number(pricingSummary?.campaignDiscount ?? 0);
+  const discountedSubTotal = Number(
+    pricingSummary?.discountedSubTotal ?? Math.max(0, subTotal - campaignDiscount)
+  );
+  const shippingFee = Number(pricingSummary?.shippingFee ?? localShippingFee);
+  const grandTotal = Number(pricingSummary?.grandTotal ?? discountedSubTotal + shippingFee);
+  const shippingName = pricingSummary?.shippingName || shipping?.name || null;
+  const isFree = pricingSummary ? Boolean(pricingSummary.isFree) : localIsFree;
+  const freeShippingThreshold =
+    pricingSummary?.freeShippingThreshold ?? shipping?.freeShippingThreshold ?? null;
 
   const handleCheckout = () => {
     if (!isLoggedIn) {
@@ -127,24 +198,45 @@ export default function Cart() {
                 <span className="font-medium">₺{subTotal.toFixed(2)}</span>
               </div>
 
+              {campaignDiscount > 0 && (
+                <div className="flex items-center justify-between">
+                  <span className="text-dark2">Kampanya İndirimi</span>
+                  <span className="font-medium text-emerald-700">
+                    -₺{campaignDiscount.toFixed(2)}
+                  </span>
+                </div>
+              )}
+
+              {campaignDiscount > 0 && (
+                <div className="flex items-center justify-between text-[13px] text-gray-600">
+                  <span>İndirimli Ara Toplam</span>
+                  <span className="font-medium">
+                    ₺{discountedSubTotal.toFixed(2)}
+                  </span>
+                </div>
+              )}
+
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <span className="text-dark2">
-                    Kargo{shipping?.name ? ` (${shipping.name})` : ""}
+                    Kargo{shippingName ? ` (${shippingName})` : ""}
                   </span>
-                  {shipLoading && (
+                  {(shipLoading || pricingLoading) && (
                     <span className="text-xs text-gray-500">hesaplanıyor…</span>
                   )}
-                  {shipError && (
+                  {!pricingSummary && shipError && (
                     <span className="text-xs text-red-600">{shipError}</span>
                   )}
                 </div>
 
-                {shipping ? (
+                {pricingSummary || shipping ? (
                   isFree ? (
                     <div className="flex items-center gap-2">
                       <s className="text-gray-400">
-                        ₺{Number(shipping.fee || 0).toFixed(2)}
+                        ₺
+                        {Number(
+                          shipping?.fee ?? pricingSummary?.shippingFee ?? 0
+                        ).toFixed(2)}
                       </s>
                       <span className="font-medium">₺0.00</span>
                       <span className="text-[11px] px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700">
@@ -153,7 +245,7 @@ export default function Cart() {
                     </div>
                   ) : (
                     <span className="font-medium">
-                      ₺{Number(shipping.fee || 0).toFixed(2)}
+                      ₺{shippingFee.toFixed(2)}
                     </span>
                   )
                 ) : (
@@ -161,11 +253,75 @@ export default function Cart() {
                 )}
               </div>
 
-              {shipping?.freeShippingThreshold != null && !isFree && (
+              {freeShippingThreshold != null && !isFree && (
                 <div className="text-xs text-gray-500 text-right">
-                  ₺{Number(shipping.freeShippingThreshold).toFixed(0)} ve üzeri
+                  ₺{Number(freeShippingThreshold).toFixed(0)} ve üzeri
                   alışverişlerde kargo ücretsiz.
                 </div>
+              )}
+            </div>
+
+            <div className="h-px bg-light2 my-4" />
+
+            <div className="space-y-2">
+              <h4 className="text-sm font-semibold text-dark1">Kampanya Seçimi</h4>
+
+              {pricingLoading && (
+                <p className="text-xs text-gray-500">Kampanyalar hesaplanıyor…</p>
+              )}
+
+              {pricingError && (
+                <p className="text-xs text-red-600">{pricingError}</p>
+              )}
+
+              {!pricingLoading && !pricingError && eligibleCampaigns.length === 0 && (
+                <p className="text-xs text-gray-500">
+                  Sepetiniz için uygun kampanya bulunamadı.
+                </p>
+              )}
+
+              {!pricingLoading && eligibleCampaigns.length > 0 && (
+                <div className="space-y-2 text-sm">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="campaign"
+                      checked={!selectedCampaignId}
+                      onChange={() => setSelectedCampaignId(null)}
+                    />
+                    <span>Kampanya kullanma</span>
+                  </label>
+
+                  {eligibleCampaigns.map((c) => {
+                    const cid = String(c.campaignId);
+                    const checked = String(selectedCampaignId || "") === cid;
+                    return (
+                      <label
+                        key={cid}
+                        className="flex items-center justify-between gap-2 cursor-pointer p-2 rounded-md border border-light2"
+                      >
+                        <span className="flex items-center gap-2">
+                          <input
+                            type="radio"
+                            name="campaign"
+                            checked={checked}
+                            onChange={() => setSelectedCampaignId(cid)}
+                          />
+                          <span>{c.name}</span>
+                        </span>
+                        <span className="text-emerald-700 font-medium">
+                          -₺{Number(c.savings || 0).toFixed(2)}
+                        </span>
+                      </label>
+                    );
+                  })}
+                </div>
+              )}
+
+              {appliedCampaign?.name && (
+                <p className="text-xs text-emerald-700">
+                  Uygulanan kampanya: {appliedCampaign.name}
+                </p>
               )}
             </div>
 

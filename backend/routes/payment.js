@@ -37,6 +37,6 @@ router.get(
 router.post("/start-guest", paymentCtrl.startGuestPaymentSession);
 
 router.post("/callback/paytr", paymentCtrl.paytrCallback);
-// router.post("/mock-complete", paymentCtrl.mockComplete);
+router.post("/mock-complete", paymentCtrl.mockComplete);
 
 module.exports = router;

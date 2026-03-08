@@ -152,6 +152,7 @@ app.use(
     "/api/v1/mini-campaigns",
     "/api/v1/shipping",
     "/api/v1/announcement-bar",
+    "/api/v1/cart-campaigns",
   ],
   readHeavyLimiter
 );

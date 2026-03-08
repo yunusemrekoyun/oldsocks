@@ -122,6 +122,20 @@ export default function OrdersList() {
             STATUS_STYLES[order.status] || "bg-gray-100 text-gray-700";
           const Icon = STATUS_ICON[order.status] || ClockIcon;
           const isOpen = !!expanded[order._id];
+          const fallbackSubTotal =
+            order.items?.reduce(
+              (sum, item) => sum + Number(item.qty || 0) * Number(item.price || 0),
+              0
+            ) || 0;
+          const pricingSubTotal = Number(
+            order.pricing?.subTotal ?? fallbackSubTotal
+          );
+          const pricingCampaignDiscount = Number(
+            order.pricing?.campaignDiscount ?? order.campaign?.savings ?? 0
+          );
+          const pricingShippingFee = Number(
+            order.pricing?.shippingFee ?? order.shipping?.fee ?? 0
+          );
 
           return (
             <div
@@ -258,6 +272,44 @@ export default function OrdersList() {
                           </div>
                         </div>
                       </div>
+                    </div>
+
+                    <div className="mt-3 rounded-xl border border-gray-100 bg-white p-4">
+                      <h5 className="text-sm font-semibold text-gray-700 mb-2">
+                        Sipariş Özeti
+                      </h5>
+                      <div className="space-y-1.5 text-sm">
+                        <div className="flex items-center justify-between">
+                          <span className="text-gray-600">Ara Toplam</span>
+                          <span className="font-medium">
+                            {fmtTL(pricingSubTotal)}
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between text-emerald-700">
+                          <span>Kampanya İndirimi</span>
+                          <span className="font-medium">
+                            -{fmtTL(pricingCampaignDiscount)}
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-gray-600">Kargo</span>
+                          <span className="font-medium">
+                            {fmtTL(pricingShippingFee)}
+                          </span>
+                        </div>
+                        <div className="pt-1 border-t border-gray-100 flex items-center justify-between">
+                          <span className="font-semibold text-dark1">Genel Toplam</span>
+                          <span className="font-semibold text-dark1">
+                            {fmtTL(order.totalPrice)}
+                          </span>
+                        </div>
+                      </div>
+
+                      {order.campaign?.name && (
+                        <p className="mt-2 text-xs text-emerald-700">
+                          Uygulanan kampanya: <b>{order.campaign.name}</b>
+                        </p>
+                      )}
                     </div>
                   </section>
                 </div>

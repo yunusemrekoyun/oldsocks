@@ -3,11 +3,10 @@ const crypto = require("crypto");
 const { v4: uuidv4 } = require("uuid");
 const User = require("../models/User");
 const Order = require("../models/Order");
-const Product = require("../models/Product");
-const ShippingMethod = require("../models/ShippingMethod");
 const fallbackData = require("../config/fallback.json");
 const { sendOrderPlacedMail } = require("../utils/mailer");
 const { applyStockChanges } = require("../utils/updateStock");
+const { calculateCartPricing } = require("../services/cartPricingService");
 
 /* Frontend base (ilk origin) */
 const FRONTEND_BASE = (() => {
@@ -27,6 +26,9 @@ function asTL(n) {
   const v = Number(n || 0);
   return "₺" + v.toFixed(2);
 }
+function round2(n) {
+  return Math.round(Number(n || 0) * 100) / 100;
+}
 function getClientIp(req) {
   const xff = (req.headers["x-forwarded-for"] || "").split(",")[0].trim();
   let ip = xff || req.ip || req.connection?.remoteAddress || "127.0.0.1";
@@ -35,138 +37,91 @@ function getClientIp(req) {
   ip = ip.split(":").slice(-1)[0]; // son parçayı al (port vs)
   return ip;
 }
-class HttpError extends Error {
-  constructor(status, message) {
-    super(message);
-    this.status = status;
+
+function buildPaytrBasket(order) {
+  const rawItems = Array.isArray(order?.items) ? order.items : [];
+  const lines = rawItems
+    .map((it) => {
+      const qty = Math.max(0, Math.floor(Number(it?.qty || 0)));
+      const unitPrice = Math.max(0, Number(it?.price || 0));
+      const name = String(it?.name || "Ürün");
+      return {
+        name,
+        qty,
+        unitPrice,
+        lineTotal: round2(unitPrice * qty),
+      };
+    })
+    .filter((line) => line.qty > 0);
+
+  if (lines.length === 0) return [];
+
+  const baseSubtotal = round2(
+    lines.reduce((sum, line) => sum + Number(line.lineTotal || 0), 0)
+  );
+  const discountedSubTotal = Number(order?.pricing?.discountedSubTotal);
+
+  const shouldScaleToDiscounted =
+    Number.isFinite(discountedSubTotal) &&
+    discountedSubTotal >= 0 &&
+    discountedSubTotal < baseSubtotal &&
+    baseSubtotal > 0;
+
+  if (!shouldScaleToDiscounted) {
+    return lines.map((line) => [
+      line.name,
+      Number(line.unitPrice || 0).toFixed(2),
+      line.qty,
+    ]);
   }
-}
 
-function normalizeSize(size) {
-  if (size === null || size === undefined) return "";
-  return String(size).trim();
-}
+  const ratio = discountedSubTotal / baseSubtotal;
+  const targetKurus = Math.round(discountedSubTotal * 100);
 
-async function calculateCartPricing(rawItems) {
-  if (!Array.isArray(rawItems) || rawItems.length === 0) {
-    throw new HttpError(400, "Sepet boş veya geçersiz.");
-  }
-
-  const aggregated = new Map();
-  rawItems.forEach((item) => {
-    const id = String(item?.id || item?.productId || "");
-    if (!id) throw new HttpError(400, "Geçersiz ürün (id eksik).");
-    const qty = Number(item?.qty);
-    if (!Number.isFinite(qty) || qty <= 0) {
-      throw new HttpError(400, "Geçersiz adet değeri.");
-    }
-    const normalizedQty = Math.floor(qty);
-    if (normalizedQty <= 0) {
-      throw new HttpError(400, "Geçersiz adet değeri.");
-    }
-    const sizeKey = normalizeSize(item?.size);
-    const key = `${id}:::${sizeKey}`;
-    if (!aggregated.has(key)) {
-      aggregated.set(key, {
-        id,
-        size: sizeKey,
-        qty: normalizedQty,
-        color: item?.color ?? null,
-      });
-    } else {
-      aggregated.get(key).qty += normalizedQty;
-    }
+  const scaled = lines.map((line, idx) => {
+    const rawKurus = Number(line.lineTotal || 0) * 100 * ratio;
+    const floorKurus = Math.max(0, Math.floor(rawKurus));
+    const fraction = rawKurus - floorKurus;
+    return {
+      idx,
+      name: line.name,
+      floorKurus,
+      fraction,
+      finalKurus: floorKurus,
+    };
   });
 
-  const productIds = Array.from(
-    new Set(Array.from(aggregated.values()).map((it) => it.id))
-  );
-  const products = await Product.find({ _id: { $in: productIds } })
-    .select("name price sizes color")
-    .lean();
-  const productMap = new Map(products.map((p) => [String(p._id), p]));
+  let currentKurus = scaled.reduce((sum, u) => sum + u.floorKurus, 0);
+  let remainder = targetKurus - currentKurus;
 
-  let subTotal = 0;
-  const orderItems = [];
-
-  for (const entry of aggregated.values()) {
-    const product = productMap.get(entry.id);
-    if (!product) {
-      throw new HttpError(400, "Sepetteki ürün bulunamadı.");
+  if (remainder > 0) {
+    const byFraction = [...scaled].sort((a, b) => b.fraction - a.fraction);
+    let i = 0;
+    while (remainder > 0 && byFraction.length > 0) {
+      byFraction[i % byFraction.length].finalKurus += 1;
+      remainder -= 1;
+      i += 1;
     }
-
-    const unitPrice = Number(product.price);
-    if (!Number.isFinite(unitPrice) || unitPrice < 0) {
-      throw new HttpError(400, `Ürünün fiyatı geçersiz: ${product.name}`);
-    }
-
-    const sizes = Array.isArray(product.sizes) ? product.sizes : [];
-    const sizeRecord = sizes.find((s) => normalizeSize(s?.size) === entry.size);
-
-    if (!sizeRecord) {
-      throw new HttpError(409, `Seçilen beden stokta yok: ${product.name}`);
-    }
-
-    const available = Number(sizeRecord.stock || 0);
-    if (entry.qty > available) {
-      throw new HttpError(409, `Yetersiz stok: ${product.name}`);
-    }
-
-    subTotal += unitPrice * entry.qty;
-    orderItems.push({
-      productId: product._id,
-      name: product.name,
-      price: unitPrice,
-      qty: entry.qty,
-      size: sizeRecord.size || "",
-      color: entry.color ?? product.color ?? "",
-    });
-  }
-
-  const shippingMethod = await ShippingMethod.findOne()
-    .sort({ createdAt: -1 })
-    .lean();
-
-  let shippingFee = 0;
-  let shippingName = null;
-  let freeShippingThreshold = null;
-  if (shippingMethod) {
-    shippingName = shippingMethod.name || null;
-    const baseFee = Number(shippingMethod.fee || 0);
-    const threshold =
-      shippingMethod.freeShippingThreshold === null ||
-      shippingMethod.freeShippingThreshold === undefined
-        ? null
-        : Number(shippingMethod.freeShippingThreshold);
-    const qualifiesForFree =
-      threshold !== null && Number.isFinite(threshold) && subTotal >= threshold;
-    shippingFee = qualifiesForFree ? 0 : baseFee;
-    if (threshold !== null && Number.isFinite(threshold)) {
-      freeShippingThreshold = threshold;
+  } else if (remainder < 0) {
+    const byFractionAsc = [...scaled].sort((a, b) => a.fraction - b.fraction);
+    let i = 0;
+    while (remainder < 0 && byFractionAsc.length > 0) {
+      const target = byFractionAsc[i % byFractionAsc.length];
+      if (target.finalKurus > 0) {
+        target.finalKurus -= 1;
+        remainder += 1;
+      }
+      i += 1;
+      if (i > byFractionAsc.length * 3 && remainder < 0) break;
     }
   }
 
-  const grandTotal = subTotal + shippingFee;
-
-  return {
-    items: orderItems.map((it) => ({
-      ...it,
-      productId: it.productId,
-    })),
-    summary: {
-      subTotal,
-      shippingFee,
-      shippingName,
-      grandTotal,
-      isFree: shippingFee === 0,
-      freeShippingThreshold,
-    },
-  };
+  return scaled.map((u) => [u.name, (u.finalKurus / 100).toFixed(2), 1]);
 }
 
 exports.startGuestPaymentSession = async (req, res) => {
   try {
-    const { cartItems, address, guest } = req.body || {};
+    const { cartItems, address, guest, selectedCampaignId } = req.body || {};
 
     // 1) Basit zorunlu alan kontrolü (fallback YOK)
     const missing = [];
@@ -193,7 +148,10 @@ exports.startGuestPaymentSession = async (req, res) => {
 
     let pricing;
     try {
-      pricing = await calculateCartPricing(cartItems);
+      pricing = await calculateCartPricing(cartItems, {
+        selectedCampaignId,
+        includeEligibleCampaigns: true,
+      });
     } catch (err) {
       const status = err?.status || 500;
       const message = err?.status
@@ -228,6 +186,22 @@ exports.startGuestPaymentSession = async (req, res) => {
       },
       items: pricing.items,
       totalPrice: pricing.summary.grandTotal,
+      campaign: pricing.appliedCampaign
+        ? {
+            campaignId: pricing.appliedCampaign.campaignId,
+            name: pricing.appliedCampaign.name,
+            templateType: pricing.appliedCampaign.templateType,
+            savings: pricing.appliedCampaign.savings,
+            details: pricing.appliedCampaign.details,
+          }
+        : null,
+      pricing: {
+        subTotal: pricing.summary.subTotal,
+        campaignDiscount: pricing.summary.campaignDiscount,
+        discountedSubTotal: pricing.summary.discountedSubTotal,
+        shippingFee: pricing.summary.shippingFee,
+        grandTotal: pricing.summary.grandTotal,
+      },
       address: {
         title: String(address.title || "Teslimat Adresi").trim() || "Teslimat Adresi",
         mainaddress: String(address.mainaddress || "").trim(),
@@ -250,6 +224,8 @@ exports.startGuestPaymentSession = async (req, res) => {
       conversationId,
       inlineUrl: `${process.env.BACKEND_PUBLIC_URL}/api/v1/payment/inline/${conversationId}`,
       summary: pricing.summary,
+      appliedCampaign: pricing.appliedCampaign,
+      eligibleCampaigns: pricing.eligibleCampaigns,
     });
   } catch (e) {
     console.error("[PAYMENT][start-guest] Hata:", e);
@@ -259,7 +235,7 @@ exports.startGuestPaymentSession = async (req, res) => {
 /** 1) Ödeme oturumunu başlat (pending Order) */
 exports.startPaymentSession = async (req, res) => {
   try {
-    const { cartItems, addressId, useFallback } = req.body;
+    const { cartItems, addressId, useFallback, selectedCampaignId } = req.body;
     const userId = req.user.userId;
     const userDoc = await User.findById(userId).lean();
 
@@ -320,7 +296,10 @@ exports.startPaymentSession = async (req, res) => {
 
     let pricing;
     try {
-      pricing = await calculateCartPricing(cartItems);
+      pricing = await calculateCartPricing(cartItems, {
+        selectedCampaignId,
+        includeEligibleCampaigns: true,
+      });
     } catch (err) {
       const status = err?.status || 500;
       const message = err?.status
@@ -342,6 +321,22 @@ exports.startPaymentSession = async (req, res) => {
       user: userId,
       items: pricing.items,
       totalPrice: pricing.summary.grandTotal,
+      campaign: pricing.appliedCampaign
+        ? {
+            campaignId: pricing.appliedCampaign.campaignId,
+            name: pricing.appliedCampaign.name,
+            templateType: pricing.appliedCampaign.templateType,
+            savings: pricing.appliedCampaign.savings,
+            details: pricing.appliedCampaign.details,
+          }
+        : null,
+      pricing: {
+        subTotal: pricing.summary.subTotal,
+        campaignDiscount: pricing.summary.campaignDiscount,
+        discountedSubTotal: pricing.summary.discountedSubTotal,
+        shippingFee: pricing.summary.shippingFee,
+        grandTotal: pricing.summary.grandTotal,
+      },
       address: {
         title: String(addr.title || "Adres").trim() || "Adres",
         mainaddress: registrationAddress,
@@ -364,6 +359,8 @@ exports.startPaymentSession = async (req, res) => {
       conversationId,
       inlineUrl: `${process.env.BACKEND_PUBLIC_URL}/api/v1/payment/inline/${conversationId}`,
       summary: pricing.summary,
+      appliedCampaign: pricing.appliedCampaign,
+      eligibleCampaigns: pricing.eligibleCampaigns,
     });
   } catch (e) {
     console.error("[Payment][start] Hata:", e);
@@ -494,11 +491,7 @@ exports.inlineCheckoutHtml = async (req, res) => {
 
     const payment_amount = tlToKurus(order.totalPrice);
 
-    const basket = (order.items || []).map((it) => [
-      it.name,
-      Number(it.price || 0).toFixed(2),
-      Number(it.qty || 1),
-    ]);
+    const basket = buildPaytrBasket(order);
     const user_basket = Buffer.from(JSON.stringify(basket)).toString("base64");
 
     const no_installment = "0";
@@ -604,6 +597,12 @@ exports.inlineCheckoutHtml = async (req, res) => {
 /** MOCK tamamla (sadece geliştirme) */
 exports.mockComplete = async (req, res) => {
   try {
+    const isMockProvider =
+      String(process.env.PAY_PROVIDER || "").toLowerCase() === "mock";
+    if (!isMockProvider) {
+      return res.status(403).json({ message: "Mock ödeme aktif değil." });
+    }
+
     const { conversationId } = req.body || {};
     if (!conversationId) {
       return res.status(400).json({ message: "Eksik parametre." });

@@ -94,6 +94,11 @@ export default function AdminLayout({ children }) {
         path: "/admin/discounts",
       },
       {
+        label: "Sepet Kampanyaları",
+        icon: <TagIcon className="w-5 h-5" />,
+        path: "/admin/cart-campaigns",
+      },
+      {
         label: "Kullanıcılar",
         icon: <UserCircleIcon className="w-5 h-5" />,
         path: "/admin/users",

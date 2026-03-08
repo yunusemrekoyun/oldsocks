@@ -188,6 +188,20 @@ export default function OrdersPage() {
           {filteredOrders.map((order) => {
             const count =
               order.items?.reduce((t, it) => t + (it.qty || 0), 0) || 0;
+            const fallbackSubTotal =
+              order.items?.reduce(
+                (t, it) => t + Number(it.qty || 0) * Number(it.price || 0),
+                0
+              ) || 0;
+            const pricingSubTotal = Number(
+              order.pricing?.subTotal ?? fallbackSubTotal
+            );
+            const pricingCampaignDiscount = Number(
+              order.pricing?.campaignDiscount ?? order.campaign?.savings ?? 0
+            );
+            const pricingShippingFee = Number(
+              order.pricing?.shippingFee ?? order.shipping?.fee ?? 0
+            );
             const changed = order.selectedStatus !== order.status;
             const statusClass =
               STATUS_STYLES[order.status] || "bg-light1 text-dark1";
@@ -281,6 +295,32 @@ export default function OrdersPage() {
                       </tbody>
                     </table>
                   </div>
+
+                    <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 text-sm">
+                      <div className="px-3 py-2 rounded-lg bg-light1/70">
+                        Ara Toplam:{" "}
+                        <b className="text-dark1">
+                          {fmtPrice(pricingSubTotal)}
+                        </b>
+                      </div>
+                      <div className="px-3 py-2 rounded-lg bg-emerald-50 text-emerald-800">
+                        Kampanya:{" "}
+                        <b>-{fmtPrice(pricingCampaignDiscount)}</b>
+                      </div>
+                      <div className="px-3 py-2 rounded-lg bg-light1/70">
+                        Kargo:{" "}
+                        <b className="text-dark1">{fmtPrice(pricingShippingFee)}</b>
+                      </div>
+                    <div className="px-3 py-2 rounded-lg bg-blue-50 text-blue-800">
+                      Genel Toplam: <b>{fmtPrice(order.totalPrice)}</b>
+                    </div>
+                  </div>
+
+                  {order.campaign?.name && (
+                    <div className="mt-3 text-sm text-emerald-700">
+                      Uygulanan kampanya: <b>{order.campaign.name}</b>
+                    </div>
+                  )}
 
                   {/* Alt satır: durum değiştir + kaydet */}
                   <div className="mt-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">

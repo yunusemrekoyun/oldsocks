@@ -1,7 +1,7 @@
 import React from "react";
 import Header from "./Header";
 import Footer from "./Footer";
-import WhatsAppButton from "../ui/WhatsappButton";
+import WhatsAppButton from "../ui/WhatsAppButton";
 import AnnouncementBar from "../AnnouncementBar";
 import CookieConsent from "../privacy/CookieConsent";
 

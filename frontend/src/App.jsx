@@ -47,6 +47,7 @@ import DiscountsPage from "./admin/pages/DiscountsPage";
 import HeroVideoPage from "./admin/pages/HeroVideoPage";
 import ShippingMethodsPage from "./admin/pages/ShippingMethodsPage";
 import AnnouncementBarPage from "./admin/pages/AnnouncementBarPage";
+import CartCampaignsPage from "./admin/pages/CartCampaignsPage";
 export default function App() {
   return (
     <BrowserRouter>
@@ -97,6 +98,7 @@ export default function App() {
             <Route index element={<div>Hoş geldin Admin!</div>} />
             <Route path="products" element={<ProductListPage />} />
             <Route path="discounts" element={<DiscountsPage />} />
+            <Route path="cart-campaigns" element={<CartCampaignsPage />} />
             <Route path="users" element={<AdminUsersPage />} />
             <Route path="categories" element={<CategoriesPage />} />
             <Route path="campaigns" element={<CampaignsPage />} />

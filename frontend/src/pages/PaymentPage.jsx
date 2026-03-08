@@ -76,6 +76,7 @@ export default function PaymentPage() {
     startedForConvRef.current = conversationId;
 
     let alive = true;
+    const host = containerRef.current;
 
     (async () => {
       try {
@@ -84,7 +85,6 @@ export default function PaymentPage() {
         });
         if (!alive) return;
 
-        const host = containerRef.current;
         if (!host) return;
 
         if (!iframeAppendedRef.current) host.innerHTML = "";
@@ -128,7 +128,6 @@ export default function PaymentPage() {
       alive = false;
       // /payment dışına çıkarken temizle
       if (location.pathname !== "/payment") {
-        const host = containerRef.current;
         if (host) host.innerHTML = "";
         iframeAppendedRef.current = false;
         startedForConvRef.current = null;
@@ -202,6 +201,27 @@ export default function PaymentPage() {
                   <span>₺{Number(summary.subTotal || 0).toFixed(2)}</span>
                 </div>
 
+                {Number(summary.campaignDiscount || 0) > 0 && (
+                  <div className="flex justify-between text-emerald-700">
+                    <span>Kampanya İndirimi</span>
+                    <span>-₺{Number(summary.campaignDiscount || 0).toFixed(2)}</span>
+                  </div>
+                )}
+
+                {Number(summary.campaignDiscount || 0) > 0 && (
+                  <div className="flex justify-between">
+                    <span>İndirimli Ara Toplam</span>
+                    <span>
+                      ₺
+                      {Number(
+                        summary.discountedSubTotal ??
+                          Number(summary.subTotal || 0) -
+                            Number(summary.campaignDiscount || 0)
+                      ).toFixed(2)}
+                    </span>
+                  </div>
+                )}
+
                 <div className="flex justify-between items-center">
                   <span>
                     Kargo
@@ -227,6 +247,12 @@ export default function PaymentPage() {
                     ₺{Number(summary.grandTotal || 0).toFixed(2)}
                   </span>
                 </div>
+
+                {summary.appliedCampaign?.name && (
+                  <p className="text-xs text-emerald-700">
+                    Uygulanan kampanya: {summary.appliedCampaign.name}
+                  </p>
+                )}
 
                 {summary.isFree && summary.freeShippingThreshold != null && (
                   <p className="text-xs text-emerald-700">

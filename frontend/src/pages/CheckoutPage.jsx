@@ -7,7 +7,7 @@ import AuthRequiredModal from "../components/auth/AuthRequireModal";
 import api from "../../api";
 
 export default function CheckoutPage() {
-  const { items } = useCart();
+  const { items, selectedCampaignId } = useCart();
   const { isLoggedIn, loading: authLoading } = useAuth();
   const navigate = useNavigate();
 
@@ -111,6 +111,7 @@ export default function CheckoutPage() {
         cartItems: items,
         addressId: selectedAddress,
         useFallback,
+        selectedCampaignId: selectedCampaignId || null,
       });
 
       if (data?.missing && !useFallback) {
@@ -128,6 +129,13 @@ export default function CheckoutPage() {
               shippingName: serverSummary.shippingName ?? null,
               freeShippingThreshold:
                 serverSummary.freeShippingThreshold ?? null,
+              campaignDiscount: Number(serverSummary.campaignDiscount ?? 0),
+              discountedSubTotal: Number(
+                serverSummary.discountedSubTotal ??
+                  serverSummary.subTotal ??
+                  0
+              ),
+              appliedCampaign: data?.appliedCampaign || null,
             }
           : {
               subTotal,
@@ -137,6 +145,9 @@ export default function CheckoutPage() {
               shippingName: shipping?.name || null,
               freeShippingThreshold:
                 shipping?.freeShippingThreshold ?? null,
+              campaignDiscount: 0,
+              discountedSubTotal: subTotal,
+              appliedCampaign: null,
             };
         navigate("/payment", {
           state: {
@@ -159,7 +170,10 @@ export default function CheckoutPage() {
           "Ödeme başlatılamadı. Lütfen bilgilerinizi kontrol edin.";
         alert(msg);
       } else {
-        alert("Ödeme başlatılamadı. Lütfen tekrar deneyin.");
+        alert(
+          err?.response?.data?.message ||
+            "Ödeme başlatılamadı. Lütfen tekrar deneyin."
+        );
       }
     } finally {
       setLoading(false);
