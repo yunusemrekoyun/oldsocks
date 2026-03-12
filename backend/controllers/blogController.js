@@ -50,10 +50,10 @@ exports.createBlog = async (req, res) => {
       publishedAt: status === "published" ? new Date() : undefined,
     });
 
-    // 🔔 Yeni blog → bülten abonelerine mail (fire-and-forget)
-    // Varsayılan link: FRONTEND_ORIGIN + /blog/:id
-    // Slug’ınız varsa 3. parametreye "/blog/:id" yerine uygun path verin.
-    sendNewsletterNewBlog(blog, process.env.FRONTEND_ORIGIN).catch(() => {});
+    // Yalnız published içerikler bültene çıkar.
+    if (status === "published") {
+      sendNewsletterNewBlog(blog, process.env.FRONTEND_ORIGIN).catch(() => {});
+    }
 
     res.status(201).json(blog);
   } catch (err) {

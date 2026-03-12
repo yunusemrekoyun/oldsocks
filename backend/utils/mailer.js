@@ -1,249 +1,729 @@
 const nodemailer = require("nodemailer");
+const User = require("../models/User");
+const NewsletterSubscriber = require("../models/NewsletterSubscriber");
+const {
+  clampText,
+  escapeHtml,
+  isValidEmailAddress,
+  normalizeEmailAddress,
+  sanitizeHeaderValue,
+  splitEmailList,
+  stripHtml,
+} = require("./email");
 
-// ENV
-const from = process.env.MAIL_FROM;
-const pass = process.env.MAIL_PASS;
-const fallbackTo = process.env.MAIL_TO || from;
-const adminList = (process.env.ADMIN_EMAILS || fallbackTo || "")
+const from = normalizeEmailAddress(process.env.MAIL_FROM);
+const pass = process.env.MAIL_PASS || "";
+const transportUser = process.env.SMTP_USER || from;
+const transportPass = process.env.SMTP_PASS || pass;
+const fallbackTo = normalizeEmailAddress(process.env.MAIL_TO || from);
+const frontendOrigin = String(process.env.FRONTEND_ORIGIN || "")
   .split(",")
-  .map((s) => s.trim())
-  .filter(Boolean);
+  .map((entry) => entry.trim())
+  .filter(Boolean)[0] || "http://localhost:5173";
 
-// Gmail transporter (senin haliyle)
-const transporter = nodemailer.createTransport({
-  service: "gmail",
-  auth: { user: from, pass },
-});
+const adminList = splitEmailList(process.env.ADMIN_EMAILS || fallbackTo || "");
 
-/* -------------------- yardımcılar -------------------- */
-const fmt = (n) => `₺${Number(n || 0).toFixed(2)}`;
-
-function safeSend(opts) {
-  if (!from || !pass) {
-    console.warn("[mailer] MAIL_FROM / MAIL_PASS yok; mail gönderilmedi.");
-    return Promise.resolve();
+function createTransporter() {
+  if (process.env.SMTP_HOST) {
+    return nodemailer.createTransport({
+      host: process.env.SMTP_HOST,
+      port: Number(process.env.SMTP_PORT || 587),
+      secure: String(process.env.SMTP_SECURE || "").toLowerCase() === "true",
+      auth: {
+        user: transportUser,
+        pass: transportPass,
+      },
+    });
   }
-  return transporter.sendMail({
-    from: `"Oldsocks" <${from}>`,
-    ...opts,
+
+  return nodemailer.createTransport({
+    service: "gmail",
+    auth: { user: transportUser, pass: transportPass },
   });
 }
 
-/* -------------------- SİPARİŞ (mevcut) -------------------- */
-function buildOrderHtml(order) {
-  const itemsHtml = (order.items || [])
-    .map((it) => {
-      const size = it.size ? ` • Beden: ${it.size}` : "";
-      const color = it.color ? ` • Renk: ${it.color}` : "";
+const transporter = createTransporter();
+
+const moneyFormatter = new Intl.NumberFormat("tr-TR", {
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+});
+const dateFormatter = new Intl.DateTimeFormat("tr-TR", {
+  dateStyle: "long",
+  timeStyle: "short",
+});
+
+function formatMoney(value) {
+  return `₺${moneyFormatter.format(Number(value || 0))}`;
+}
+
+function formatDate(value) {
+  const parsed = value ? new Date(value) : new Date();
+  return dateFormatter.format(parsed);
+}
+
+function formatAddress(order) {
+  const address = order?.address || {};
+  return [
+    address.title,
+    address.mainaddress,
+    address.street,
+    [address.district, address.city].filter(Boolean).join(" / "),
+    address.postalCode,
+  ]
+    .filter(Boolean)
+    .join(", ");
+}
+
+function buildTransportError() {
+  const err = new Error("Mail servisi yapılandırılmamış.");
+  err.code = "MAIL_NOT_CONFIGURED";
+  return err;
+}
+
+function getMailSender() {
+  if (!from || !transportPass) {
+    throw buildTransportError();
+  }
+
+  return {
+    from: `"Oldsocks" <${from}>`,
+  };
+}
+
+function resolveRecipients(input) {
+  const list = Array.isArray(input) ? input : [input];
+  const normalized = list
+    .flatMap((entry) => splitEmailList(entry))
+    .filter((entry, index, arr) => arr.indexOf(entry) === index);
+
+  if (!normalized.length) {
+    throw new Error("Geçerli alıcı e-posta adresi bulunamadı.");
+  }
+
+  return normalized;
+}
+
+async function safeSend({ to, subject, html, text, replyTo, bcc }) {
+  const sender = getMailSender();
+  const recipients = resolveRecipients(to);
+  const hasBcc = Array.isArray(bcc) ? bcc.length > 0 : Boolean(bcc);
+  const bccList = hasBcc ? resolveRecipients(bcc) : undefined;
+  const payload = {
+    ...sender,
+    to: recipients,
+    subject: sanitizeHeaderValue(subject, 180),
+    html,
+    text,
+  };
+
+  if (bccList?.length) payload.bcc = bccList;
+
+  if (replyTo && isValidEmailAddress(replyTo)) {
+    payload.replyTo = normalizeEmailAddress(replyTo);
+  }
+
+  return transporter.sendMail(payload);
+}
+
+function getAdminRecipients() {
+  return adminList.length ? adminList : fallbackTo ? [fallbackTo] : [];
+}
+
+function baseEmailLayout({ preheader, eyebrow, title, subtitle, bodyHtml, footerHtml }) {
+  const safePreheader = escapeHtml(preheader || "");
+  return `
+  <!doctype html>
+  <html lang="tr">
+    <head>
+      <meta charset="utf-8" />
+      <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+      <title>${escapeHtml(title)}</title>
+    </head>
+    <body style="margin:0;padding:0;background:#f5f1ea;color:#111827;font-family:Arial,Helvetica,sans-serif;">
+      <div style="display:none;max-height:0;overflow:hidden;opacity:0;">${safePreheader}</div>
+      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#f5f1ea;padding:24px 0;">
+        <tr>
+          <td align="center">
+            <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:680px;background:#ffffff;border-radius:22px;overflow:hidden;box-shadow:0 12px 40px rgba(17,24,39,0.08);">
+              <tr>
+                <td style="padding:36px 40px;background:linear-gradient(135deg,#111827 0%,#1f2937 100%);color:#ffffff;">
+                  <div style="font-size:12px;letter-spacing:0.28em;text-transform:uppercase;opacity:0.72;margin-bottom:12px;">${escapeHtml(
+                    eyebrow || "Oldsocks"
+                  )}</div>
+                  <div style="font-size:34px;line-height:1.1;font-weight:700;font-family:Georgia,'Times New Roman',serif;">${escapeHtml(
+                    title
+                  )}</div>
+                  ${
+                    subtitle
+                      ? `<div style="margin-top:12px;font-size:15px;line-height:1.7;opacity:0.88;">${escapeHtml(
+                          subtitle
+                        )}</div>`
+                      : ""
+                  }
+                </td>
+              </tr>
+              <tr>
+                <td style="padding:32px 40px 20px;">
+                  ${bodyHtml}
+                </td>
+              </tr>
+              <tr>
+                <td style="padding:0 40px 32px;color:#6b7280;font-size:12px;line-height:1.7;">
+                  ${
+                    footerHtml ||
+                    "Bu e-posta Oldsocks sistemleri tarafından otomatik olarak oluşturulmuştur."
+                  }
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+      </table>
+    </body>
+  </html>`;
+}
+
+function summaryCard(label, value, tone = "dark") {
+  const colors = {
+    dark: { bg: "#f9fafb", text: "#111827", border: "#e5e7eb" },
+    success: { bg: "#ecfdf5", text: "#047857", border: "#a7f3d0" },
+    accent: { bg: "#eff6ff", text: "#1d4ed8", border: "#bfdbfe" },
+  };
+  const palette = colors[tone] || colors.dark;
+  return `
+    <td style="padding:0 6px 12px 0;">
+      <div style="border:1px solid ${palette.border};background:${palette.bg};border-radius:16px;padding:16px 18px;min-width:120px;">
+        <div style="font-size:11px;letter-spacing:0.16em;text-transform:uppercase;color:#6b7280;margin-bottom:8px;">${escapeHtml(
+          label
+        )}</div>
+        <div style="font-size:20px;font-weight:700;color:${palette.text};">${escapeHtml(
+          value
+        )}</div>
+      </div>
+    </td>`;
+}
+
+function buildItemsTable(order) {
+  const rows = (order.items || [])
+    .map((item) => {
+      const meta = [item.size ? `Beden: ${item.size}` : "", item.color ? `Renk: ${item.color}` : ""]
+        .filter(Boolean)
+        .join(" • ");
+
       return `
         <tr>
-          <td style="padding:8px 0;border-bottom:1px solid #eee;">${
-            it.name
-          }${size}${color}</td>
-          <td style="padding:8px 0;border-bottom:1px solid #eee;" align="right">
-            ${it.qty} × ₺${Number(it.price || 0).toFixed(2)}
+          <td style="padding:16px 0;border-bottom:1px solid #e5e7eb;vertical-align:top;">
+            <div style="font-weight:600;color:#111827;">${escapeHtml(item.name)}</div>
+            ${
+              meta
+                ? `<div style="margin-top:6px;font-size:12px;color:#6b7280;">${escapeHtml(meta)}</div>`
+                : ""
+            }
+          </td>
+          <td style="padding:16px 0;border-bottom:1px solid #e5e7eb;text-align:center;color:#374151;vertical-align:top;">
+            ${escapeHtml(String(item.qty || 0))}
+          </td>
+          <td style="padding:16px 0;border-bottom:1px solid #e5e7eb;text-align:right;color:#111827;vertical-align:top;">
+            ${escapeHtml(formatMoney(item.price))}
+          </td>
+          <td style="padding:16px 0;border-bottom:1px solid #e5e7eb;text-align:right;font-weight:600;color:#111827;vertical-align:top;">
+            ${escapeHtml(formatMoney(Number(item.qty || 0) * Number(item.price || 0)))}
           </td>
         </tr>`;
     })
     .join("");
 
-  // ← senin şemaya göre doldur
-  const addr = order.address || {};
-  const isGuest = !!order.guest;
-  const fullName = isGuest
-    ? `${order.guest?.firstName || ""} ${order.guest?.lastName || ""}`.trim()
-    : order.user?.firstName && order.user?.lastName
-    ? `${order.user.firstName} ${order.user.lastName}`
-    : "-";
-  const email = isGuest ? order.guest?.email || "-" : order.user?.email || "-";
-  const phone = isGuest ? order.guest?.phone || "-" : "-"; // user populated değilse boş gelebilir
-
-  const addrLine1 = addr.mainaddress || "-";
-  const addrLine2 = addr.street || "";
-  const cityLine = `${addr.city || ""} ${addr.postalCode || ""}`.trim();
-
   return `
-  <div style="font-family:Arial, Helvetica, sans-serif; max-width:640px; margin:auto;">
-    <h2 style="margin:0 0 6px 0;">Yeni Sipariş</h2>
-    <p style="margin:0 0 14px 0; color:#555;">
-      Sipariş No: <strong>#${order.orderNumber || order._id}</strong><br/>
-      Tarih: ${new Date(order.createdAt || Date.now()).toLocaleString("tr-TR")}
-    </p>
-
-    <table style="width:100%; border-collapse:collapse;">
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;">
       <thead>
         <tr>
-          <th align="left" style="padding:8px 0; border-bottom:2px solid #000;">Ürün</th>
-          <th align="right" style="padding:8px 0; border-bottom:2px solid #000;">Adet × Fiyat</th>
+          <th align="left" style="padding:0 0 12px;font-size:12px;letter-spacing:0.12em;text-transform:uppercase;color:#6b7280;border-bottom:2px solid #111827;">Ürün</th>
+          <th align="center" style="padding:0 0 12px;font-size:12px;letter-spacing:0.12em;text-transform:uppercase;color:#6b7280;border-bottom:2px solid #111827;">Adet</th>
+          <th align="right" style="padding:0 0 12px;font-size:12px;letter-spacing:0.12em;text-transform:uppercase;color:#6b7280;border-bottom:2px solid #111827;">Birim</th>
+          <th align="right" style="padding:0 0 12px;font-size:12px;letter-spacing:0.12em;text-transform:uppercase;color:#6b7280;border-bottom:2px solid #111827;">Toplam</th>
         </tr>
       </thead>
-      <tbody>
-        ${itemsHtml}
-      </tbody>
-      <tfoot>
-        <tr>
-          <td style="padding-top:12px;" align="left"><strong>Toplam</strong></td>
-          <td style="padding-top:12px;" align="right"><strong>₺${Number(
-            order.totalPrice || 0
-          ).toFixed(2)}</strong></td>
-        </tr>
-      </tfoot>
+      <tbody>${rows}</tbody>
+    </table>`;
+}
+
+function buildPricingTable(order) {
+  const pricing = order?.pricing || {};
+  const campaignSavings = Number(order?.campaign?.savings || pricing.campaignDiscount || 0);
+  const shippingFee = Number(pricing.shippingFee ?? order?.shipping?.fee ?? 0);
+  const subTotal = Number(pricing.subTotal || order.totalPrice || 0);
+  const discountedSubTotal = Number(pricing.discountedSubTotal || order.totalPrice || 0);
+  const grandTotal = Number(pricing.grandTotal || order.totalPrice || 0);
+
+  return `
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-top:22px;border-collapse:collapse;">
+      <tr>
+        <td style="padding:6px 0;color:#6b7280;">Ara Toplam</td>
+        <td align="right" style="padding:6px 0;color:#111827;">${escapeHtml(formatMoney(subTotal))}</td>
+      </tr>
+      ${
+        campaignSavings > 0
+          ? `<tr>
+              <td style="padding:6px 0;color:#047857;">Kampanya İndirimi${
+                order?.campaign?.name ? ` (${escapeHtml(order.campaign.name)})` : ""
+              }</td>
+              <td align="right" style="padding:6px 0;color:#047857;">-${escapeHtml(
+                formatMoney(campaignSavings)
+              )}</td>
+            </tr>`
+          : ""
+      }
+      <tr>
+        <td style="padding:6px 0;color:#6b7280;">Ürünler Toplamı</td>
+        <td align="right" style="padding:6px 0;color:#111827;">${escapeHtml(
+          formatMoney(discountedSubTotal)
+        )}</td>
+      </tr>
+      <tr>
+        <td style="padding:6px 0;color:#6b7280;">Kargo</td>
+        <td align="right" style="padding:6px 0;color:#111827;">${escapeHtml(
+          shippingFee > 0 ? formatMoney(shippingFee) : "Ücretsiz"
+        )}</td>
+      </tr>
+      <tr>
+        <td style="padding-top:14px;border-top:1px solid #e5e7eb;font-size:16px;font-weight:700;color:#111827;">Genel Toplam</td>
+        <td align="right" style="padding-top:14px;border-top:1px solid #e5e7eb;font-size:18px;font-weight:700;color:#111827;">${escapeHtml(
+          formatMoney(grandTotal)
+        )}</td>
+      </tr>
+    </table>`;
+}
+
+async function resolveOrderContext(order) {
+  let userDoc = null;
+
+  if (order?.user && typeof order.user === "object" && order.user.email) {
+    userDoc = order.user;
+  } else if (order?.user) {
+    userDoc = await User.findById(order.user)
+      .select("firstName lastName email phone")
+      .lean();
+  }
+
+  const guest = order?.guest || null;
+  const customerEmail = normalizeEmailAddress(guest?.email || userDoc?.email || "");
+  const customerName =
+    [guest?.firstName || userDoc?.firstName || "", guest?.lastName || userDoc?.lastName || ""]
+      .join(" ")
+      .trim() || "Değerli Müşterimiz";
+  const customerPhone = guest?.phone || userDoc?.phone || "-";
+
+  return {
+    userDoc,
+    guest,
+    customerEmail,
+    customerName,
+    customerPhone,
+    addressText: formatAddress(order),
+    orderNumber: order?.orderNumber || order?._id,
+    createdAtText: formatDate(order?.createdAt),
+  };
+}
+
+function buildOrderCustomerHtml(order, context) {
+  const bodyHtml = `
+    <p style="margin:0 0 20px;font-size:15px;line-height:1.8;color:#374151;">
+      Merhaba <strong>${escapeHtml(context.customerName)}</strong>, siparişiniz başarıyla alındı.
+      Hazırlık süreci başladığında ve kargoya verildiğinde sizi ayrıca bilgilendireceğiz.
+    </p>
+
+    <table role="presentation" cellspacing="0" cellpadding="0" style="width:100%;margin-bottom:18px;">
+      <tr>
+        ${summaryCard("Sipariş No", `#${context.orderNumber}`)}
+        ${summaryCard("Sipariş Tarihi", context.createdAtText, "accent")}
+        ${summaryCard("Toplam", formatMoney(order?.pricing?.grandTotal || order?.totalPrice || 0), "success")}
+      </tr>
     </table>
 
-    <div style="margin-top:18px; padding-top:12px; border-top:1px solid #eee;">
-      <h3 style="margin:0 0 6px 0;">Müşteri / Teslimat</h3>
-      <p style="margin:0; color:#555;">
-        ${fullName}<br/>
-        ${email}<br/>
-        ${phone}<br/>
-        ${addrLine1} ${addrLine2}<br/>
-        ${cityLine}
-      </p>
-    </div>
-  </div>`;
-}
+    <div style="margin:24px 0 14px;font-size:13px;letter-spacing:0.18em;text-transform:uppercase;color:#6b7280;">Sipariş İçeriği</div>
+    ${buildItemsTable(order)}
+    ${buildPricingTable(order)}
 
-async function sendOrderPlacedMail(order, to = fallbackTo) {
-  const subject = `Yeni Sipariş: #${order.orderNumber || order._id}`;
-  const html = buildOrderHtml(order);
-  await safeSend({ to, subject, html });
-}
-
-/* -------------------- YENİ: Yorum/Yanıt mailleri -------------------- */
-function buildPendingCommentHtml({ comment, post }) {
-  return `
-  <div style="font-family:Arial, Helvetica, sans-serif; max-width:640px; margin:auto;">
-    <h2 style="margin:0 0 8px 0;">Onay Bekleyen Yorum</h2>
-    <p style="margin:0 0 8px 0; color:#555;"><b>Gönderi:</b> ${
-      post?.title || "-"
-    }</p>
-    <p style="margin:0 0 8px 0; color:#555;"><b>Yazan:</b> ${
-      comment?.authorName || comment?.authorEmail || "Ziyaretçi"
-    }</p>
-    <div style="margin-top:8px; padding:12px; border:1px solid #eee; border-radius:8px; background:#fafafa;">
-      ${String(comment?.content || "").slice(0, 600)}
-    </div>
-  </div>`;
-}
-
-function buildPendingReplyHtml({ reply, post, parentComment }) {
-  return `
-  <div style="font-family:Arial, Helvetica, sans-serif; max-width:640px; margin:auto;">
-    <h2 style="margin:0 0 8px 0;">Onay Bekleyen Yanıt</h2>
-    <p style="margin:0 0 8px 0; color:#555;"><b>Gönderi:</b> ${
-      post?.title || "-"
-    }</p>
-    <p style="margin:0 0 8px 0; color:#555;"><b>Yanıtlayan:</b> ${
-      reply?.authorName || reply?.authorEmail || "Ziyaretçi"
-    }</p>
-
-    <div style="margin:10px 0 6px; font-size:12px; color:#777;">Yanıtlanan yorum</div>
-    <div style="margin:0 0 10px; padding:10px; border:1px dashed #ddd; border-radius:6px;">
-      ${String(parentComment?.content || "").slice(0, 400)}
-    </div>
-
-    <div style="margin:10px 0 6px; font-size:12px; color:#777;">Yanıt</div>
-    <div style="margin:0 0 10px; padding:12px; border:1px solid #eee; border-radius:6px; background:#fafafa;">
-      ${String(reply?.content || "").slice(0, 600)}
-    </div>
-  </div>`;
-}
-
-async function sendPendingCommentMail({ comment, post }) {
-  const subject = "Onay Bekleyen Yorum";
-  const html = buildPendingCommentHtml({ comment, post });
-  const to = adminList.length ? adminList : [fallbackTo];
-  await safeSend({ to, subject, html });
-}
-
-async function sendPendingReplyMail({ reply, post, parentComment }) {
-  const subject = "Onay Bekleyen Yanıt";
-  const html = buildPendingReplyHtml({ reply, post, parentComment });
-  const to = adminList.length ? adminList : [fallbackTo];
-  await safeSend({ to, subject, html });
-}
-
-/* -------------------- YENİ: İletişim Formu -------------------- */
-async function sendContactMail({ name, email, subject, message }) {
-  const html = `
-    <div style="font-family:Arial, Helvetica, sans-serif; max-width:640px; margin:auto;">
-      <h2 style="margin:0 0 8px 0;">İletişim Formu</h2>
-      <p style="margin:0 0 8px 0; color:#555;">
-        <b>Gönderen:</b> ${name} &lt;${email}&gt;<br/>
-        <b>Konu:</b> ${subject}
-      </p>
-      <div style="margin-top:8px; padding:12px; border:1px solid #eee; border-radius:8px; background:#fafafa; white-space:pre-wrap;">
-        ${String(message || "").slice(0, 5000)}
+    <div style="margin-top:28px;padding:20px;border:1px solid #e5e7eb;border-radius:18px;background:#faf7f2;">
+      <div style="font-size:13px;letter-spacing:0.18em;text-transform:uppercase;color:#6b7280;margin-bottom:10px;">Teslimat Bilgileri</div>
+      <div style="font-size:15px;line-height:1.8;color:#111827;">
+        ${escapeHtml(context.customerName)}<br/>
+        ${escapeHtml(context.customerEmail || "-")}<br/>
+        ${escapeHtml(context.customerPhone)}<br/>
+        ${escapeHtml(context.addressText || "-")}
       </div>
     </div>
   `;
-  const to = adminList.length ? adminList : [fallbackTo];
+
+  return baseEmailLayout({
+    preheader: `Siparişiniz alındı. Sipariş no: ${context.orderNumber}`,
+    eyebrow: "Sipariş Onayı",
+    title: "Siparişiniz Alındı",
+    subtitle: `Sipariş numaranız #${context.orderNumber}. Tüm detaylar aşağıdadır.`,
+    bodyHtml,
+  });
+}
+
+function buildOrderCustomerText(order, context) {
+  const itemLines = (order.items || [])
+    .map((item) => {
+      const extras = [item.size ? `Beden: ${item.size}` : "", item.color ? `Renk: ${item.color}` : ""]
+        .filter(Boolean)
+        .join(" / ");
+      return `- ${item.name}${extras ? ` (${extras})` : ""} | ${item.qty} x ${formatMoney(
+        item.price
+      )} = ${formatMoney(Number(item.qty || 0) * Number(item.price || 0))}`;
+    })
+    .join("\n");
+
+  return [
+    "Oldsocks - Sipariş Onayı",
+    "",
+    `Merhaba ${context.customerName},`,
+    `Siparişiniz başarıyla alındı.`,
+    "",
+    `Sipariş No: #${context.orderNumber}`,
+    `Sipariş Tarihi: ${context.createdAtText}`,
+    "",
+    "Sipariş İçeriği:",
+    itemLines,
+    "",
+    `Ara Toplam: ${formatMoney(order?.pricing?.subTotal || order.totalPrice || 0)}`,
+    Number(order?.campaign?.savings || order?.pricing?.campaignDiscount || 0) > 0
+      ? `Kampanya İndirimi: -${formatMoney(
+          order?.campaign?.savings || order?.pricing?.campaignDiscount || 0
+        )}`
+      : null,
+    `Kargo: ${Number(order?.pricing?.shippingFee || order?.shipping?.fee || 0) > 0 ? formatMoney(
+      order?.pricing?.shippingFee || order?.shipping?.fee || 0
+    ) : "Ücretsiz"}`,
+    `Genel Toplam: ${formatMoney(order?.pricing?.grandTotal || order.totalPrice || 0)}`,
+    "",
+    "Teslimat Bilgileri:",
+    context.customerName,
+    context.customerEmail || "-",
+    context.customerPhone,
+    context.addressText || "-",
+  ]
+    .filter(Boolean)
+    .join("\n");
+}
+
+function buildOrderAdminHtml(order, context) {
+  const bodyHtml = `
+    <p style="margin:0 0 20px;font-size:15px;line-height:1.8;color:#374151;">
+      Sisteme yeni bir sipariş düştü. Sipariş ve müşteri detayları aşağıdadır.
+    </p>
+
+    <table role="presentation" cellspacing="0" cellpadding="0" style="width:100%;margin-bottom:18px;">
+      <tr>
+        ${summaryCard("Sipariş No", `#${context.orderNumber}`)}
+        ${summaryCard("Müşteri", context.customerName, "accent")}
+        ${summaryCard("Toplam", formatMoney(order?.pricing?.grandTotal || order?.totalPrice || 0), "success")}
+      </tr>
+    </table>
+
+    <div style="margin:24px 0 14px;font-size:13px;letter-spacing:0.18em;text-transform:uppercase;color:#6b7280;">Müşteri Bilgileri</div>
+    <div style="padding:18px;border:1px solid #e5e7eb;border-radius:18px;background:#fafafa;font-size:15px;line-height:1.8;color:#111827;">
+      ${escapeHtml(context.customerName)}<br/>
+      ${escapeHtml(context.customerEmail || "-")}<br/>
+      ${escapeHtml(context.customerPhone)}<br/>
+      ${escapeHtml(context.addressText || "-")}
+    </div>
+
+    <div style="margin:24px 0 14px;font-size:13px;letter-spacing:0.18em;text-transform:uppercase;color:#6b7280;">Sipariş İçeriği</div>
+    ${buildItemsTable(order)}
+    ${buildPricingTable(order)}
+  `;
+
+  return baseEmailLayout({
+    preheader: `Yeni sipariş geldi. Sipariş no: ${context.orderNumber}`,
+    eyebrow: "Yeni Sipariş",
+    title: "Yeni Sipariş Bildirimi",
+    subtitle: `${context.customerName} tarafından oluşturulan sipariş detayları.`,
+    bodyHtml,
+  });
+}
+
+function buildOrderAdminText(order, context) {
+  return [
+    `Yeni Sipariş: #${context.orderNumber}`,
+    `Tarih: ${context.createdAtText}`,
+    `Müşteri: ${context.customerName}`,
+    `E-posta: ${context.customerEmail || "-"}`,
+    `Telefon: ${context.customerPhone}`,
+    `Adres: ${context.addressText || "-"}`,
+    "",
+    buildOrderCustomerText(order, context),
+  ].join("\n");
+}
+
+async function sendOrderPlacedMail(order, options = {}) {
+  const context = await resolveOrderContext(order);
+  const customerRecipient = isValidEmailAddress(context.customerEmail)
+    ? context.customerEmail
+    : null;
+  const adminRecipients = getAdminRecipients();
+
+  const result = {
+    customerSent: false,
+    customerSkipped: Boolean(options.skipCustomer) || !customerRecipient,
+    adminSent: false,
+    adminSkipped: Boolean(options.skipAdmin) || adminRecipients.length === 0,
+    errors: [],
+  };
+
+  if (!options.skipCustomer && customerRecipient) {
+    try {
+      await safeSend({
+        to: customerRecipient,
+        subject: `Siparişiniz alındı: #${context.orderNumber}`,
+        html: buildOrderCustomerHtml(order, context),
+        text: buildOrderCustomerText(order, context),
+      });
+      result.customerSent = true;
+      result.customerSkipped = false;
+    } catch (error) {
+      result.errors.push({
+        target: "customer",
+        message: error?.message || "Müşteri maili gönderilemedi.",
+      });
+    }
+  }
+
+  if (!options.skipAdmin && adminRecipients.length) {
+    try {
+      await safeSend({
+        to: adminRecipients[0],
+        bcc: adminRecipients.slice(1),
+        subject: `Yeni Sipariş: #${context.orderNumber}`,
+        html: buildOrderAdminHtml(order, context),
+        text: buildOrderAdminText(order, context),
+      });
+      result.adminSent = true;
+      result.adminSkipped = false;
+    } catch (error) {
+      result.errors.push({
+        target: "admin",
+        message: error?.message || "Admin maili gönderilemedi.",
+      });
+    }
+  }
+
+  if (!result.customerSent && !result.adminSent && result.errors.length > 0) {
+    const error = new Error(result.errors.map((entry) => entry.message).join(" | "));
+    error.code = "ORDER_MAIL_FAILED";
+    error.details = result.errors;
+    throw error;
+  }
+
+  return result;
+}
+
+function applyOrderMailResult(order, result, date = new Date()) {
+  if (result.customerSent || result.customerSkipped) {
+    order.customerMailSentAt = order.customerMailSentAt || date;
+  }
+  if (result.adminSent || result.adminSkipped) {
+    order.adminMailSentAt = order.adminMailSentAt || date;
+  }
+
+  const customerDone = Boolean(order.customerMailSentAt);
+  const adminDone = Boolean(order.adminMailSentAt);
+
+  if (customerDone && adminDone) {
+    order.orderMailSentAt = order.orderMailSentAt || date;
+  }
+
+  return order;
+}
+
+function buildCommentModerationHtml({ title, subtitle, contentBlocks }) {
+  const bodyHtml = `
+    <p style="margin:0 0 18px;font-size:15px;line-height:1.8;color:#374151;">${escapeHtml(
+      subtitle
+    )}</p>
+    ${contentBlocks.join("")}
+  `;
+
+  return baseEmailLayout({
+    preheader: title,
+    eyebrow: "İçerik Moderasyonu",
+    title,
+    subtitle,
+    bodyHtml,
+  });
+}
+
+async function sendPendingCommentMail({ comment, post }) {
+  const recipients = getAdminRecipients();
+  if (!recipients.length) return;
+
+  const html = buildCommentModerationHtml({
+    title: "Onay Bekleyen Yorum",
+    subtitle: `${post?.title || "İçerik"} başlıklı gönderi için yeni bir yorum var.`,
+    contentBlocks: [
+      `<div style="padding:18px;border:1px solid #e5e7eb;border-radius:18px;background:#fafafa;">
+        <div style="font-size:12px;letter-spacing:0.14em;text-transform:uppercase;color:#6b7280;margin-bottom:8px;">Gönderen</div>
+        <div style="font-size:15px;color:#111827;font-weight:600;">${escapeHtml(
+          comment?.authorName || comment?.authorEmail || "Ziyaretçi"
+        )}</div>
+        <div style="margin-top:14px;font-size:15px;line-height:1.8;color:#374151;">${escapeHtml(
+          clampText(comment?.content || "", 600)
+        )}</div>
+      </div>`,
+    ],
+  });
+
   await safeSend({
-    to,
-    subject: `İletişim: ${subject}`,
+    to: recipients[0],
+    bcc: recipients.slice(1),
+    subject: "Onay Bekleyen Yorum",
     html,
+    text: `Onay Bekleyen Yorum\nGönderi: ${post?.title || "-"}\nYazan: ${
+      comment?.authorName || comment?.authorEmail || "Ziyaretçi"
+    }\n\n${clampText(comment?.content || "", 600)}`,
+  });
+}
+
+async function sendPendingReplyMail({ reply, post, parentComment }) {
+  const recipients = getAdminRecipients();
+  if (!recipients.length) return;
+
+  const html = buildCommentModerationHtml({
+    title: "Onay Bekleyen Yanıt",
+    subtitle: `${post?.title || "İçerik"} gönderisine yeni bir yanıt geldi.`,
+    contentBlocks: [
+      `<div style="padding:18px;border:1px solid #e5e7eb;border-radius:18px;background:#fafafa;margin-bottom:16px;">
+        <div style="font-size:12px;letter-spacing:0.14em;text-transform:uppercase;color:#6b7280;margin-bottom:8px;">Yanıtlayan</div>
+        <div style="font-size:15px;color:#111827;font-weight:600;">${escapeHtml(
+          reply?.authorName || reply?.authorEmail || "Ziyaretçi"
+        )}</div>
+      </div>`,
+      `<div style="padding:18px;border:1px dashed #d1d5db;border-radius:18px;background:#ffffff;margin-bottom:16px;">
+        <div style="font-size:12px;letter-spacing:0.14em;text-transform:uppercase;color:#6b7280;margin-bottom:8px;">Yanıtlanan Yorum</div>
+        <div style="font-size:15px;line-height:1.8;color:#374151;">${escapeHtml(
+          clampText(parentComment?.content || "", 400)
+        )}</div>
+      </div>`,
+      `<div style="padding:18px;border:1px solid #e5e7eb;border-radius:18px;background:#fafafa;">
+        <div style="font-size:12px;letter-spacing:0.14em;text-transform:uppercase;color:#6b7280;margin-bottom:8px;">Yanıt</div>
+        <div style="font-size:15px;line-height:1.8;color:#374151;">${escapeHtml(
+          clampText(reply?.content || "", 600)
+        )}</div>
+      </div>`,
+    ],
+  });
+
+  await safeSend({
+    to: recipients[0],
+    bcc: recipients.slice(1),
+    subject: "Onay Bekleyen Yanıt",
+    html,
+    text: `Onay Bekleyen Yanıt\nGönderi: ${post?.title || "-"}\nYanıtlayan: ${
+      reply?.authorName || reply?.authorEmail || "Ziyaretçi"
+    }\n\nYanıtlanan yorum:\n${clampText(parentComment?.content || "", 400)}\n\nYanıt:\n${clampText(
+      reply?.content || "",
+      600
+    )}`,
+  });
+}
+
+async function sendContactMail({ name, email, subject, message }) {
+  const recipients = getAdminRecipients();
+  if (!recipients.length) {
+    throw buildTransportError();
+  }
+
+  const safeName = clampText(name, 120);
+  const safeSubject = sanitizeHeaderValue(subject, 140);
+  const safeMessage = String(message || "").trim().slice(0, 5000);
+
+  const html = baseEmailLayout({
+    preheader: `Yeni iletişim formu mesajı: ${safeSubject}`,
+    eyebrow: "İletişim Formu",
+    title: "Yeni Mesaj",
+    subtitle: `${safeName} tarafından gönderilen iletişim formu mesajı.`,
+    bodyHtml: `
+      <div style="padding:18px;border:1px solid #e5e7eb;border-radius:18px;background:#fafafa;margin-bottom:18px;">
+        <div style="font-size:12px;letter-spacing:0.14em;text-transform:uppercase;color:#6b7280;margin-bottom:8px;">Gönderen</div>
+        <div style="font-size:15px;line-height:1.8;color:#111827;">
+          ${escapeHtml(safeName)}<br/>
+          ${escapeHtml(email)}
+        </div>
+      </div>
+      <div style="padding:18px;border:1px solid #e5e7eb;border-radius:18px;background:#ffffff;">
+        <div style="font-size:12px;letter-spacing:0.14em;text-transform:uppercase;color:#6b7280;margin-bottom:8px;">Mesaj</div>
+        <div style="font-size:15px;line-height:1.9;color:#374151;white-space:pre-wrap;">${escapeHtml(
+          safeMessage
+        )}</div>
+      </div>
+    `,
+  });
+
+  await safeSend({
+    to: recipients[0],
+    bcc: recipients.slice(1),
+    subject: `İletişim: ${safeSubject}`,
+    html,
+    text: `İletişim Formu\nGönderen: ${safeName} <${email}>\nKonu: ${safeSubject}\n\n${safeMessage}`,
     replyTo: email,
   });
 }
 
-/* -------------------- YENİ: Bülten – “Yeni Blog” maili -------------------- */
 function buildNewsletterNewBlogHtml({ post, link }) {
-  const title = post?.title || "Yeni Blog Yazısı";
-  const excerpt =
-    (post?.content &&
-      String(post.content)
-        .replace(/<[^>]+>/g, "")
-        .slice(0, 200)) ||
-    "";
-  return `
-    <div style="font-family:Arial, Helvetica, sans-serif; max-width:640px; margin:auto;">
-      <h2 style="margin:0 0 10px 0;">${title}</h2>
-      ${
-        excerpt
-          ? `<p style="margin:0 0 12px 0; color:#555;">${excerpt}...</p>`
-          : ""
-      }
-      <a href="${link}" style="display:inline-block; padding:10px 16px; background:#125795; color:#fff; text-decoration:none; border-radius:6px;">
-        Yazıyı Oku
-      </a>
-      <p style="margin-top:12px; font-size:12px; color:#888;">Oldsocks</p>
-    </div>
-  `;
+  const title = clampText(post?.title || "Yeni Blog Yazısı", 160);
+  const excerpt = clampText(stripHtml(post?.content || ""), 260);
+
+  return baseEmailLayout({
+    preheader: title,
+    eyebrow: "Oldsocks Bülten",
+    title,
+    subtitle: excerpt || "Yeni blog içeriğimizi incelemek için bağlantıyı kullanabilirsiniz.",
+    bodyHtml: `
+      <div style="padding:20px;border:1px solid #e5e7eb;border-radius:18px;background:#fafafa;">
+        <div style="font-size:15px;line-height:1.9;color:#374151;">
+          ${escapeHtml(excerpt || "Yeni blog yazımız yayında.")}
+        </div>
+      </div>
+      <div style="margin-top:24px;">
+        <a href="${escapeHtml(link)}" style="display:inline-block;padding:14px 24px;border-radius:999px;background:#111827;color:#ffffff;text-decoration:none;font-weight:700;">
+          Yazıyı Oku
+        </a>
+      </div>
+    `,
+  });
 }
 
-async function sendNewsletterNewBlog(
-  post,
-  frontendOrigin,
-  pathTemplate = "/blog/:id"
-) {
-  try {
-    const NewsletterSubscriber = require("../models/NewsletterSubscriber");
-    const subs = await NewsletterSubscriber.find().select("email -_id");
-    if (!subs.length) return;
+async function sendNewsletterNewBlog(post, providedFrontendOrigin, pathTemplate = "/blog/:id") {
+  const subs = await NewsletterSubscriber.find().select("email -_id").lean();
+  const recipients = subs
+    .map((entry) => normalizeEmailAddress(entry.email))
+    .filter((entry, index, arr) => isValidEmailAddress(entry) && arr.indexOf(entry) === index);
 
-    const base = frontendOrigin || process.env.FRONTEND_ORIGIN || "";
-    const path = (pathTemplate || "/blog/:id").replace(":id", String(post._id));
-    const link = `${base}${path}`;
+  if (!recipients.length) return;
 
-    const html = buildNewsletterNewBlogHtml({ post, link });
-    const to = subs.map((s) => s.email);
+  const base = String(providedFrontendOrigin || frontendOrigin || "").split(",")[0].trim();
+  const path = String(pathTemplate || "/blog/:id").replace(":id", String(post._id));
+  const link = `${base}${path}`;
+  const html = buildNewsletterNewBlogHtml({ post, link });
 
-    // Çok alıcıyı BCC'de gönderiyoruz (tek alıcı TO)
-    await safeSend({
-      to: to.slice(0, 1),
-      bcc: to.slice(1),
-      subject: `Yeni Blog: ${post.title || "Yeni Yazı"}`,
-      html,
-    });
-  } catch (e) {
-    console.warn("[mailer] sendNewsletterNewBlog hata:", e?.message || e);
-  }
+  await safeSend({
+    to: recipients[0],
+    bcc: recipients.slice(1),
+    subject: `Yeni Blog: ${sanitizeHeaderValue(post?.title || "Yeni Yazı", 140)}`,
+    html,
+    text: `${post?.title || "Yeni Yazı"}\n\n${clampText(stripHtml(post?.content || ""), 260)}\n\n${link}`,
+  });
 }
 
 module.exports = {
+  applyOrderMailResult,
+  getAdminRecipients,
+  sendContactMail,
+  sendNewsletterNewBlog,
   sendOrderPlacedMail,
   sendPendingCommentMail,
   sendPendingReplyMail,
-  sendContactMail,
-  sendNewsletterNewBlog,
 };

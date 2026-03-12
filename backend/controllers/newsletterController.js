@@ -1,25 +1,31 @@
 const NewsletterSubscriber = require("../models/NewsletterSubscriber");
+const {
+  hasFilledHoneypot,
+  isValidEmailAddress,
+  normalizeEmailAddress,
+} = require("../utils/email");
 
 exports.subscribe = async (req, res) => {
   try {
-    const email = String(req.body.email || "")
-      .trim()
-      .toLowerCase();
-    if (!email || !/^\S+@\S+\.\S+$/.test(email)) {
+    if (hasFilledHoneypot(req.body.website)) {
+      return res.json({ message: "Abonelik kaydedildi." });
+    }
+
+    const email = normalizeEmailAddress(req.body.email);
+    if (!isValidEmailAddress(email)) {
       return res.status(400).json({ message: "Geçerli bir e-posta girin." });
     }
 
     // upsert: varsa dokunma, yoksa oluştur
-    const doc = await NewsletterSubscriber.findOneAndUpdate(
+    await NewsletterSubscriber.findOneAndUpdate(
       { email },
       { $setOnInsert: { email } },
       { upsert: true, new: true }
     );
 
-    return res.json({ message: "Abonelik kaydedildi.", subscriber: doc });
+    return res.json({ message: "Abonelik kaydedildi." });
   } catch (err) {
-    // eşsiz kısıt çakışmaları vs.
-    return res.status(200).json({ message: "Zaten abonesiniz." });
+    return res.status(200).json({ message: "Abonelik kaydedildi." });
   }
 };
 

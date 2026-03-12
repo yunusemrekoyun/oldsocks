@@ -4,7 +4,7 @@ const { v4: uuidv4 } = require("uuid");
 const User = require("../models/User");
 const Order = require("../models/Order");
 const fallbackData = require("../config/fallback.json");
-const { sendOrderPlacedMail } = require("../utils/mailer");
+const { dispatchOrderPlacedMail } = require("../utils/orderMailDispatch");
 const { applyStockChanges } = require("../utils/updateStock");
 const { calculateCartPricing } = require("../services/cartPricingService");
 
@@ -623,10 +623,9 @@ exports.mockComplete = async (req, res) => {
     }
 
     // Opsiyonel: mock akışında mail de gönder (dev/test için faydalı)
-    if (!order.orderMailSentAt) {
+    if (!order.customerMailSentAt || !order.adminMailSentAt) {
       try {
-        await sendOrderPlacedMail(order);
-        order.orderMailSentAt = new Date();
+        await dispatchOrderPlacedMail(order);
         await order.save();
       } catch (e) {
         console.warn("[PAYMENT][mock-complete] mail error:", e?.message || e);
@@ -698,10 +697,9 @@ exports.paytrCallback = async (req, res) => {
       }
 
       // Mail (tek sefer)
-      if (!order.orderMailSentAt) {
+      if (!order.customerMailSentAt || !order.adminMailSentAt) {
         try {
-          await sendOrderPlacedMail(order);
-          order.orderMailSentAt = new Date();
+          await dispatchOrderPlacedMail(order);
         } catch (e) {
           console.warn(
             "[PAYTR][callback] order mail send error:",

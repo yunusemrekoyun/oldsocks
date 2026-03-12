@@ -7,7 +7,7 @@ const cookieParser = require("cookie-parser");
 const helmet = require("helmet");
 const compression = require("compression");
 const morgan = require("morgan");
-const rateLimit = require("express-rate-limit");
+const { rateLimit, ipKeyGenerator } = require("express-rate-limit");
 const mongoose = require("mongoose");
 
 const connectDB = require("./config/db");
@@ -61,7 +61,7 @@ if (process.env.NODE_ENV !== "test") {
 /* --- Rate Limit Helpers --- */
 const skipPreflight = (req) =>
   req.method === "OPTIONS" || req.method === "HEAD";
-const keyByIp = (req) => req.ip;
+const keyByIp = (req) => ipKeyGenerator(req.ip);
 
 /* 7) Rate limit (rotaya göre) */
 
@@ -129,6 +129,24 @@ const adminLimiter = rateLimit({
   skipSuccessfulRequests: true,
 });
 
+const contactLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 8,
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: skipPreflight,
+  keyGenerator: keyByIp,
+});
+
+const newsletterLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 12,
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: skipPreflight,
+  keyGenerator: keyByIp,
+});
+
 /* 8) Body parsers */
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
@@ -161,6 +179,8 @@ app.use(
 app.use("/api/v1/auth", authLimiter);
 app.use("/api/v1/payment", paymentLimiter);
 app.use("/api/v1/admin", adminLimiter);
+app.use("/api/v1/contact", contactLimiter);
+app.use("/api/v1/newsletter/subscribe", newsletterLimiter);
 
 /* Geri kalan tüm API: genel limiter */
 app.use("/api/v1", generalLimiter);

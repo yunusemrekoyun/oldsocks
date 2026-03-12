@@ -3,6 +3,7 @@ import api from "../../../api";
 
 const NewsLetter = () => {
   const [email, setEmail] = useState("");
+  const [website, setWebsite] = useState("");
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState(null); // { type: "success" | "error", text: string }
 
@@ -18,9 +19,10 @@ const NewsLetter = () => {
 
     setBusy(true);
     try {
-      await api.post("/newsletter/subscribe", { email: clean });
+      await api.post("/newsletter/subscribe", { email: clean, website });
       setMsg({ type: "success", text: "Abonelik kaydedildi. Teşekkürler!" });
       setEmail("");
+      setWebsite("");
     } catch (err) {
       setMsg({
         type: "error",
@@ -38,6 +40,18 @@ const NewsLetter = () => {
       </h4>
 
       <form className="space-y-4" onSubmit={onSubmit}>
+        <div className="absolute left-[-5000px] top-auto h-px w-px overflow-hidden">
+          <label htmlFor="newsletter-website">Website</label>
+          <input
+            id="newsletter-website"
+            type="text"
+            value={website}
+            onChange={(e) => setWebsite(e.target.value)}
+            autoComplete="off"
+            tabIndex={-1}
+          />
+        </div>
+
         <input
           type="email"
           placeholder="E-posta adresinizi girin"

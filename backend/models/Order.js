@@ -37,6 +37,8 @@ const OrderSchema = new mongoose.Schema(
     items: { type: [OrderItemSchema], required: true },
     totalPrice: { type: Number, required: true },
     orderMailSentAt: { type: Date, default: null },
+    customerMailSentAt: { type: Date, default: null },
+    adminMailSentAt: { type: Date, default: null },
     address: {
       title: { type: String, required: true },
       mainaddress: { type: String, required: true },

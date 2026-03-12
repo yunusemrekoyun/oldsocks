@@ -1,7 +1,7 @@
 // backend/controllers/orderController.js
 const Order = require("../models/Order");
 const { applyStockChanges } = require("../utils/updateStock");
-const { sendOrderPlacedMail } = require("../utils/mailer");
+const { dispatchOrderPlacedMail } = require("../utils/orderMailDispatch");
 
 exports.getAllOrders = async (req, res) => {
   try {
@@ -71,10 +71,9 @@ exports.updateOrderStatus = async (req, res) => {
         console.error("[OrderController] Stok düşürme hatası:", e);
       }
 
-      if (!order.orderMailSentAt) {
+      if (!order.customerMailSentAt || !order.adminMailSentAt) {
         try {
-          await sendOrderPlacedMail(order);
-          order.orderMailSentAt = new Date();
+          await dispatchOrderPlacedMail(order);
         } catch (e) {
           console.error("[OrderController] Mail gönderilemedi:", e);
         }
@@ -119,10 +118,9 @@ exports.confirmOrderPayment = async (req, res) => {
     return res.status(409).json({ message: "Ödeme henüz onaylanmadı." });
   }
 
-  if (!order.orderMailSentAt) {
+  if (!order.customerMailSentAt || !order.adminMailSentAt) {
     try {
-      await sendOrderPlacedMail(order);
-      order.orderMailSentAt = new Date();
+      await dispatchOrderPlacedMail(order);
       await order.save();
       console.log("[OrderConfirm] Mail gönderildi (safety).");
     } catch (e) {
