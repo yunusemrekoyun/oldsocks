@@ -22,101 +22,10 @@ import {
 } from "@heroicons/react/24/outline";
 import api from "../../../api";
 import ToastAlert from "../../components/ui/ToastAlert";
+import ConfirmDialog from "../../components/ui/ConfirmDialog";
 import { v4 as uuidv4 } from "uuid";
 import { useUploadQueue } from "../../context/UploadQueueContext";
-
-/* ───── Yardımcı: Desteklenen tipler ───── */
-const ALLOWED_MIMES = ["image/jpeg", "image/png"]; // nihai çıktı hedefi
-const READABLE_BUT_CONVERT = ["image/webp"]; // tarayıcı okuyabiliyor → jpeg'e çevir
-const NOT_READABLE_HEIC = ["image/heic", "image/heif"]; // çoğu tarayıcı okuyamaz
-
-/* ───── Yardımcı: Görsel sıkıştırma & dönüştürme (canvas) ─────
-   - maxW x maxH kutusuna sığdırır (oranı korur)
-   - kaliteyi fazla düşürmeden ~limit altına inmeye çalışır
-*/
-async function compressToJpeg(
-  file,
-  { maxW = 1920, maxH = 600, maxBytes = 10 * 1024 * 1024, startQuality = 0.9 }
-) {
-  // Tarayıcı okuyabiliyorsa <img> ile yükle
-  const canLoadDirect =
-    file.type.startsWith("image/") && !NOT_READABLE_HEIC.includes(file.type);
-
-  if (!canLoadDirect) {
-    throw new Error(
-      "Bu görüntü formatı (özellikle HEIC/HEIF) tarayıcıda açılamıyor. Lütfen JPG veya PNG yükleyin."
-    );
-  }
-
-  const dataUrl = await new Promise((resolve, reject) => {
-    const fr = new FileReader();
-    fr.onload = () => resolve(fr.result);
-    fr.onerror = () => reject(new Error("Dosya okunamadı."));
-    fr.readAsDataURL(file);
-  });
-
-  const img = await new Promise((resolve, reject) => {
-    const image = new Image();
-    image.onload = () => resolve(image);
-    image.onerror = () => reject(new Error("Görsel yüklenemedi."));
-    image.src = dataUrl;
-  });
-
-  // Ölçekleme: 1920x600 kutusuna sığdır (oranı koru)
-  const ratio = Math.min(maxW / img.width, maxH / img.height, 1); // büyütme yok
-  const targetW = Math.round(img.width * ratio);
-  const targetH = Math.round(img.height * ratio);
-
-  const canvas = document.createElement("canvas");
-  canvas.width = targetW;
-  canvas.height = targetH;
-  const ctx = canvas.getContext("2d");
-  ctx.drawImage(img, 0, 0, targetW, targetH);
-
-  // Kademeli kalite düşürme ile maxBytes altına inmeyi dene
-  let q = startQuality;
-  let blob = await new Promise((resolve) =>
-    canvas.toBlob(resolve, "image/jpeg", q)
-  );
-  if (!blob) throw new Error("Sıkıştırma başarısız.");
-
-  while (blob.size > maxBytes && q > 0.5) {
-    q -= 0.1;
-    // bir alt kalite ile tekrar
-    blob = await new Promise((resolve) =>
-      canvas.toBlob(resolve, "image/jpeg", q)
-    );
-    if (!blob) break;
-  }
-
-  // Hâlâ büyükse, son bir kez daha sert düş (en az 0.5'e kadar)
-  if (blob && blob.size > maxBytes && q <= 0.5) {
-    // son çare
-    blob = await new Promise((resolve) =>
-      canvas.toBlob(resolve, "image/jpeg", 0.5)
-    );
-  }
-
-  if (!blob) throw new Error("Görsel dönüştürülemedi.");
-
-  const outFile = new File([blob], ensureJpegName(file.name), {
-    type: "image/jpeg",
-  });
-  const previewUrl = URL.createObjectURL(blob);
-
-  return {
-    file: outFile,
-    previewUrl,
-    width: targetW,
-    height: targetH,
-    quality: q,
-  };
-}
-
-function ensureJpegName(name = "image.jpg") {
-  const base = name.replace(/\.[^.]+$/, "");
-  return `${base}.jpg`;
-}
+import { prepareBannerImageUpload } from "../../utils/bannerImageUpload";
 
 /* ───── Silme Onayı ───── */
 const ConfirmModal = ({ open, onClose, onConfirm, message }) => {
@@ -214,6 +123,7 @@ export default function CampaignsPage() {
   /* toast & sil onay */
   const [toast, setToast] = useState(null);
   const [deleteId, setDeleteId] = useState(null);
+  const [closeConfirmOpen, setCloseConfirmOpen] = useState(false);
 
   /* upload queue */
   const { addTask, updateTask, removeTask } = useUploadQueue();
@@ -322,31 +232,18 @@ export default function CampaignsPage() {
   };
 
   const closeDialog = () => {
+    if (saving) return;
     if (dirty && !saving) {
-      const sure = confirm("Kaydedilmemiş değişiklikler var. Kapatılsın mı?");
-      if (!sure) return;
+      setCloseConfirmOpen(true);
+      return;
     }
     setDialogOpen(false);
+    setDirty(false);
+    setSaving(false);
   };
 
   /* ---------------- validation ---------------- */
 
-  function isHeicFile(file) {
-    const mime = (file?.type || "").toLowerCase();
-    const name = (file?.name || "").toLowerCase();
-    const ext = name.split(".").pop();
-
-    // Safari/iOS bazen empty mime veya application/octet-stream döndürür
-    if (mime === "image/heic" || mime === "image/heif") return true;
-    if (ext === "heic" || ext === "heif") return true;
-    if (
-      (mime === "" || mime === "application/octet-stream") &&
-      (ext === "heic" || ext === "heif")
-    )
-      return true;
-
-    return false;
-  }
   const selectionCount =
     selectionType === "products"
       ? form.products.length
@@ -403,66 +300,24 @@ export default function CampaignsPage() {
     let uploadFile = form.imageFile;
     try {
       if (uploadFile) {
-        if (isHeicFile(uploadFile)) {
-          setSaving(false);
-          setFieldErrors((e) => ({
-            ...e,
-            image: "HEIC/HEIF desteklenmiyor. Lütfen JPG/PNG yükleyin.",
-          }));
-          setToast({
-            msg: "HEIC/HEIF tespit edildi. Lütfen JPG/PNG yükleyin.",
-            type: "error",
-          });
-          return;
-        }
+        const prepared = await prepareBannerImageUpload(uploadFile);
+        uploadFile = prepared.file;
+        setForm((f) => ({
+          ...f,
+          imageFile: prepared.file,
+          imageUrl: prepared.previewUrl,
+        }));
 
-        if (
-          !ALLOWED_MIMES.includes(uploadFile.type) ||
-          READABLE_BUT_CONVERT.includes(uploadFile.type)
-        ) {
-          // WEBP vb. → JPEG'e çevir
-          const { file: converted, previewUrl } = await compressToJpeg(
-            uploadFile,
-            {
-              maxW: 1920,
-              maxH: 600,
-              maxBytes: 10 * 1024 * 1024, // ~10MB
-              startQuality: 0.9,
-            }
-          );
-          uploadFile = converted;
-          setForm((f) => ({
-            ...f,
-            imageFile: converted,
-            imageUrl: previewUrl,
-          }));
+        if (prepared.convertedFromApple) {
           setToast({
-            msg: "Yüklenen görsel JPEG'e dönüştürüldü ve optimize edildi.",
+            msg: "Apple fotoğrafı JPEG'e çevrilip optimize edildi.",
             type: "info",
           });
-        } else {
-          // JPEG/PNG ise yine de optimize etmeyi deneyebiliriz (çok büyükse)
-          if (uploadFile.size > 10 * 1024 * 1024) {
-            const { file: compressed, previewUrl } = await compressToJpeg(
-              uploadFile,
-              {
-                maxW: 1920,
-                maxH: 600,
-                maxBytes: 10 * 1024 * 1024,
-                startQuality: 0.9,
-              }
-            );
-            uploadFile = compressed;
-            setForm((f) => ({
-              ...f,
-              imageFile: compressed,
-              imageUrl: previewUrl,
-            }));
-            setToast({
-              msg: "Görsel boyutu büyük olduğu için sıkıştırıldı (≈1920×600).",
-              type: "info",
-            });
-          }
+        } else if (prepared.optimized) {
+          setToast({
+            msg: "Görsel optimize edildi ve upload için hazırlandı.",
+            type: "info",
+          });
         }
       }
     } catch (err) {
@@ -490,10 +345,6 @@ export default function CampaignsPage() {
     const taskId = uuidv4();
     addTask({ id: taskId, name: form.title || "Kampanya", progress: 0 });
 
-    // Form kapansın ve dirty sıfırlansın → confirm/uyarı yok
-    setDirty(false);
-    setDialogOpen(false);
-
     const cfg = {
       headers: { "Content-Type": "multipart/form-data" },
       onUploadProgress: (ev) => {
@@ -515,6 +366,8 @@ export default function CampaignsPage() {
 
       const { data } = await api.get("/campaigns");
       setCampaigns(data);
+      setDirty(false);
+      setDialogOpen(false);
       setToast({ msg: "Kampanya kaydedildi.", type: "success" });
       setSaving(false);
     } catch (e) {
@@ -522,10 +375,13 @@ export default function CampaignsPage() {
       updateTask(taskId, {
         progress: 100,
         status: "error",
-        errorMsg: "Kampanya kaydedilemedi",
+        errorMsg: e.response?.data?.message || "Kampanya kaydedilemedi",
       });
       setTimeout(() => removeTask(taskId), 4000);
-      setToast({ msg: "Kampanya kaydedilemedi.", type: "error" });
+      setToast({
+        msg: e.response?.data?.message || "Kampanya kaydedilemedi.",
+        type: "error",
+      });
       setSaving(false);
     }
   };
@@ -580,58 +436,36 @@ export default function CampaignsPage() {
   const onPickFile = async (file) => {
     if (!file) return;
 
-    // ✅ HEIC/HEIF: anında uyar ve hiç yükleme
-    if (isHeicFile(file)) {
-      setFieldErrors((e) => ({
-        ...e,
-        image: "HEIC/HEIF desteklenmiyor. Lütfen JPG veya PNG yükleyin.",
-      }));
-      setToast({
-        msg: "HEIC/HEIF tespit edildi. Dosya yüklenmedi. Lütfen JPG/PNG seçin.",
-        type: "error",
-      });
-      return;
-    }
-
-    // PNG/JPEG → büyükse sıkıştır; WEBP vb. → JPEG'e dönüştür
     try {
-      let processed = file;
-      if (
-        !ALLOWED_MIMES.includes(file.type) ||
-        READABLE_BUT_CONVERT.includes(file.type) ||
-        file.size > 10 * 1024 * 1024
-      ) {
-        const { file: out, previewUrl } = await compressToJpeg(file, {
-          maxW: 1920,
-          maxH: 600,
-          maxBytes: 10 * 1024 * 1024,
-          startQuality: 0.9,
-        });
-        processed = out;
-        setForm((f) => ({ ...f, imageFile: processed, imageUrl: previewUrl }));
-        setDirty(true);
-
-        if (!ALLOWED_MIMES.includes(file.type)) {
-          setToast({
-            msg: "Görsel JPEG'e dönüştürüldü ve optimize edildi.",
-            type: "info",
-          });
-        } else {
-          setToast({
-            msg: "Görsel optimize edildi (≈1920×600).",
-            type: "info",
-          });
-        }
-      } else {
-        const url = URL.createObjectURL(file);
-        setForm((f) => ({ ...f, imageFile: file, imageUrl: url }));
-        setDirty(true);
-      }
+      const prepared = await prepareBannerImageUpload(file);
+      setForm((f) => ({
+        ...f,
+        imageFile: prepared.file,
+        imageUrl: prepared.previewUrl,
+      }));
+      setDirty(true);
       setFieldErrors((e) => ({ ...e, image: "" }));
+
+      if (prepared.convertedFromApple) {
+        setToast({
+          msg: "Apple fotoğrafı otomatik çevrildi ve optimize edildi.",
+          type: "info",
+        });
+      } else if (prepared.optimized) {
+        setToast({
+          msg: "Görsel optimize edildi (yaklaşık 1920x600).",
+          type: "info",
+        });
+      }
     } catch (err) {
       console.error(err);
+      setFieldErrors((e) => ({
+        ...e,
+        image: err?.message || "Görsel işlenemedi. Lütfen farklı bir dosya deneyin.",
+      }));
       setToast({
-        msg: err?.message || "Görsel işlenemedi. Lütfen JPG/PNG yükleyin.",
+        msg:
+          err?.message || "Görsel işlenemedi. Lütfen farklı bir dosya deneyin.",
         type: "error",
       });
     }
@@ -1028,10 +862,11 @@ export default function CampaignsPage() {
                   </span>
                   <input
                     type="file"
-                    accept="image/*"
+                    accept="image/*,.heic,.heif"
                     className="hidden"
                     onChange={(e) => {
                       const file = e.target.files?.[0];
+                      e.target.value = "";
                       if (!file) return;
                       onPickFile(file);
                     }}
@@ -1039,7 +874,7 @@ export default function CampaignsPage() {
                 </label>
                 <Typography variant="small" className="text-gray-500 mt-1">
                   Hedef çözünürlük: yaklaşık 1920×600 (oran korunur).
-                  Desteklenen formatlar: JPG/PNG.
+                  Apple fotoğrafları dahil görseller otomatik optimize edilir.
                 </Typography>
                 {fieldErrors.image && (
                   <p className="mt-1 text-xs text-red-600">
@@ -1116,6 +951,20 @@ export default function CampaignsPage() {
         onClose={() => setDeleteId(null)}
         onConfirm={handleDeleteConfirmed}
         message="Bu kampanyayı silmek istediğinize emin misiniz?"
+      />
+
+      <ConfirmDialog
+        open={closeConfirmOpen}
+        title="Değişiklikleri Kapat"
+        message="Kaydedilmemiş değişiklikler var. Form kapatılsın mı?"
+        confirmLabel="Kapat"
+        tone="warning"
+        onCancel={() => setCloseConfirmOpen(false)}
+        onConfirm={() => {
+          setCloseConfirmOpen(false);
+          resetForm();
+          setDialogOpen(false);
+        }}
       />
 
       {/* toast */}

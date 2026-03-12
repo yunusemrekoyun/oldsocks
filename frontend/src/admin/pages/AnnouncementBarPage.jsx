@@ -1,11 +1,13 @@
 import React, { useEffect, useMemo, useState } from "react";
 import api from "../../../api";
 import ToastAlert from "../../components/ui/ToastAlert";
+import ConfirmDialog from "../../components/ui/ConfirmDialog";
 
 export default function AnnouncementBarPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState(null);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
 
   const [form, setForm] = useState({
     enabled: false,
@@ -85,7 +87,6 @@ export default function AnnouncementBarPage() {
   };
 
   const onDelete = async () => {
-    if (!confirm("Duyuruyu tamamen kaldırmak istiyor musunuz?")) return;
     try {
       setSaving(true);
       await api.delete("/announcement-bar/admin");
@@ -226,7 +227,7 @@ export default function AnnouncementBarPage() {
         <div className="flex items-center justify-end gap-3">
           <button
             type="button"
-            onClick={onDelete}
+            onClick={() => setDeleteConfirmOpen(true)}
             disabled={saving}
             className="px-4 py-2 border rounded-lg hover:bg-gray-50 disabled:opacity-60"
           >
@@ -245,6 +246,20 @@ export default function AnnouncementBarPage() {
           </button>
         </div>
       </form>
+
+      <ConfirmDialog
+        open={deleteConfirmOpen}
+        title="Duyuruyu Kaldır"
+        message="Duyuruyu tamamen kaldırmak istiyor musunuz?"
+        confirmLabel="Kaldır"
+        tone="danger"
+        loading={saving}
+        onCancel={() => setDeleteConfirmOpen(false)}
+        onConfirm={async () => {
+          setDeleteConfirmOpen(false);
+          await onDelete();
+        }}
+      />
 
       {toast && <ToastAlert {...toast} onClose={() => setToast(null)} />}
     </div>

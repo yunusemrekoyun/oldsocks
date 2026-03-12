@@ -9,6 +9,7 @@ import {
 } from "react-icons/fa";
 import ToastAlert from "../../components/ui/ToastAlert";
 import Window from "../../components/ui/Window";
+import ConfirmDialog from "../../components/ui/ConfirmDialog";
 
 const cx = (...cls) => cls.filter(Boolean).join(" ");
 
@@ -78,7 +79,9 @@ export default function CartCampaignsPage() {
   const [mode, setMode] = useState("create");
   const [editingId, setEditingId] = useState(null);
   const [form, setForm] = useState(emptyForm);
+  const [dirty, setDirty] = useState(false);
   const [productSearch, setProductSearch] = useState("");
+  const [closeConfirmOpen, setCloseConfirmOpen] = useState(false);
 
   const [confirmDelete, setConfirmDelete] = useState(null);
 
@@ -127,6 +130,8 @@ export default function CartCampaignsPage() {
     setMode("create");
     setEditingId(null);
     setProductSearch("");
+    setDirty(false);
+    setCloseConfirmOpen(false);
   };
 
   const openCreate = () => {
@@ -168,10 +173,22 @@ export default function CartCampaignsPage() {
       },
     });
     setProductSearch("");
+    setDirty(false);
+    setCloseConfirmOpen(false);
     setOpenForm(true);
   };
 
+  const requestCloseForm = () => {
+    if (dirty) {
+      setCloseConfirmOpen(true);
+      return;
+    }
+    setOpenForm(false);
+    resetForm();
+  };
+
   const toggleProductId = (pid) => {
+    setDirty(true);
     setForm((prev) => {
       const has = prev.productIds.includes(pid);
       return {
@@ -276,6 +293,7 @@ export default function CartCampaignsPage() {
         await api.put(`/cart-campaigns/${editingId}`, payload);
         notify("Kampanya güncellendi.", "success");
       }
+      setDirty(false);
       setOpenForm(false);
       resetForm();
       await fetchData();
@@ -476,10 +494,7 @@ export default function CartCampaignsPage() {
                 {mode === "create" ? "Yeni Sepet Kampanyası" : "Kampanyayı Düzenle"}
               </h2>
               <button
-                onClick={() => {
-                  setOpenForm(false);
-                  resetForm();
-                }}
+                onClick={requestCloseForm}
                 className="text-sm text-gray-500 hover:text-gray-800"
               >
                 Kapat
@@ -496,7 +511,10 @@ export default function CartCampaignsPage() {
                   <input
                     className="w-full border rounded-lg px-3 py-2"
                     value={form.name}
-                    onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))}
+                    onChange={(e) => {
+                      setDirty(true);
+                      setForm((prev) => ({ ...prev, name: e.target.value }));
+                    }}
                     placeholder="Örn. 3 Al 1 Bedava"
                     required
                   />
@@ -507,7 +525,8 @@ export default function CartCampaignsPage() {
                   <select
                     className="w-full border rounded-lg px-3 py-2"
                     value={form.templateType}
-                    onChange={(e) =>
+                    onChange={(e) => {
+                      setDirty(true);
                       setForm((prev) => ({
                         ...prev,
                         templateType: e.target.value,
@@ -517,8 +536,8 @@ export default function CartCampaignsPage() {
                           discountPercent: "",
                           thresholdAmount: "",
                         },
-                      }))
-                    }
+                      }));
+                    }}
                   >
                     {TEMPLATE_OPTIONS.map((opt) => (
                       <option key={opt.value} value={opt.value}>
@@ -534,7 +553,10 @@ export default function CartCampaignsPage() {
                     type="datetime-local"
                     className="w-full border rounded-lg px-3 py-2"
                     value={form.startAt}
-                    onChange={(e) => setForm((prev) => ({ ...prev, startAt: e.target.value }))}
+                    onChange={(e) => {
+                      setDirty(true);
+                      setForm((prev) => ({ ...prev, startAt: e.target.value }));
+                    }}
                     required
                   />
                 </div>
@@ -545,7 +567,10 @@ export default function CartCampaignsPage() {
                     type="datetime-local"
                     className="w-full border rounded-lg px-3 py-2"
                     value={form.endAt}
-                    onChange={(e) => setForm((prev) => ({ ...prev, endAt: e.target.value }))}
+                    onChange={(e) => {
+                      setDirty(true);
+                      setForm((prev) => ({ ...prev, endAt: e.target.value }));
+                    }}
                     required
                   />
                 </div>
@@ -555,9 +580,13 @@ export default function CartCampaignsPage() {
                   <select
                     className="w-full border rounded-lg px-3 py-2"
                     value={form.headerPlacement}
-                    onChange={(e) =>
-                      setForm((prev) => ({ ...prev, headerPlacement: e.target.value }))
-                    }
+                    onChange={(e) => {
+                      setDirty(true);
+                      setForm((prev) => ({
+                        ...prev,
+                        headerPlacement: e.target.value,
+                      }));
+                    }}
                   >
                     {HEADER_OPTIONS.map((opt) => (
                       <option key={opt.value} value={opt.value}>
@@ -576,12 +605,13 @@ export default function CartCampaignsPage() {
                         min={1}
                         className="w-full border rounded-lg px-3 py-2"
                         value={form.rules.xQty}
-                        onChange={(e) =>
+                        onChange={(e) => {
+                          setDirty(true);
                           setForm((prev) => ({
                             ...prev,
                             rules: { ...prev.rules, xQty: e.target.value },
-                          }))
-                        }
+                          }));
+                        }}
                         required
                       />
                     </div>
@@ -593,12 +623,13 @@ export default function CartCampaignsPage() {
                         min={1}
                         className="w-full border rounded-lg px-3 py-2"
                         value={form.rules.yQty}
-                        onChange={(e) =>
+                        onChange={(e) => {
+                          setDirty(true);
                           setForm((prev) => ({
                             ...prev,
                             rules: { ...prev.rules, yQty: e.target.value },
-                          }))
-                        }
+                          }));
+                        }}
                         required
                       />
                     </div>
@@ -616,12 +647,13 @@ export default function CartCampaignsPage() {
                         min={1}
                         className="w-full border rounded-lg px-3 py-2"
                         value={form.rules.xQty}
-                        onChange={(e) =>
+                        onChange={(e) => {
+                          setDirty(true);
                           setForm((prev) => ({
                             ...prev,
                             rules: { ...prev.rules, xQty: e.target.value },
-                          }))
-                        }
+                          }));
+                        }}
                         required
                       />
                     </div>
@@ -635,12 +667,16 @@ export default function CartCampaignsPage() {
                         step="0.01"
                         className="w-full border rounded-lg px-3 py-2"
                         value={form.rules.discountPercent}
-                        onChange={(e) =>
+                        onChange={(e) => {
+                          setDirty(true);
                           setForm((prev) => ({
                             ...prev,
-                            rules: { ...prev.rules, discountPercent: e.target.value },
-                          }))
-                        }
+                            rules: {
+                              ...prev.rules,
+                              discountPercent: e.target.value,
+                            },
+                          }));
+                        }}
                         required
                       />
                     </div>
@@ -659,12 +695,16 @@ export default function CartCampaignsPage() {
                         step="0.01"
                         className="w-full border rounded-lg px-3 py-2"
                         value={form.rules.thresholdAmount}
-                        onChange={(e) =>
+                        onChange={(e) => {
+                          setDirty(true);
                           setForm((prev) => ({
                             ...prev,
-                            rules: { ...prev.rules, thresholdAmount: e.target.value },
-                          }))
-                        }
+                            rules: {
+                              ...prev.rules,
+                              thresholdAmount: e.target.value,
+                            },
+                          }));
+                        }}
                         required
                       />
                     </div>
@@ -678,12 +718,16 @@ export default function CartCampaignsPage() {
                         step="0.01"
                         className="w-full border rounded-lg px-3 py-2"
                         value={form.rules.discountPercent}
-                        onChange={(e) =>
+                        onChange={(e) => {
+                          setDirty(true);
                           setForm((prev) => ({
                             ...prev,
-                            rules: { ...prev.rules, discountPercent: e.target.value },
-                          }))
-                        }
+                            rules: {
+                              ...prev.rules,
+                              discountPercent: e.target.value,
+                            },
+                          }));
+                        }}
                         required
                       />
                     </div>
@@ -695,12 +739,13 @@ export default function CartCampaignsPage() {
                     <input
                       type="checkbox"
                       checked={form.stackWithCatalogDiscount}
-                      onChange={(e) =>
+                      onChange={(e) => {
+                        setDirty(true);
                         setForm((prev) => ({
                           ...prev,
                           stackWithCatalogDiscount: e.target.checked,
-                        }))
-                      }
+                        }));
+                      }}
                     />
                     <span>Mevcut katalog indirimlerinin üstüne binsin</span>
                   </label>
@@ -710,7 +755,13 @@ export default function CartCampaignsPage() {
                   <input
                     type="checkbox"
                     checked={form.isEnabled}
-                    onChange={(e) => setForm((prev) => ({ ...prev, isEnabled: e.target.checked }))}
+                    onChange={(e) => {
+                      setDirty(true);
+                      setForm((prev) => ({
+                        ...prev,
+                        isEnabled: e.target.checked,
+                      }));
+                    }}
                   />
                   <span>Kampanya açık</span>
                 </label>
@@ -735,7 +786,8 @@ export default function CartCampaignsPage() {
                 <div className="mb-2 flex flex-wrap gap-2">
                   <button
                     type="button"
-                    onClick={() =>
+                    onClick={() => {
+                      setDirty(true);
                       setForm((prev) => ({
                         ...prev,
                         productIds: Array.from(
@@ -744,17 +796,18 @@ export default function CartCampaignsPage() {
                             ...filteredProducts.map((p) => String(p._id)),
                           ])
                         ),
-                      }))
-                    }
+                      }));
+                    }}
                     className="text-xs px-2 py-1 rounded border"
                   >
                     Filtredekileri Seç
                   </button>
                   <button
                     type="button"
-                    onClick={() =>
-                      setForm((prev) => ({ ...prev, productIds: [] }))
-                    }
+                    onClick={() => {
+                      setDirty(true);
+                      setForm((prev) => ({ ...prev, productIds: [] }));
+                    }}
                     className="text-xs px-2 py-1 rounded border"
                   >
                     Tümünü Temizle
@@ -792,10 +845,7 @@ export default function CartCampaignsPage() {
                   <button
                     type="button"
                     className="px-4 py-2 rounded-md border"
-                    onClick={() => {
-                      setOpenForm(false);
-                      resetForm();
-                    }}
+                    onClick={requestCloseForm}
                   >
                     İptal
                   </button>
@@ -811,6 +861,21 @@ export default function CartCampaignsPage() {
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        open={closeConfirmOpen}
+        title="Değişiklikleri Kapat"
+        message="Kaydedilmemiş değişiklikler var. Form kapatılsın mı?"
+        confirmLabel="Kapat"
+        tone="warning"
+        onCancel={() => setCloseConfirmOpen(false)}
+        onConfirm={() => {
+          setCloseConfirmOpen(false);
+          setDirty(false);
+          setOpenForm(false);
+          resetForm();
+        }}
+      />
 
       {confirmDelete && (
         <Window title="Onayla" onClose={() => setConfirmDelete(null)}>

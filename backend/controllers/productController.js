@@ -102,8 +102,9 @@ exports.getProducts = async (req, res) => {
     }
 
     const products = await Product.find()
+      .sort({ createdAt: -1 })
       .select(
-        "name video images price originalPrice discount sizes color category parentProductId"
+        "name video images price originalPrice discount sizes color category parentProductId createdAt"
       )
       .populate({
         path: "category",

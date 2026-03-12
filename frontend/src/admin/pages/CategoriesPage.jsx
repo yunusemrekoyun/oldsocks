@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import api from "../../../api";
 import Window from "../../components/ui/Window";
 import ToastAlert from "../../components/ui/ToastAlert";
+import ConfirmDialog from "../../components/ui/ConfirmDialog";
 import CategoryFormModal from "../modals/CategoryFormModal";
 import {
   FaPlus,
@@ -44,6 +45,8 @@ export default function CategoriesPage() {
 
   const [activeCat, setActiveCat] = useState(null);
   const [showForm, setShowForm] = useState(false);
+  const [formDirty, setFormDirty] = useState(false);
+  const [closeConfirmOpen, setCloseConfirmOpen] = useState(false);
 
   const [deleteId, setDeleteId] = useState(null);
   const [toast, setToast] = useState(null);
@@ -76,11 +79,25 @@ export default function CategoriesPage() {
 
   const openNew = () => {
     setActiveCat(null);
+    setFormDirty(false);
+    setCloseConfirmOpen(false);
     setShowForm(true);
   };
   const openEdit = (c) => {
     setActiveCat(c);
+    setFormDirty(false);
+    setCloseConfirmOpen(false);
     setShowForm(true);
+  };
+
+  const closeForm = () => {
+    if (formDirty) {
+      setCloseConfirmOpen(true);
+      return;
+    }
+    setShowForm(false);
+    setActiveCat(null);
+    setFormDirty(false);
   };
 
   const handleDelete = async () => {
@@ -347,15 +364,18 @@ export default function CategoriesPage() {
       {showForm && (
         <Window
           title={activeCat ? "Kategori Düzenle" : "Yeni Kategori"}
-          onClose={() => setShowForm(false)}
+          onClose={closeForm}
         >
           <CategoryFormModal
             category={activeCat}
-            onClose={() => setShowForm(false)}
+            onClose={closeForm}
+            onDirtyChange={setFormDirty}
             onSaved={(result) => {
               // Başarı: null/undefined
               if (!result) {
                 setShowForm(false);
+                setActiveCat(null);
+                setFormDirty(false);
                 fetchCats();
                 setToast({ msg: "Kategori kaydedildi.", type: "success" });
                 return;
@@ -382,6 +402,21 @@ export default function CategoriesPage() {
           />
         </Window>
       )}
+
+      <ConfirmDialog
+        open={closeConfirmOpen}
+        title="Değişiklikleri Kapat"
+        message="Kaydedilmemiş değişiklikler var. Form kapatılsın mı?"
+        confirmLabel="Kapat"
+        tone="warning"
+        onCancel={() => setCloseConfirmOpen(false)}
+        onConfirm={() => {
+          setCloseConfirmOpen(false);
+          setFormDirty(false);
+          setShowForm(false);
+          setActiveCat(null);
+        }}
+      />
 
       {/* Toast */}
       {toast && (

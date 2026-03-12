@@ -4,6 +4,7 @@ import { Navigate, useNavigate } from "react-router-dom";
 import { useCart } from "../context/useCart";
 import { useAuth } from "../context/AuthContext";
 import AuthRequiredModal from "../components/auth/AuthRequireModal";
+import ToastAlert from "../components/ui/ToastAlert";
 import api from "../../api";
 
 export default function CheckoutPage() {
@@ -16,6 +17,7 @@ export default function CheckoutPage() {
   const [addrLoading, setAddrLoading] = useState(true);
   const [selectedAddress, setSelectedAddress] = useState(null);
   const [showLoginModal, setShowLoginModal] = useState(false);
+  const [toast, setToast] = useState(null);
 
   // kargo state
   const [shipping, setShipping] = useState(null);
@@ -102,7 +104,7 @@ export default function CheckoutPage() {
 
   const attemptPayment = async (useFallback = false) => {
     if (!selectedAddress) {
-      alert("Lütfen bir adres seçin.");
+      setToast({ type: "error", msg: "Lütfen bir adres seçin." });
       return;
     }
     setLoading(true);
@@ -159,7 +161,7 @@ export default function CheckoutPage() {
         return;
       }
 
-      alert("Ödeme başlatılamadı.");
+      setToast({ type: "error", msg: "Ödeme başlatılamadı." });
     } catch (err) {
       console.error("Ödeme başlatılamadı:", err);
       if (err.response?.status === 401) {
@@ -168,12 +170,14 @@ export default function CheckoutPage() {
         const msg =
           err.response?.data?.message ||
           "Ödeme başlatılamadı. Lütfen bilgilerinizi kontrol edin.";
-        alert(msg);
+        setToast({ type: "error", msg });
       } else {
-        alert(
-          err?.response?.data?.message ||
-            "Ödeme başlatılamadı. Lütfen tekrar deneyin."
-        );
+        setToast({
+          type: "error",
+          msg:
+            err?.response?.data?.message ||
+            "Ödeme başlatılamadı. Lütfen tekrar deneyin.",
+        });
       }
     } finally {
       setLoading(false);
@@ -276,6 +280,14 @@ export default function CheckoutPage() {
           open
           onClose={() => setShowLoginModal(false)}
           onLogin={() => navigate("/profile")}
+        />
+      )}
+
+      {toast && (
+        <ToastAlert
+          msg={toast.msg}
+          type={toast.type}
+          onClose={() => setToast(null)}
         />
       )}
     </div>

@@ -24,92 +24,7 @@ import api from "../../../api";
 import ToastAlert from "../../components/ui/ToastAlert";
 import { v4 as uuidv4 } from "uuid";
 import { useUploadQueue } from "../../context/UploadQueueContext";
-
-/* ───── Görsel format/optimizasyon yardımcıları ───── */
-const ALLOWED_MIMES = ["image/jpeg", "image/png"];
-const READABLE_BUT_CONVERT = ["image/webp"]; // webp → jpeg'e dönüştürülecek
-const MAX_BYTES = 10 * 1024 * 1024; // ~10MB
-
-function isHeicFile(file) {
-  const mime = (file?.type || "").toLowerCase();
-  const name = (file?.name || "").toLowerCase();
-  const ext = name.split(".").pop();
-  if (mime === "image/heic" || mime === "image/heif") return true;
-  if (ext === "heic" || ext === "heif") return true;
-  if (
-    (mime === "" || mime === "application/octet-stream") &&
-    (ext === "heic" || ext === "heif")
-  )
-    return true;
-  return false;
-}
-
-function ensureJpegName(name = "image.jpg") {
-  const base = name.replace(/\.[^.]+$/, "");
-  return `${base}.jpg`;
-}
-
-async function compressToJpeg(
-  file,
-  { maxW = 1920, maxH = 600, maxBytes = MAX_BYTES, startQuality = 0.9 }
-) {
-  if (isHeicFile(file)) {
-    throw new Error("HEIC/HEIF desteklenmiyor. Lütfen JPG veya PNG yükleyin.");
-  }
-
-  // FileReader
-  const dataUrl = await new Promise((resolve, reject) => {
-    const fr = new FileReader();
-    fr.onload = () => resolve(fr.result);
-    fr.onerror = () => reject(new Error("Dosya okunamadı."));
-    fr.readAsDataURL(file);
-  });
-
-  // Image
-  const img = await new Promise((resolve, reject) => {
-    const image = new Image();
-    image.onload = () => resolve(image);
-    image.onerror = () => reject(new Error("Görsel yüklenemedi."));
-    image.src = dataUrl;
-  });
-
-  // 1920x600 kutusuna sığdır (oran korunur, büyütme yok)
-  const ratio = Math.min(maxW / img.width, maxH / img.height, 1);
-  const targetW = Math.round(img.width * ratio);
-  const targetH = Math.round(img.height * ratio);
-
-  const canvas = document.createElement("canvas");
-  canvas.width = targetW;
-  canvas.height = targetH;
-  const ctx = canvas.getContext("2d");
-  ctx.drawImage(img, 0, 0, targetW, targetH);
-
-  let q = startQuality;
-  let blob = await new Promise((res) => canvas.toBlob(res, "image/jpeg", q));
-  if (!blob) throw new Error("Sıkıştırma başarısız.");
-
-  while (blob.size > maxBytes && q > 0.5) {
-    q -= 0.1;
-    blob = await new Promise((res) => canvas.toBlob(res, "image/jpeg", q));
-    if (!blob) break;
-  }
-  if (blob && blob.size > maxBytes && q <= 0.5) {
-    blob = await new Promise((res) => canvas.toBlob(res, "image/jpeg", 0.5));
-  }
-  if (!blob) throw new Error("Görsel dönüştürülemedi.");
-
-  const outFile = new File([blob], ensureJpegName(file.name), {
-    type: "image/jpeg",
-  });
-  const previewUrl = URL.createObjectURL(blob);
-  return {
-    file: outFile,
-    previewUrl,
-    width: targetW,
-    height: targetH,
-    quality: q,
-  };
-}
+import { prepareBannerImageUpload } from "../../utils/bannerImageUpload";
 
 /* ───── Silme Onayı ───── */
 const ConfirmModal = ({ open, onClose, onConfirm, message }) => {
@@ -379,54 +294,35 @@ export default function MiniCampaignsPage() {
   const onPickFile = async (file) => {
     if (!file) return;
 
-    if (isHeicFile(file)) {
-      setFieldErrors((e) => ({
-        ...e,
-        image: "HEIC/HEIF desteklenmiyor. Lütfen JPG veya PNG yükleyin.",
-      }));
-      setToast({
-        msg: "HEIC/HEIF tespit edildi. Dosya yüklenmedi. Lütfen JPG/PNG seçin.",
-        type: "error",
-      });
-      return;
-    }
-
     try {
-      let processed = file;
-      if (
-        !ALLOWED_MIMES.includes(file.type) ||
-        READABLE_BUT_CONVERT.includes(file.type) ||
-        file.size > MAX_BYTES
-      ) {
-        const { file: out, previewUrl } = await compressToJpeg(file, {
-          maxW: 1920,
-          maxH: 600,
-          maxBytes: MAX_BYTES,
-          startQuality: 0.9,
-        });
-        processed = out;
-        setForm((f) => ({ ...f, imageFile: processed, imageUrl: previewUrl }));
-
-        if (!ALLOWED_MIMES.includes(file.type)) {
-          setToast({
-            msg: "Görsel JPEG'e dönüştürüldü ve optimize edildi (≈1920×600).",
-            type: "info",
-          });
-        } else {
-          setToast({
-            msg: "Görsel optimize edildi (≈1920×600).",
-            type: "info",
-          });
-        }
-      } else {
-        const url = URL.createObjectURL(file);
-        setForm((f) => ({ ...f, imageFile: file, imageUrl: url }));
-      }
+      const prepared = await prepareBannerImageUpload(file);
+      setForm((f) => ({
+        ...f,
+        imageFile: prepared.file,
+        imageUrl: prepared.previewUrl,
+      }));
       setFieldErrors((e) => ({ ...e, image: "" }));
+
+      if (prepared.convertedFromApple) {
+        setToast({
+          msg: "Apple fotoğrafı otomatik çevrildi ve optimize edildi.",
+          type: "info",
+        });
+      } else if (prepared.optimized) {
+        setToast({
+          msg: "Görsel optimize edildi (yaklaşık 1920x600).",
+          type: "info",
+        });
+      }
     } catch (err) {
       console.error(err);
+      setFieldErrors((e) => ({
+        ...e,
+        image: err?.message || "Görsel işlenemedi. Lütfen farklı bir dosya deneyin.",
+      }));
       setToast({
-        msg: err?.message || "Görsel işlenemedi. Lütfen JPG/PNG yükleyin.",
+        msg:
+          err?.message || "Görsel işlenemedi. Lütfen farklı bir dosya deneyin.",
         type: "error",
       });
     }
@@ -451,59 +347,22 @@ export default function MiniCampaignsPage() {
     let uploadFile = form.imageFile;
     try {
       if (uploadFile) {
-        if (isHeicFile(uploadFile)) {
-          setSaving(false);
-          setFieldErrors((e) => ({
-            ...e,
-            image: "HEIC/HEIF desteklenmiyor. Lütfen JPG/PNG yükleyin.",
-          }));
+        const prepared = await prepareBannerImageUpload(uploadFile);
+        uploadFile = prepared.file;
+        setForm((f) => ({
+          ...f,
+          imageFile: prepared.file,
+          imageUrl: prepared.previewUrl,
+        }));
+
+        if (prepared.convertedFromApple) {
           setToast({
-            msg: "HEIC/HEIF tespit edildi. Lütfen JPG/PNG yükleyin.",
-            type: "error",
-          });
-          return;
-        }
-        if (
-          !ALLOWED_MIMES.includes(uploadFile.type) ||
-          READABLE_BUT_CONVERT.includes(uploadFile.type)
-        ) {
-          const { file: converted, previewUrl } = await compressToJpeg(
-            uploadFile,
-            {
-              maxW: 1920,
-              maxH: 600,
-              maxBytes: MAX_BYTES,
-              startQuality: 0.9,
-            }
-          );
-          uploadFile = converted;
-          setForm((f) => ({
-            ...f,
-            imageFile: converted,
-            imageUrl: previewUrl,
-          }));
-          setToast({
-            msg: "Görsel JPEG'e dönüştürüldü ve optimize edildi.",
+            msg: "Apple fotoğrafı JPEG'e çevrilip optimize edildi.",
             type: "info",
           });
-        } else if (uploadFile.size > MAX_BYTES) {
-          const { file: compressed, previewUrl } = await compressToJpeg(
-            uploadFile,
-            {
-              maxW: 1920,
-              maxH: 600,
-              maxBytes: MAX_BYTES,
-              startQuality: 0.9,
-            }
-          );
-          uploadFile = compressed;
-          setForm((f) => ({
-            ...f,
-            imageFile: compressed,
-            imageUrl: previewUrl,
-          }));
+        } else if (prepared.optimized) {
           setToast({
-            msg: "Görsel boyutu büyüktü, optimize edildi.",
+            msg: "Görsel optimize edildi ve upload için hazırlandı.",
             type: "info",
           });
         }
@@ -532,8 +391,6 @@ export default function MiniCampaignsPage() {
     const id = uuidv4();
     addTask({ id, name: form.title || "Mini Kampanya", progress: 0 });
 
-    setDialogOpen(false);
-
     const cfg = {
       headers: { "Content-Type": "multipart/form-data" },
       onUploadProgress: (ev) => {
@@ -555,6 +412,7 @@ export default function MiniCampaignsPage() {
 
       const { data } = await api.get("/mini-campaigns");
       setItems(data);
+      setDialogOpen(false);
       setToast({ msg: "Mini kampanya kaydedildi.", type: "success" });
       setSaving(false);
     } catch (err) {
@@ -562,10 +420,13 @@ export default function MiniCampaignsPage() {
       updateTask(id, {
         progress: 100,
         status: "error",
-        errorMsg: "Mini kampanya kaydedilemedi",
+        errorMsg: err.response?.data?.message || "Mini kampanya kaydedilemedi",
       });
       setTimeout(() => removeTask(id), 4000);
-      setToast({ msg: "Mini kampanya kaydedilemedi.", type: "error" });
+      setToast({
+        msg: err.response?.data?.message || "Mini kampanya kaydedilemedi.",
+        type: "error",
+      });
       setSaving(false);
     }
   };
@@ -734,7 +595,9 @@ export default function MiniCampaignsPage() {
       <Dialog
         open={dialogOpen}
         size="xl"
-        handler={() => setDialogOpen(false)}
+        handler={() => {
+          if (!saving) setDialogOpen(false);
+        }}
         className="mx-2 sm:mx-auto"
       >
         <DialogHeader>
@@ -966,18 +829,19 @@ export default function MiniCampaignsPage() {
                   </span>
                   <input
                     type="file"
-                    accept="image/*"
+                    accept="image/*,.heic,.heif"
                     className="hidden"
                     onChange={(e) => {
                       const file = e.target.files?.[0];
+                      e.target.value = "";
                       if (!file) return;
                       onPickFile(file);
                     }}
                   />
                 </label>
                 <Typography variant="small" className="text-gray-500 mt-1">
-                  Hedef çözünürlük: yaklaşık 1920×600 (oran korunur). Yalnızca
-                  JPG/PNG desteklenir. HEIC/HEIF yüklenmez.
+                  Hedef çözünürlük: yaklaşık 1920×600 (oran korunur). Apple
+                  fotoğrafları dahil görseller otomatik optimize edilir.
                 </Typography>
                 {fieldErrors.image && (
                   <p className="mt-1 text-xs text-red-600">

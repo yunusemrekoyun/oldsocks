@@ -179,6 +179,18 @@ app.use((err, req, res, next) => {
   if (err && String(err.message || "").startsWith("CORS blocked")) {
     return res.status(403).json({ message: err.message });
   }
+  if (err?.code === "LIMIT_FILE_SIZE") {
+    return res
+      .status(400)
+      .json({
+        message: "Yüklenen dosya çok büyük. Lütfen daha küçük bir dosya deneyin.",
+      });
+  }
+  if (Number.isInteger(err?.statusCode)) {
+    return res
+      .status(err.statusCode)
+      .json({ message: err.message || "Islem tamamlanamadi." });
+  }
   res.status(500).json({ message: "Internal Server Error" });
 });
 

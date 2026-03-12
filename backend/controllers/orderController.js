@@ -7,7 +7,8 @@ exports.getAllOrders = async (req, res) => {
   try {
     const orders = await Order.find()
       .sort("-createdAt")
-      .populate("user", "firstName lastName email");
+      .populate("user", "firstName lastName email")
+      .populate("items.productId", "images name");
     res.json(orders);
   } catch (err) {
     console.error("getAllOrders error:", err);

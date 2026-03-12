@@ -14,7 +14,6 @@ export default function RequireAuth({ children }) {
 
   // Girişli değilse uyar ve login’e yönlendir
   if (!isLoggedIn) {
-    alert("Lütfen önce giriş yapın.");
     return <Navigate to="/auth" replace state={{ from: location.pathname }} />;
   }
 

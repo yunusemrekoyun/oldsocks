@@ -89,3 +89,17 @@
 .range-thumb::-moz-range-thumb {
   pointer-events: auto;
 }
+
+@media (max-width: 768px) and (pointer: coarse) {
+  .admin-shell input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]),
+  .admin-shell select,
+  .admin-shell textarea {
+    font-size: 16px !important;
+    line-height: 1.5;
+  }
+
+  .admin-shell {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+}

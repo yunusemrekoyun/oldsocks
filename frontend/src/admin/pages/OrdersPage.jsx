@@ -10,8 +10,10 @@ import {
   FaTruck,
   FaCheckCircle,
   FaBan,
+  FaTimes,
 } from "react-icons/fa";
 import useUnseenOrders from "../../hooks/useUnseenOrders";
+import ToastAlert from "../../components/ui/ToastAlert";
 
 const STATUS_LABELS = {
   pending: "Sipariş oluşturuldu",
@@ -42,6 +44,8 @@ export default function OrdersPage() {
   const [filteredOrders, setFilteredOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [updatingId, setUpdatingId] = useState(null);
+  const [imageViewer, setImageViewer] = useState(null);
+  const [toast, setToast] = useState(null);
   const { markSeen } = useUnseenOrders();
 
   const [searchTerm, setSearchTerm] = useState("");
@@ -106,7 +110,7 @@ export default function OrdersPage() {
       );
     } catch (err) {
       console.error("Status update failed", err);
-      alert("Sipariş durumu güncellenemedi.");
+      setToast({ type: "error", msg: "Sipariş durumu güncellenemedi." });
     } finally {
       setUpdatingId(null);
     }
@@ -118,6 +122,16 @@ export default function OrdersPage() {
       maximumFractionDigits: 2,
     })}`;
 
+  const getProductMeta = (item) => {
+    const populatedProduct =
+      item?.productId && typeof item.productId === "object" ? item.productId : null;
+
+    return {
+      productId: populatedProduct?._id || item?.productId || null,
+      image: populatedProduct?.images?.[0] || "",
+    };
+  };
+
   if (loading) {
     return (
       <div className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-6 py-8 text-lg text-dark1">
@@ -128,6 +142,34 @@ export default function OrdersPage() {
 
   return (
     <div className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-6 py-6 space-y-6">
+      {imageViewer && (
+        <div
+          className="fixed inset-0 z-[1200] bg-black/85 p-4 sm:p-6"
+          onClick={() => setImageViewer(null)}
+          role="dialog"
+          aria-modal="true"
+          aria-label="Sipariş ürün görseli"
+        >
+          <div className="relative flex h-full w-full items-center justify-center">
+            <button
+              type="button"
+              className="absolute right-0 top-0 inline-flex items-center justify-center rounded-full bg-white/10 p-3 text-white transition hover:bg-white/20"
+              onClick={() => setImageViewer(null)}
+              aria-label="Görseli kapat"
+            >
+              <FaTimes />
+            </button>
+
+            <img
+              src={imageViewer.src}
+              alt={imageViewer.alt}
+              className="max-h-[88vh] max-w-full rounded-2xl bg-white object-contain shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+            />
+          </div>
+        </div>
+      )}
+
       {/* --- Üst Araçlar --- */}
       <div className="sticky top-0 z-10 bg-white/80 backdrop-blur supports-[backdrop-filter]:bg-white/60 border border-light2 rounded-xl p-4 shadow-sm">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
@@ -245,13 +287,13 @@ export default function OrdersPage() {
                 {/* Ürün listesi (scrollable on mobile) */}
                 <div className="px-5 py-4">
                   <div className="rounded-xl border border-light2 overflow-x-auto">
-                    <table className="w-full text-sm min-w-[680px]">
+                    <table className="w-full min-w-[560px] text-sm sm:min-w-[680px]">
                       <thead className="bg-light1 text-dark2">
                         <tr>
                           <th className="text-left px-4 py-2 font-medium">
                             Ürün
                           </th>
-                          <th className="text-left px-4 py-2 font-medium">
+                          <th className="hidden px-4 py-2 text-left font-medium sm:table-cell">
                             Varyant
                           </th>
                           <th className="text-right px-4 py-2 font-medium">
@@ -266,51 +308,110 @@ export default function OrdersPage() {
                         </tr>
                       </thead>
                       <tbody>
-                        {order.items.map((item, idx) => (
-                          <tr
-                            key={idx}
-                            className={
-                              idx % 2 === 0 ? "bg-white" : "bg-light1/50"
-                            }
-                          >
-                            <td className="px-4 py-2 text-dark1 break-words">
-                              {item.name}
-                            </td>
-                            <td className="px-4 py-2 text-dark2">
-                              {(item.size && `Beden: ${item.size}`) ||
-                                (item.color && `Renk: ${item.color}`) ||
-                                "-"}
-                            </td>
-                            <td className="px-4 py-2 text-right text-dark1">
-                              {item.qty}
-                            </td>
-                            <td className="px-4 py-2 text-right text-dark1 whitespace-nowrap">
-                              {fmtPrice(item.price)}
-                            </td>
-                            <td className="px-4 py-2 text-right text-dark1 whitespace-nowrap">
-                              {fmtPrice(item.qty * item.price)}
-                            </td>
-                          </tr>
-                        ))}
+                        {order.items.map((item, idx) => {
+                          const { productId, image } = getProductMeta(item);
+                          const hasVariant = item.size || item.color;
+
+                          return (
+                            <tr
+                              key={idx}
+                              className={
+                                idx % 2 === 0 ? "bg-white" : "bg-light1/50"
+                              }
+                            >
+                              <td className="px-4 py-3 text-dark1">
+                                <div className="flex min-w-0 items-center gap-3">
+                                  {image ? (
+                                    <button
+                                      type="button"
+                                      className="h-14 w-14 shrink-0 overflow-hidden rounded-xl border border-light2 bg-white focus:outline-none focus:ring-2 focus:ring-dark1"
+                                      onClick={() =>
+                                        setImageViewer({
+                                          src: image,
+                                          alt: item.name,
+                                        })
+                                      }
+                                      aria-label={`${item.name} görselini büyüt`}
+                                    >
+                                      <img
+                                        src={image}
+                                        alt={item.name}
+                                        className="h-full w-full object-cover"
+                                      />
+                                    </button>
+                                  ) : (
+                                    <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl border border-dashed border-light2 bg-light1 text-xs text-dark2">
+                                      Görsel
+                                    </div>
+                                  )}
+
+                                  <div className="min-w-0">
+                                    {productId ? (
+                                      <a
+                                        href={`/product-details/${productId}`}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        className="block break-words font-medium text-dark1 transition hover:text-dark2 hover:underline"
+                                      >
+                                        {item.name}
+                                      </a>
+                                    ) : (
+                                      <div className="break-words font-medium text-dark1">
+                                        {item.name}
+                                      </div>
+                                    )}
+
+                                    <div className="mt-1 text-xs text-dark2 sm:hidden">
+                                      {hasVariant
+                                        ? [
+                                            item.size ? `Beden: ${item.size}` : null,
+                                            item.color ? `Renk: ${item.color}` : null,
+                                          ]
+                                            .filter(Boolean)
+                                            .join(" • ")
+                                        : "Varyant yok"}
+                                    </div>
+                                  </div>
+                                </div>
+                              </td>
+                              <td className="hidden px-4 py-2 text-dark2 sm:table-cell">
+                                {hasVariant
+                                  ? [
+                                      item.size ? `Beden: ${item.size}` : null,
+                                      item.color ? `Renk: ${item.color}` : null,
+                                    ]
+                                      .filter(Boolean)
+                                      .join(" • ")
+                                  : "-"}
+                              </td>
+                              <td className="px-4 py-2 text-right text-dark1">
+                                {item.qty}
+                              </td>
+                              <td className="px-4 py-2 text-right text-dark1 whitespace-nowrap">
+                                {fmtPrice(item.price)}
+                              </td>
+                              <td className="px-4 py-2 text-right text-dark1 whitespace-nowrap">
+                                {fmtPrice(item.qty * item.price)}
+                              </td>
+                            </tr>
+                          );
+                        })}
                       </tbody>
                     </table>
                   </div>
 
-                    <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 text-sm">
-                      <div className="px-3 py-2 rounded-lg bg-light1/70">
-                        Ara Toplam:{" "}
-                        <b className="text-dark1">
-                          {fmtPrice(pricingSubTotal)}
-                        </b>
-                      </div>
-                      <div className="px-3 py-2 rounded-lg bg-emerald-50 text-emerald-800">
-                        Kampanya:{" "}
-                        <b>-{fmtPrice(pricingCampaignDiscount)}</b>
-                      </div>
-                      <div className="px-3 py-2 rounded-lg bg-light1/70">
-                        Kargo:{" "}
-                        <b className="text-dark1">{fmtPrice(pricingShippingFee)}</b>
-                      </div>
+                  <div className="mt-4 grid grid-cols-1 gap-2 text-sm sm:grid-cols-2 lg:grid-cols-4">
+                    <div className="rounded-lg bg-light1/70 px-3 py-2">
+                      Ara Toplam:{" "}
+                      <b className="text-dark1">{fmtPrice(pricingSubTotal)}</b>
+                    </div>
+                    <div className="rounded-lg bg-emerald-50 px-3 py-2 text-emerald-800">
+                      Kampanya: <b>-{fmtPrice(pricingCampaignDiscount)}</b>
+                    </div>
+                    <div className="rounded-lg bg-light1/70 px-3 py-2">
+                      Kargo:{" "}
+                      <b className="text-dark1">{fmtPrice(pricingShippingFee)}</b>
+                    </div>
                     <div className="px-3 py-2 rounded-lg bg-blue-50 text-blue-800">
                       Genel Toplam: <b>{fmtPrice(order.totalPrice)}</b>
                     </div>
@@ -403,6 +504,14 @@ export default function OrdersPage() {
             );
           })}
         </div>
+      )}
+
+      {toast && (
+        <ToastAlert
+          msg={toast.msg}
+          type={toast.type}
+          onClose={() => setToast(null)}
+        />
       )}
     </div>
   );

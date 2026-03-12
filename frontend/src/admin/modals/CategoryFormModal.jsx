@@ -190,7 +190,12 @@ const BlockedProductsModal = ({ open, onClose, data }) => {
   );
 };
 
-export default function CategoryFormModal({ category, onClose, onSaved }) {
+export default function CategoryFormModal({
+  category,
+  onClose,
+  onSaved,
+  onDirtyChange,
+}) {
   const isEdit = Boolean(category);
 
   const [form, setForm] = useState({ name: "", image: null });
@@ -224,6 +229,10 @@ export default function CategoryFormModal({ category, onClose, onSaved }) {
     setImageTooLarge(false);
     if (fileInputRef.current) fileInputRef.current.value = "";
   }, [category, isEdit]);
+
+  useEffect(() => {
+    onDirtyChange?.(dirty);
+  }, [dirty, onDirtyChange]);
 
   const childTokens = useMemo(() => {
     return childrenInput
@@ -406,6 +415,7 @@ export default function CategoryFormModal({ category, onClose, onSaved }) {
       updateTask(id, { progress: 100, status: "success" });
       setTimeout(() => removeTask(id), 2000);
 
+      setDirty(false);
       onSaved(null); // ✅ başarı → CategoriesPage modalı kapatır
     } catch (err) {
       const status = err?.response?.status;

@@ -19,6 +19,7 @@ import {
 } from "@heroicons/react/24/outline";
 import api from "../../../api";
 import ToastAlert from "../../components/ui/ToastAlert";
+import ConfirmDialog from "../../components/ui/ConfirmDialog";
 
 /* ────────── Silme Onay Modali ────────── */
 const ConfirmModal = ({ open, onClose, onConfirm, message }) => {
@@ -92,6 +93,7 @@ export default function BlogCategoriesPage() {
   /* form dialog */
   const [dialogOpen, setDialogOpen] = useState(false);
   const [dirty, setDirty] = useState(false);
+  const [closeConfirmOpen, setCloseConfirmOpen] = useState(false);
   const [form, setForm] = useState({
     _id: null,
     name: "",
@@ -134,6 +136,7 @@ export default function BlogCategoriesPage() {
   const openNew = () => {
     setForm({ _id: null, name: "", slug: "", description: "" });
     setDirty(false);
+    setCloseConfirmOpen(false);
     setDialogOpen(true);
   };
 
@@ -145,7 +148,17 @@ export default function BlogCategoriesPage() {
       description: cat.description || "",
     });
     setDirty(false);
+    setCloseConfirmOpen(false);
     setDialogOpen(true);
+  };
+
+  const requestCloseDialog = () => {
+    if (dirty) {
+      setCloseConfirmOpen(true);
+      return;
+    }
+    setDialogOpen(false);
+    setDirty(false);
   };
 
   const handleSave = async () => {
@@ -166,6 +179,7 @@ export default function BlogCategoriesPage() {
         setToast({ msg: "Kategori oluşturuldu.", type: "success" });
       }
       await fetchCategories();
+      setDirty(false);
       setDialogOpen(false);
     } catch (err) {
       console.error("Kaydetme hatası:", err);
@@ -370,7 +384,7 @@ export default function BlogCategoriesPage() {
       <Dialog
         open={dialogOpen}
         size="md"
-        handler={() => setDialogOpen(false)}
+        handler={requestCloseDialog}
         className="!max-w-[95vw]"
       >
         <DialogHeader>
@@ -438,7 +452,7 @@ export default function BlogCategoriesPage() {
         <DialogFooter className="gap-2">
           <Button
             variant="text"
-            onClick={() => setDialogOpen(false)}
+            onClick={requestCloseDialog}
             className="mr-2"
           >
             İptal
@@ -459,6 +473,20 @@ export default function BlogCategoriesPage() {
         onClose={() => setDeleteId(null)}
         onConfirm={handleDeleteConfirmed}
         message="Bu kategoriyi silmek istediğinize emin misiniz?"
+      />
+
+      <ConfirmDialog
+        open={closeConfirmOpen}
+        title="Değişiklikleri Kapat"
+        message="Kaydedilmemiş değişiklikler var. Form kapatılsın mı?"
+        confirmLabel="Kapat"
+        tone="warning"
+        onCancel={() => setCloseConfirmOpen(false)}
+        onConfirm={() => {
+          setCloseConfirmOpen(false);
+          setDirty(false);
+          setDialogOpen(false);
+        }}
       />
 
       {/* Toast */}

@@ -19,6 +19,7 @@ import {
 } from "@heroicons/react/24/outline";
 import api from "../../../api";
 import ToastAlert from "../../components/ui/ToastAlert";
+import ConfirmDialog from "../../components/ui/ConfirmDialog";
 import { v4 as uuidv4 } from "uuid";
 import { useUploadQueue } from "../../context/UploadQueueContext";
 
@@ -88,8 +89,8 @@ export default function BlogsPage() {
 
   // form
   const [dialogOpen, setDialogOpen] = useState(false);
-  // eslint-disable-next-line no-unused-vars
   const [dirty, setDirty] = useState(false);
+  const [closeConfirmOpen, setCloseConfirmOpen] = useState(false);
   const [form, setForm] = useState({
     _id: null,
     title: "",
@@ -161,6 +162,7 @@ export default function BlogsPage() {
     });
     setTagInput("");
     setDirty(false);
+    setCloseConfirmOpen(false);
     setDialogOpen(true);
   };
 
@@ -182,10 +184,20 @@ export default function BlogsPage() {
       });
       setTagInput("");
       setDirty(false);
+      setCloseConfirmOpen(false);
       setDialogOpen(true);
     } catch {
       setToast({ msg: "Blog verisi alınamadı.", type: "error" });
     }
+  };
+
+  const requestCloseDialog = () => {
+    if (dirty) {
+      setCloseConfirmOpen(true);
+      return;
+    }
+    setDialogOpen(false);
+    setDirty(false);
   };
 
   /* ---------------- tag işlemleri ---------------- */
@@ -263,6 +275,7 @@ export default function BlogsPage() {
 
       const { data } = await api.get("/blogs");
       setBlogs(data);
+      setDirty(false);
       setDialogOpen(false);
     } catch {
       updateTask(id, {
@@ -530,7 +543,7 @@ export default function BlogsPage() {
       <Dialog
         open={dialogOpen}
         size="xl"
-        handler={() => setDialogOpen(false)}
+        handler={requestCloseDialog}
         className="!max-w-[95vw]"
       >
         <DialogHeader>{form._id ? "Blogu Güncelle" : "Yeni Blog"}</DialogHeader>
@@ -799,7 +812,7 @@ export default function BlogsPage() {
           </div>
         </DialogBody>
         <DialogFooter className="gap-2">
-          <Button variant="text" onClick={() => setDialogOpen(false)}>
+          <Button variant="text" onClick={requestCloseDialog}>
             İptal
           </Button>
           <Button disabled={!canSave} onClick={handleSave} color="blue">
@@ -814,6 +827,20 @@ export default function BlogsPage() {
         onClose={() => setDeleteId(null)}
         onConfirm={handleDeleteConfirmed}
         message="Bu blogu silmek istediğinize emin misiniz?"
+      />
+
+      <ConfirmDialog
+        open={closeConfirmOpen}
+        title="Değişiklikleri Kapat"
+        message="Kaydedilmemiş değişiklikler var. Form kapatılsın mı?"
+        confirmLabel="Kapat"
+        tone="warning"
+        onCancel={() => setCloseConfirmOpen(false)}
+        onConfirm={() => {
+          setCloseConfirmOpen(false);
+          setDirty(false);
+          setDialogOpen(false);
+        }}
       />
 
       {/* toast */}

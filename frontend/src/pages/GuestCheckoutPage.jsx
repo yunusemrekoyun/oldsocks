@@ -2,6 +2,7 @@
 import React, { useMemo, useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useCart } from "../context/useCart";
+import ToastAlert from "../components/ui/ToastAlert";
 import api from "../../api";
 
 export default function GuestCheckoutPage() {
@@ -28,6 +29,7 @@ export default function GuestCheckoutPage() {
   // --- KARGO ---
   const [shipping, setShipping] = useState(null);
   const [shipLoading, setShipLoading] = useState(true);
+  const [toast, setToast] = useState(null);
 
   // ürünlerin ara toplamı
   const subTotal = useMemo(
@@ -142,19 +144,21 @@ export default function GuestCheckoutPage() {
         return;
       }
 
-      alert("Ödeme başlatılamadı.");
+      setToast({ type: "error", msg: "Ödeme başlatılamadı." });
     } catch (e) {
       console.error("guest payment start error:", e);
       if (e.response?.status === 422) {
         const msg =
           e.response?.data?.message ||
           "Ödeme başlatılamadı. Lütfen bilgilerinizi kontrol edin.";
-        alert(msg);
+        setToast({ type: "error", msg });
       } else {
-        alert(
-          e?.response?.data?.message ||
-            "Ödeme başlatılamadı. Lütfen tekrar deneyin."
-        );
+        setToast({
+          type: "error",
+          msg:
+            e?.response?.data?.message ||
+            "Ödeme başlatılamadı. Lütfen tekrar deneyin.",
+        });
       }
     } finally {
       setLoading(false);
@@ -363,6 +367,14 @@ export default function GuestCheckoutPage() {
             {loading ? "Yönlendiriliyor…" : "Ödemeye Geç (Üye olmadan)"}
           </button>
         </div>
+
+        {toast && (
+          <ToastAlert
+            msg={toast.msg}
+            type={toast.type}
+            onClose={() => setToast(null)}
+          />
+        )}
       </div>
     </div>
   );

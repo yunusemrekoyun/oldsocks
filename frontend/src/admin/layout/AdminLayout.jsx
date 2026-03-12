@@ -416,7 +416,7 @@ export default function AdminLayout({ children }) {
   }, [location.pathname]);
 
   return (
-    <div className="min-h-svh md:min-h-screen flex bg-gray-50">
+    <div className="admin-shell min-h-svh md:min-h-screen flex bg-gray-50">
       {/* Desktop Sidebar */}
       <aside className="hidden md:block w-64 md:sticky md:top-0 md:h-[100svh]">
         {SidebarContent}

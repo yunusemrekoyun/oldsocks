@@ -1,12 +1,20 @@
 // src/pages/ShopPage.jsx
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
+import { ChevronDownIcon } from "@heroicons/react/24/outline";
 import BreadCrumb from "../components/breadCrumb/BreadCrumb";
 import CategoryFilter from "../components/categories/CategoryFilter";
 import Products from "../components/products/Products";
 import api from "../../api";
 import useProductsCache from "../hooks/useProductsCache";
 import useCategoriesCache from "../hooks/useCategoriesCache";
+
+const SORT_OPTIONS = [
+  { value: "newest", label: "Tarihe Göre: En Yeni" },
+  { value: "oldest", label: "Tarihe Göre: En Eski" },
+  { value: "priceDesc", label: "Fiyata Göre: En Yüksek" },
+  { value: "priceAsc", label: "Fiyata Göre: En Düşük" },
+];
 
 export default function ShopPage() {
   const { state } = useLocation();
@@ -41,6 +49,7 @@ export default function ShopPage() {
     priceRange: [0, Infinity],
   };
   const [filters, setFilters] = useState(defaultFilters);
+  const [sortBy, setSortBy] = useState("newest");
 
   /* 3) Header preset */
   useEffect(() => {
@@ -104,65 +113,89 @@ export default function ShopPage() {
   }, [baseList, campaignItems, miniItems]);
 
   /* 6) Listeyi filtrele (normalize’larla) */
-  const filtered = baseList.filter((p) => {
-    const cat =
-      typeof p.category === "object"
-        ? String(p.category._id)
-        : String(p.category);
-    const parent =
-      typeof p.category === "object" && p.category.parent
-        ? String(p.category.parent._id || p.category.parent)
-        : null;
+  const filtered = useMemo(
+    () =>
+      baseList.filter((p) => {
+        const cat =
+          typeof p.category === "object"
+            ? String(p.category._id)
+            : String(p.category);
+        const parent =
+          typeof p.category === "object" && p.category.parent
+            ? String(p.category.parent._id || p.category.parent)
+            : null;
 
-    // Belirli indirim → sadece o indirimin ürünleri
-    if (discountProductIdSet) {
-      if (!discountProductIdSet.has(String(p._id))) return false;
-    }
+        if (discountProductIdSet && !discountProductIdSet.has(String(p._id))) {
+          return false;
+        }
 
-    // Header kampanya preset ürünleri
-    if (presetProductIdSet) {
-      if (!presetProductIdSet.has(String(p._id))) return false;
-    }
+        if (presetProductIdSet && !presetProductIdSet.has(String(p._id))) {
+          return false;
+        }
 
-    // Genel "İndirimdekiler"
-    if (!discountProductIdSet && discountOnly) {
-      const rate = Number(p.discount || 0);
-      if (!(rate > 0)) return false; // toplu indirimler product.discount’a yazılıyor
-    }
+        if (!discountProductIdSet && discountOnly) {
+          const rate = Number(p.discount || 0);
+          if (!(rate > 0)) return false;
+        }
 
-    // Alt kategori > kategori
-    if (filters.subCategory.length) {
-      if (!filters.subCategory.map(String).includes(cat)) return false;
-    } else if (filters.category.length) {
-      const cats = filters.category.map(String);
-      if (!cats.includes(cat) && !(parent && cats.includes(parent)))
-        return false;
-    }
+        if (filters.subCategory.length) {
+          if (!filters.subCategory.map(String).includes(cat)) return false;
+        } else if (filters.category.length) {
+          const cats = filters.category.map(String);
+          if (!cats.includes(cat) && !(parent && cats.includes(parent))) {
+            return false;
+          }
+        }
 
-    // Beden
-    if (filters.sizes.length) {
-      const sizeStrs = Array.isArray(p.sizes)
-        ? p.sizes
-            .map((s) => String((s?.size ?? s ?? "").toString().trim()))
-            .filter(Boolean)
-        : [];
-      const ok = sizeStrs.some((s) => filters.sizes.includes(s));
-      if (!ok) return false;
-    }
+        if (filters.sizes.length) {
+          const sizeStrs = Array.isArray(p.sizes)
+            ? p.sizes
+                .map((s) => String((s?.size ?? s ?? "").toString().trim()))
+                .filter(Boolean)
+            : [];
+          const ok = sizeStrs.some((s) => filters.sizes.includes(s));
+          if (!ok) return false;
+        }
 
-    // Renk
-    if (filters.colors.length) {
-      const color = String((p.color || "").trim());
-      if (!filters.colors.includes(color)) return false;
-    }
+        if (filters.colors.length) {
+          const color = String((p.color || "").trim());
+          if (!filters.colors.includes(color)) return false;
+        }
 
-    // Fiyat aralığı
-    const [low, high] = filters.priceRange;
-    const price = Number(p.price || 0);
-    if (price < low || price > high) return false;
+        const [low, high] = filters.priceRange;
+        const price = Number(p.price || 0);
+        if (price < low || price > high) return false;
 
-    return true;
-  });
+        return true;
+      }),
+    [baseList, discountOnly, discountProductIdSet, filters, presetProductIdSet]
+  );
+
+  const sortedProducts = useMemo(() => {
+    const list = [...filtered];
+
+    const getTimestamp = (product) => {
+      const createdAt = product?.createdAt
+        ? new Date(product.createdAt).getTime()
+        : NaN;
+      if (Number.isFinite(createdAt)) return createdAt;
+
+      const objectIdTime = parseInt(String(product?._id || "").slice(0, 8), 16);
+      return Number.isFinite(objectIdTime) ? objectIdTime * 1000 : 0;
+    };
+
+    list.sort((a, b) => {
+      if (sortBy === "priceAsc") return Number(a.price || 0) - Number(b.price || 0);
+      if (sortBy === "priceDesc") return Number(b.price || 0) - Number(a.price || 0);
+
+      const timeA = getTimestamp(a);
+      const timeB = getTimestamp(b);
+
+      return sortBy === "oldest" ? timeA - timeB : timeB - timeA;
+    });
+
+    return list;
+  }, [filtered, sortBy]);
 
   /* 7) Kampanya/preset temizleme */
   const clearCampaign = () => {
@@ -199,15 +232,44 @@ export default function ShopPage() {
 
         {/* SAĞ: Ürünler */}
         <section className="lg:col-span-3">
-          <header className="mb-6">
-            <h1 className="text-4xl font-playfair font-bold text-black">
-              {presetTitle || miniTitle || campaignTitle || ""}
-            </h1>
+          <header className="mb-6 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+            <div className="min-w-0">
+              <h1 className="text-4xl font-playfair font-bold text-black">
+                {presetTitle || miniTitle || campaignTitle || "Tüm Ürünler"}
+              </h1>
+              <p className="mt-2 text-sm text-dark2">
+                {sortedProducts.length} ürün listeleniyor
+              </p>
+            </div>
+
+            <div className="w-full md:w-auto rounded-2xl border border-light2 bg-white px-4 py-3 shadow-sm">
+              <label
+                htmlFor="shop-sort"
+                className="mb-2 block text-[11px] font-semibold uppercase tracking-[0.22em] text-dark2"
+              >
+                Sıralama
+              </label>
+              <div className="relative">
+                <select
+                  id="shop-sort"
+                  value={sortBy}
+                  onChange={(e) => setSortBy(e.target.value)}
+                  className="w-full appearance-none rounded-full border border-light2 bg-light1 px-4 py-2.5 pr-10 text-sm font-medium text-dark1 outline-none transition focus:border-dark1 md:min-w-[260px]"
+                >
+                  {SORT_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDownIcon className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-dark2" />
+              </div>
+            </div>
           </header>
 
-          <Products products={filtered.slice(0, visibleCount)} />
+          <Products products={sortedProducts.slice(0, visibleCount)} />
 
-          {visibleCount < filtered.length && !(campaignItems || miniItems) && (
+          {visibleCount < sortedProducts.length && !(campaignItems || miniItems) && (
             <div ref={browseRef} className="mt-10 text-center">
               <button
                 className="px-6 py-2 border border-dark1 text-dark1 rounded-full hover:bg-dark1 hover:text-white transition"

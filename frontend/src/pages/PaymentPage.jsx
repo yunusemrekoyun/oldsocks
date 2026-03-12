@@ -2,6 +2,7 @@
 import React, { useEffect, useRef, useState, useMemo } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useCart } from "../context/useCart";
+import ToastAlert from "../components/ui/ToastAlert";
 import api from "../../api";
 
 export default function PaymentPage() {
@@ -27,6 +28,7 @@ export default function PaymentPage() {
 
   const [addresses, setAddresses] = useState([]);
   const [addrLoading, setAddrLoading] = useState(!isGuest); // guest’te adres çekmeyeceğiz
+  const [toast, setToast] = useState(null);
 
   // conversationId yoksa geri gönder
   useEffect(() => {
@@ -68,6 +70,13 @@ export default function PaymentPage() {
       addresses[0]
     );
   }, [isGuest, addresses, selectedAddressIdFromState]);
+
+  const redirectToCartWithError = (msg) => {
+    setToast({ type: "error", msg });
+    window.setTimeout(() => {
+      navigate("/cart", { replace: true });
+    }, 1200);
+  };
 
   // PayTR inline formu başlat
   useEffect(() => {
@@ -115,12 +124,10 @@ export default function PaymentPage() {
         }
 
         console.error("Bilinmeyen inline response:", data);
-        alert("Ödeme başlatılamadı. Lütfen tekrar deneyin.");
-        navigate("/cart", { replace: true });
+        redirectToCartWithError("Ödeme başlatılamadı. Lütfen tekrar deneyin.");
       } catch (e) {
         console.error("Ödeme formu yüklenemedi:", e);
-        alert("Ödeme başlatılamadı. Lütfen tekrar deneyin.");
-        navigate("/cart", { replace: true });
+        redirectToCartWithError("Ödeme başlatılamadı. Lütfen tekrar deneyin.");
       }
     })();
 
@@ -320,6 +327,14 @@ export default function PaymentPage() {
           </div>
         </aside>
       </div>
+
+      {toast && (
+        <ToastAlert
+          msg={toast.msg}
+          type={toast.type}
+          onClose={() => setToast(null)}
+        />
+      )}
     </div>
   );
 }

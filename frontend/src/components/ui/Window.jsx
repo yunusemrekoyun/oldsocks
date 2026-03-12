@@ -1,7 +1,15 @@
 // src/components/ui/Window.jsx
 import React, { useState, useRef, useEffect } from "react";
 
-export default function Window({ title, children, onClose, footer }) {
+export default function Window({
+  title,
+  children,
+  onClose,
+  footer,
+  showFullscreenToggle = true,
+  zIndexClass = "z-[999]",
+  maxWidthClass = "sm:max-w-4xl md:max-w-5xl",
+}) {
   const [isFull, setIsFull] = useState(false);
   const ref = useRef(null);
 
@@ -24,7 +32,9 @@ export default function Window({ title, children, onClose, footer }) {
   }, [onClose]);
 
   return (
-    <div className="fixed inset-0 z-[999] flex items-center justify-center p-2 sm:p-4">
+    <div
+      className={`fixed inset-0 flex items-center justify-center p-2 sm:p-4 ${zIndexClass}`}
+    >
       {/* Backdrop */}
       <div
         className="absolute inset-0 bg-black/50"
@@ -42,7 +52,7 @@ export default function Window({ title, children, onClose, footer }) {
           // boyutlandırma
           isFull
             ? "w-full h-full rounded-none sm:rounded-2xl"
-            : "w-full max-w-[100%] sm:max-w-4xl md:max-w-5xl max-h-[95vh] sm:max-h-[90vh] rounded-xl",
+            : `w-full max-w-[100%] ${maxWidthClass} max-h-[95vh] sm:max-h-[90vh] rounded-xl`,
         ].join(" ")}
       >
         {/* Header (sticky) */}
@@ -55,14 +65,16 @@ export default function Window({ title, children, onClose, footer }) {
           </h2>
 
           <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setIsFull((f) => !f)}
-              className="px-3 py-1.5 rounded-lg border text-sm hover:bg-gray-50"
-              title={isFull ? "Pencereyi küçült" : "Tam ekran yap"}
-            >
-              {isFull ? "⇲" : "⇱"}
-            </button>
+            {showFullscreenToggle && (
+              <button
+                type="button"
+                onClick={() => setIsFull((f) => !f)}
+                className="px-3 py-1.5 rounded-lg border text-sm hover:bg-gray-50"
+                title={isFull ? "Pencereyi küçült" : "Tam ekran yap"}
+              >
+                {isFull ? "⇲" : "⇱"}
+              </button>
+            )}
             {onClose && (
               <button
                 type="button"
