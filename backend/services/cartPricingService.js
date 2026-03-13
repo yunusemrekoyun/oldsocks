@@ -1,11 +1,17 @@
 const Product = require("../models/Product");
 const ShippingMethod = require("../models/ShippingMethod");
 const CartCampaign = require("../models/CartCampaign");
+const Coupon = require("../models/Coupon");
+const {
+  hasCouponUsage,
+  normalizeCouponCode,
+} = require("../utils/couponUsageService");
 
 class HttpError extends Error {
-  constructor(status, message) {
+  constructor(status, message, extras = {}) {
     super(message);
     this.status = status;
+    Object.assign(this, extras);
   }
 }
 
@@ -69,7 +75,9 @@ function sumCheapestUnits(lines, neededUnits, useOriginal = false) {
 
   const buckets = lines
     .map((line) => ({
-      unitPrice: useOriginal ? Number(line.originalPrice || 0) : Number(line.price || 0),
+      unitPrice: useOriginal
+        ? Number(line.originalPrice || 0)
+        : Number(line.price || 0),
       qty: Number(line.qty || 0),
     }))
     .filter((b) => Number.isFinite(b.unitPrice) && b.unitPrice >= 0 && b.qty > 0)
@@ -103,10 +111,63 @@ function computePercentDiscount({
     return round2((current * percent) / 100);
   }
 
-  // Kampanya "üstüne binmesin" ise, katalog indirimi dikkate alınmadan
-  // kampanya tek başına uygulanmış olsaydı oluşacak toplamı hedefler.
   const campaignOnlyTotal = round2(original * (1 - percent / 100));
   return round2(Math.max(0, current - campaignOnlyTotal));
+}
+
+function evaluateCouponForLines(coupon, lines) {
+  const coveredSet = new Set((coupon.productIds || []).map((id) => String(id)));
+  const coveredLines = lines.filter((line) => coveredSet.has(String(line.productId)));
+  if (!coveredLines.length) {
+    throw new HttpError(409, "Kupon sepetinizdeki ürünler için geçerli değil.", {
+      source: "coupon",
+    });
+  }
+
+  const coveredSubtotal = round2(
+    coveredLines.reduce(
+      (sum, line) => sum + Number(line.price || 0) * Number(line.qty || 0),
+      0
+    )
+  );
+
+  const minimumSubtotal = Number(coupon.minimumSubtotal || 0);
+  if (coveredSubtotal < minimumSubtotal) {
+    throw new HttpError(
+      409,
+      `Kuponu kullanmak için kapsanan ürünlerde en az ₺${minimumSubtotal.toFixed(
+        2
+      )} sepet tutarına ulaşmalısınız.`,
+      { source: "coupon" }
+    );
+  }
+
+  let savings = 0;
+  if (coupon.discountType === "percent") {
+    savings = round2((coveredSubtotal * Number(coupon.discountValue || 0)) / 100);
+  } else if (coupon.discountType === "fixed") {
+    savings = round2(Number(coupon.discountValue || 0));
+  }
+
+  savings = round2(Math.max(0, Math.min(savings, coveredSubtotal)));
+  if (savings <= 0) {
+    throw new HttpError(409, "Kupon indirimi hesaplanamadı.", {
+      source: "coupon",
+    });
+  }
+
+  return {
+    couponId: coupon._id,
+    code: coupon.code,
+    discountType: coupon.discountType,
+    discountValue: Number(coupon.discountValue || 0),
+    minimumSubtotal,
+    savings,
+    details: {
+      coveredSubtotal,
+      coveredProductCount: coveredLines.length,
+    },
+  };
 }
 
 function evaluateCampaignForLines(campaign, lines) {
@@ -230,6 +291,37 @@ async function getEligibleCampaigns(lines, now = new Date()) {
     .filter(Boolean);
 }
 
+async function resolveCouponForLines(selectedCouponCode, lines, context = {}) {
+  const code = normalizeCouponCode(selectedCouponCode);
+  if (!code) return null;
+
+  const coupon = await Coupon.findOne({
+    code,
+    isEnabled: true,
+  }).lean();
+
+  if (!coupon) {
+    throw new HttpError(404, "Kupon bulunamadı veya aktif değil.", {
+      source: "coupon",
+    });
+  }
+
+  if (context.customerUserId || context.customerEmail) {
+    const alreadyUsed = await hasCouponUsage({
+      couponId: coupon._id,
+      userId: context.customerUserId || null,
+      email: context.customerEmail || "",
+    });
+    if (alreadyUsed) {
+      throw new HttpError(409, "Bu kuponu daha önce kullandınız.", {
+        source: "coupon",
+      });
+    }
+  }
+
+  return evaluateCouponForLines(coupon, lines);
+}
+
 function selectCampaign(eligibleCampaigns, selectedCampaignId) {
   if (!selectedCampaignId) {
     return null;
@@ -241,7 +333,8 @@ function selectCampaign(eligibleCampaigns, selectedCampaignId) {
   if (!found) {
     throw new HttpError(
       409,
-      "Seçilen kampanya sepet koşullarını artık sağlamıyor."
+      "Seçilen kampanya sepet koşullarını artık sağlamıyor.",
+      { source: "campaign" }
     );
   }
   return found;
@@ -251,6 +344,7 @@ async function calculateCartPricing(rawItems, options = {}) {
   const selectedCampaignId = options?.selectedCampaignId
     ? String(options.selectedCampaignId)
     : "";
+  const selectedCouponCode = options?.couponCode ? String(options.couponCode) : "";
   const includeEligibleCampaigns = options?.includeEligibleCampaigns !== false;
   const now = options?.now instanceof Date ? options.now : new Date();
 
@@ -313,12 +407,22 @@ async function calculateCartPricing(rawItems, options = {}) {
   const eligibleCampaigns = includeEligibleCampaigns
     ? await getEligibleCampaigns(orderItems, now)
     : [];
-  const appliedCampaign = includeEligibleCampaigns
-    ? selectCampaign(eligibleCampaigns, selectedCampaignId)
-    : null;
+
+  const appliedCoupon = await resolveCouponForLines(selectedCouponCode, orderItems, {
+    customerUserId: options?.customerUserId || null,
+    customerEmail: options?.customerEmail || "",
+  });
+
+  const appliedCampaign =
+    includeEligibleCampaigns && !appliedCoupon
+      ? selectCampaign(eligibleCampaigns, selectedCampaignId)
+      : null;
 
   const campaignDiscount = round2(appliedCampaign?.savings || 0);
-  const discountedSubTotal = round2(Math.max(0, subTotal - campaignDiscount));
+  const couponDiscount = round2(appliedCoupon?.savings || 0);
+  const discountedSubTotal = round2(
+    Math.max(0, subTotal - campaignDiscount - couponDiscount)
+  );
 
   const shippingMethod = await ShippingMethod.findOne()
     .sort({ createdAt: -1 })
@@ -351,13 +455,15 @@ async function calculateCartPricing(rawItems, options = {}) {
       ...it,
       productId: it.productId,
     })),
-    eligibleCampaigns: eligibleCampaigns.map((campaign) => ({
-      campaignId: campaign.campaignId,
-      name: campaign.name,
-      templateType: campaign.templateType,
-      savings: campaign.savings,
-      details: campaign.details,
-    })),
+    eligibleCampaigns: appliedCoupon
+      ? []
+      : eligibleCampaigns.map((campaign) => ({
+          campaignId: campaign.campaignId,
+          name: campaign.name,
+          templateType: campaign.templateType,
+          savings: campaign.savings,
+          details: campaign.details,
+        })),
     appliedCampaign: appliedCampaign
       ? {
           campaignId: appliedCampaign.campaignId,
@@ -367,15 +473,28 @@ async function calculateCartPricing(rawItems, options = {}) {
           details: appliedCampaign.details,
         }
       : null,
+    appliedCoupon: appliedCoupon
+      ? {
+          couponId: appliedCoupon.couponId,
+          code: appliedCoupon.code,
+          discountType: appliedCoupon.discountType,
+          discountValue: appliedCoupon.discountValue,
+          minimumSubtotal: appliedCoupon.minimumSubtotal,
+          savings: appliedCoupon.savings,
+          details: appliedCoupon.details,
+        }
+      : null,
     summary: {
       subTotal,
       campaignDiscount,
+      couponDiscount,
       discountedSubTotal,
       shippingFee,
       shippingName,
       grandTotal,
       isFree: shippingFee === 0,
       freeShippingThreshold,
+      couponCode: appliedCoupon?.code || null,
     },
   };
 }

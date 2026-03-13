@@ -215,7 +215,20 @@ export default function PaymentPage() {
                   </div>
                 )}
 
-                {Number(summary.campaignDiscount || 0) > 0 && (
+                {Number(summary.couponDiscount || 0) > 0 && (
+                  <div className="flex justify-between text-blue-700">
+                    <span>
+                      Kupon İndirimi
+                      {summary.appliedCoupon?.code
+                        ? ` (${summary.appliedCoupon.code})`
+                        : ""}
+                    </span>
+                    <span>-₺{Number(summary.couponDiscount || 0).toFixed(2)}</span>
+                  </div>
+                )}
+
+                {(Number(summary.campaignDiscount || 0) > 0 ||
+                  Number(summary.couponDiscount || 0) > 0) && (
                   <div className="flex justify-between">
                     <span>İndirimli Ara Toplam</span>
                     <span>
@@ -258,6 +271,12 @@ export default function PaymentPage() {
                 {summary.appliedCampaign?.name && (
                   <p className="text-xs text-emerald-700">
                     Uygulanan kampanya: {summary.appliedCampaign.name}
+                  </p>
+                )}
+
+                {summary.appliedCoupon?.code && (
+                  <p className="text-xs text-blue-700">
+                    Uygulanan kupon: {summary.appliedCoupon.code}
                   </p>
                 )}
 

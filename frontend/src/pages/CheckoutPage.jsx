@@ -8,7 +8,13 @@ import ToastAlert from "../components/ui/ToastAlert";
 import api from "../../api";
 
 export default function CheckoutPage() {
-  const { items, selectedCampaignId } = useCart();
+  const {
+    items,
+    selectedCampaignId,
+    setSelectedCampaignId,
+    selectedCouponCode,
+    setSelectedCouponCode,
+  } = useCart();
   const { isLoggedIn, loading: authLoading } = useAuth();
   const navigate = useNavigate();
 
@@ -18,6 +24,11 @@ export default function CheckoutPage() {
   const [selectedAddress, setSelectedAddress] = useState(null);
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [toast, setToast] = useState(null);
+  const [pricingSummary, setPricingSummary] = useState(null);
+  const [appliedCampaign, setAppliedCampaign] = useState(null);
+  const [appliedCoupon, setAppliedCoupon] = useState(null);
+  const [pricingLoading, setPricingLoading] = useState(false);
+  const [pricingError, setPricingError] = useState(null);
 
   // kargo state
   const [shipping, setShipping] = useState(null);
@@ -56,6 +67,77 @@ export default function CheckoutPage() {
 
   const shippingFee = shipping ? (isFree ? 0 : Number(shipping.fee || 0)) : 0;
   const grandTotal = subTotal + shippingFee;
+
+  useEffect(() => {
+    if (!items.length) {
+      setPricingSummary(null);
+      setAppliedCampaign(null);
+      setAppliedCoupon(null);
+      setPricingError(null);
+      return;
+    }
+
+    let alive = true;
+    (async () => {
+      try {
+        setPricingLoading(true);
+        const { data } = await api.post("/cart-campaigns/preview", {
+          cartItems: items,
+          selectedCampaignId: selectedCampaignId || null,
+          couponCode: selectedCouponCode || null,
+        });
+        if (!alive) return;
+        setPricingSummary(data?.summary || null);
+        setAppliedCampaign(data?.appliedCampaign || null);
+        setAppliedCoupon(data?.appliedCoupon || null);
+        setPricingError(null);
+      } catch (err) {
+        if (!alive) return;
+        console.error("checkout pricing preview error:", err);
+        const source = err?.response?.data?.source || null;
+        setPricingSummary(null);
+        setAppliedCampaign(null);
+        setAppliedCoupon(null);
+        setPricingError(
+          err?.response?.data?.message || "Sipariş özeti güncellenemedi."
+        );
+        if (source === "campaign" && selectedCampaignId) {
+          setSelectedCampaignId(null);
+        }
+        if (source === "coupon" && selectedCouponCode) {
+          setSelectedCouponCode(null);
+        }
+      } finally {
+        if (alive) setPricingLoading(false);
+      }
+    })();
+
+    return () => {
+      alive = false;
+    };
+  }, [
+    items,
+    selectedCampaignId,
+    selectedCouponCode,
+    setSelectedCampaignId,
+    setSelectedCouponCode,
+  ]);
+
+  const displaySubTotal = Number(pricingSummary?.subTotal ?? subTotal);
+  const displayCampaignDiscount = Number(
+    pricingSummary?.campaignDiscount ?? 0
+  );
+  const displayCouponDiscount = Number(pricingSummary?.couponDiscount ?? 0);
+  const displayDiscountedSubTotal = Number(
+    pricingSummary?.discountedSubTotal ??
+      Math.max(0, displaySubTotal - displayCampaignDiscount - displayCouponDiscount)
+  );
+  const displayShippingFee = Number(pricingSummary?.shippingFee ?? shippingFee);
+  const displayGrandTotal = Number(pricingSummary?.grandTotal ?? grandTotal);
+  const displayIsFree = pricingSummary ? Boolean(pricingSummary.isFree) : isFree;
+  const displayShippingName = pricingSummary?.shippingName || shipping?.name || null;
+  const displayFreeShippingThreshold =
+    pricingSummary?.freeShippingThreshold ?? shipping?.freeShippingThreshold ?? null;
 
   useEffect(() => {
     api
@@ -114,6 +196,7 @@ export default function CheckoutPage() {
         addressId: selectedAddress,
         useFallback,
         selectedCampaignId: selectedCampaignId || null,
+        couponCode: selectedCouponCode || null,
       });
 
       if (data?.missing && !useFallback) {
@@ -132,12 +215,14 @@ export default function CheckoutPage() {
               freeShippingThreshold:
                 serverSummary.freeShippingThreshold ?? null,
               campaignDiscount: Number(serverSummary.campaignDiscount ?? 0),
+              couponDiscount: Number(serverSummary.couponDiscount ?? 0),
               discountedSubTotal: Number(
                 serverSummary.discountedSubTotal ??
                   serverSummary.subTotal ??
                   0
               ),
               appliedCampaign: data?.appliedCampaign || null,
+              appliedCoupon: data?.appliedCoupon || null,
             }
           : {
               subTotal,
@@ -148,8 +233,10 @@ export default function CheckoutPage() {
               freeShippingThreshold:
                 shipping?.freeShippingThreshold ?? null,
               campaignDiscount: 0,
+              couponDiscount: 0,
               discountedSubTotal: subTotal,
               appliedCampaign: null,
+              appliedCoupon: null,
             };
         navigate("/payment", {
           state: {
@@ -235,34 +322,83 @@ export default function CheckoutPage() {
         <div className="space-y-2 border-t pt-4 text-lg font-semibold">
           <div className="flex justify-between">
             <span>Ara Toplam:</span>
-            <span>₺{subTotal.toFixed(2)}</span>
+            <span>₺{displaySubTotal.toFixed(2)}</span>
           </div>
 
+          {displayCampaignDiscount > 0 && (
+            <div className="flex justify-between text-emerald-700 text-base">
+              <span>Kampanya İndirimi</span>
+              <span>-₺{displayCampaignDiscount.toFixed(2)}</span>
+            </div>
+          )}
+
+          {displayCouponDiscount > 0 && (
+            <div className="flex justify-between text-blue-700 text-base">
+              <span>
+                Kupon İndirimi
+                {appliedCoupon?.code ? ` (${appliedCoupon.code})` : ""}
+              </span>
+              <span>-₺{displayCouponDiscount.toFixed(2)}</span>
+            </div>
+          )}
+
+          {(displayCampaignDiscount > 0 || displayCouponDiscount > 0) && (
+            <div className="flex justify-between text-base">
+              <span>İndirimli Ara Toplam:</span>
+              <span>₺{displayDiscountedSubTotal.toFixed(2)}</span>
+            </div>
+          )}
+
           <div className="flex justify-between items-center">
-            <span>Kargo:</span>
-            {shipLoading ? (
+            <span>
+              Kargo{displayShippingName ? ` (${displayShippingName})` : ""}
+            </span>
+            {shipLoading || pricingLoading ? (
               <span className="text-gray-500">Kargo yükleniyor…</span>
-            ) : shipping ? (
-              isFree ? (
+            ) : shipping || pricingSummary ? (
+              displayIsFree ? (
                 <span className="flex items-center gap-2">
                   <span className="line-through text-gray-500">
-                    ₺{Number(shipping.fee).toFixed(2)}
+                    ₺{Number(shipping?.fee ?? displayShippingFee).toFixed(2)}
                   </span>
                   <span className="text-emerald-600 font-bold">Ücretsiz</span>
                 </span>
               ) : (
-                <span>₺{shippingFee.toFixed(2)}</span>
+                <span>₺{displayShippingFee.toFixed(2)}</span>
               )
             ) : (
               <span className="text-gray-500">Tanımlı kargo yok</span>
             )}
           </div>
 
+          {displayFreeShippingThreshold != null && !displayIsFree && (
+            <p className="text-sm text-gray-500">
+              ₺{Number(displayFreeShippingThreshold).toFixed(0)} ve üzeri
+              alışverişlerde kargo ücretsiz.
+            </p>
+          )}
+
           <div className="flex justify-between text-xl">
             <span>Genel Toplam:</span>
-            <span className="text-primary">₺{grandTotal.toFixed(2)}</span>
+            <span className="text-primary">₺{displayGrandTotal.toFixed(2)}</span>
           </div>
         </div>
+
+        {(appliedCampaign?.name || appliedCoupon?.code || pricingError) && (
+          <div className="mt-4 space-y-1 text-sm">
+            {appliedCampaign?.name && (
+              <p className="text-emerald-700">
+                Uygulanan kampanya: <b>{appliedCampaign.name}</b>
+              </p>
+            )}
+            {appliedCoupon?.code && (
+              <p className="text-blue-700">
+                Uygulanan kupon: <b>{appliedCoupon.code}</b>
+              </p>
+            )}
+            {pricingError && <p className="text-red-600">{pricingError}</p>}
+          </div>
+        )}
 
         <button
           onClick={() => attemptPayment(false)}

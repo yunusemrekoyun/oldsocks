@@ -20,15 +20,39 @@ const toCardPricing = (p) => {
   };
 };
 
+const getProductTimestamp = (product) => {
+  if (product?.createdAt) {
+    const createdAt = new Date(product.createdAt).getTime();
+    if (Number.isFinite(createdAt)) return createdAt;
+  }
+
+  const objectIdTime = parseInt(String(product?._id || "").slice(0, 8), 16);
+  if (Number.isFinite(objectIdTime)) return objectIdTime * 1000;
+
+  return 0;
+};
+
+const pickRandomItems = (list, count) => {
+  const items = [...list];
+  for (let i = items.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [items[i], items[j]] = [items[j], items[i]];
+  }
+  return items.slice(0, count);
+};
+
 export default function NewProducts() {
   const { data: allProducts, loading } = useProductsCache();
   const all = Array.isArray(allProducts) ? allProducts : [];
   const variantColorMap = useMemo(() => buildVariantColorMap(all), [all]);
 
-  // Rastgele 4 ürün seç
+  // En yeni 10 üründen rastgele 4 ürün seç
   const items = useMemo(() => {
-    const shuffled = [...all].sort(() => 0.5 - Math.random());
-    return shuffled.slice(0, 4);
+    const latestTen = [...all]
+      .sort((a, b) => getProductTimestamp(b) - getProductTimestamp(a))
+      .slice(0, 10);
+
+    return pickRandomItems(latestTen, 4);
   }, [all]);
 
   if (loading || !allProducts) {

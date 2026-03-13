@@ -4,6 +4,7 @@ import { CartContext } from "./CartContextObject";
 
 const STORAGE_KEY = "cartItems";
 const CAMPAIGN_STORAGE_KEY = "selectedCartCampaignId";
+const COUPON_STORAGE_KEY = "selectedCouponCode";
 
 export default function CartProvider({ children }) {
   const [items, setItems] = useState(() => {
@@ -17,6 +18,14 @@ export default function CartProvider({ children }) {
   const [selectedCampaignId, setSelectedCampaignId] = useState(() => {
     try {
       const stored = localStorage.getItem(CAMPAIGN_STORAGE_KEY);
+      return stored ? String(stored) : null;
+    } catch {
+      return null;
+    }
+  });
+  const [selectedCouponCode, setSelectedCouponCode] = useState(() => {
+    try {
+      const stored = localStorage.getItem(COUPON_STORAGE_KEY);
       return stored ? String(stored) : null;
     } catch {
       return null;
@@ -42,6 +51,18 @@ export default function CartProvider({ children }) {
       return;
     }
   }, [selectedCampaignId]);
+
+  useEffect(() => {
+    try {
+      if (selectedCouponCode) {
+        localStorage.setItem(COUPON_STORAGE_KEY, selectedCouponCode);
+      } else {
+        localStorage.removeItem(COUPON_STORAGE_KEY);
+      }
+    } catch {
+      return;
+    }
+  }, [selectedCouponCode]);
 
   const addToCart = (product) => {
     setItems((prev) => {
@@ -80,6 +101,7 @@ export default function CartProvider({ children }) {
   const clearCart = () => {
     setItems([]);
     setSelectedCampaignId(null);
+    setSelectedCouponCode(null);
   };
 
   return (
@@ -92,6 +114,8 @@ export default function CartProvider({ children }) {
         clearCart,
         selectedCampaignId,
         setSelectedCampaignId,
+        selectedCouponCode,
+        setSelectedCouponCode,
       }}
     >
       {children}

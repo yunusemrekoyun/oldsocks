@@ -2,6 +2,16 @@
 const Order = require("../models/Order");
 const { applyStockChanges } = require("../utils/updateStock");
 const { dispatchOrderPlacedMail } = require("../utils/orderMailDispatch");
+const { recordCouponUsageForOrder } = require("../utils/couponUsageService");
+
+async function persistCouponUsage(order) {
+  try {
+    await recordCouponUsageForOrder(order);
+  } catch (err) {
+    if (err?.code === 11000) return;
+    console.warn("[OrderController] Kupon kullanımı kaydedilemedi:", err?.message || err);
+  }
+}
 
 exports.getAllOrders = async (req, res) => {
   try {
@@ -82,6 +92,8 @@ exports.updateOrderStatus = async (req, res) => {
           });
         }
       }
+
+      await persistCouponUsage(order);
 
       if (!order.customerMailSentAt || !order.adminMailSentAt) {
         try {

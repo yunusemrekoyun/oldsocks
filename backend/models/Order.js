@@ -61,9 +61,20 @@ const OrderSchema = new mongoose.Schema(
       details: { type: Object, default: null },
     },
 
+    coupon: {
+      couponId: { type: mongoose.Types.ObjectId, ref: "Coupon", default: null },
+      code: { type: String, default: null },
+      discountType: { type: String, default: null },
+      discountValue: { type: Number, default: 0 },
+      minimumSubtotal: { type: Number, default: 0 },
+      savings: { type: Number, default: 0 },
+      details: { type: Object, default: null },
+    },
+
     pricing: {
       subTotal: { type: Number, default: 0 },
       campaignDiscount: { type: Number, default: 0 },
+      couponDiscount: { type: Number, default: 0 },
       discountedSubTotal: { type: Number, default: 0 },
       shippingFee: { type: Number, default: 0 },
       grandTotal: { type: Number, default: 0 },

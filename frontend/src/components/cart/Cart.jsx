@@ -14,6 +14,8 @@ export default function Cart() {
     clearCart,
     selectedCampaignId,
     setSelectedCampaignId,
+    selectedCouponCode,
+    setSelectedCouponCode,
   } = useCart();
   const { isLoggedIn } = useAuth();
   const navigate = useNavigate();
@@ -26,8 +28,11 @@ export default function Cart() {
   const [pricingSummary, setPricingSummary] = useState(null);
   const [eligibleCampaigns, setEligibleCampaigns] = useState([]);
   const [appliedCampaign, setAppliedCampaign] = useState(null);
+  const [appliedCoupon, setAppliedCoupon] = useState(null);
   const [pricingLoading, setPricingLoading] = useState(false);
   const [pricingError, setPricingError] = useState(null);
+  const [couponInput, setCouponInput] = useState(selectedCouponCode || "");
+  const [couponError, setCouponError] = useState(null);
 
   // Kargo metodu (tek kayıt varsayımı)
   const [shipping, setShipping] = useState(null); // { _id, name, fee, freeShippingThreshold }
@@ -58,12 +63,18 @@ export default function Cart() {
   }, []);
 
   useEffect(() => {
+    setCouponInput(selectedCouponCode || "");
+  }, [selectedCouponCode]);
+
+  useEffect(() => {
     if (items.length === 0) {
       setPricingSummary(null);
       setEligibleCampaigns([]);
       setAppliedCampaign(null);
+      setAppliedCoupon(null);
       setPricingError(null);
       if (selectedCampaignId) setSelectedCampaignId(null);
+      if (selectedCouponCode) setSelectedCouponCode(null);
       return;
     }
 
@@ -74,28 +85,43 @@ export default function Cart() {
         const { data } = await api.post("/cart-campaigns/preview", {
           cartItems: items,
           selectedCampaignId: selectedCampaignId || null,
+          couponCode: selectedCouponCode || null,
         });
         if (!alive) return;
         const eligible = Array.isArray(data?.eligibleCampaigns)
           ? data.eligibleCampaigns
           : [];
         const applied = data?.appliedCampaign || null;
+        const coupon = data?.appliedCoupon || null;
 
         setPricingSummary(data?.summary || null);
         setEligibleCampaigns(eligible);
         setAppliedCampaign(applied);
+        setAppliedCoupon(coupon);
         setPricingError(null);
+        setCouponError(null);
       } catch (e) {
         console.error("Sepet fiyatlandırması alınamadı:", e);
         const message =
           e?.response?.data?.message || "Kampanya hesaplanamadı.";
-        setPricingError(message);
+        const source = e?.response?.data?.source || null;
+        if (source === "coupon") {
+          setCouponError(message);
+          setPricingError(null);
+        } else {
+          setPricingError(message);
+          setCouponError(null);
+        }
         setPricingSummary(null);
         setEligibleCampaigns([]);
         setAppliedCampaign(null);
+        setAppliedCoupon(null);
 
         if (e?.response?.status === 409 && selectedCampaignId) {
           setSelectedCampaignId(null);
+        }
+        if (source === "coupon" && selectedCouponCode) {
+          setSelectedCouponCode(null);
         }
       } finally {
         if (alive) setPricingLoading(false);
@@ -105,7 +131,13 @@ export default function Cart() {
     return () => {
       alive = false;
     };
-  }, [items, selectedCampaignId, setSelectedCampaignId]);
+  }, [
+    items,
+    selectedCampaignId,
+    selectedCouponCode,
+    setSelectedCampaignId,
+    setSelectedCouponCode,
+  ]);
 
   // Ara toplam
   const localSubTotal = useMemo(
@@ -127,8 +159,10 @@ export default function Cart() {
 
   const subTotal = Number(pricingSummary?.subTotal ?? localSubTotal);
   const campaignDiscount = Number(pricingSummary?.campaignDiscount ?? 0);
+  const couponDiscount = Number(pricingSummary?.couponDiscount ?? 0);
   const discountedSubTotal = Number(
-    pricingSummary?.discountedSubTotal ?? Math.max(0, subTotal - campaignDiscount)
+    pricingSummary?.discountedSubTotal ??
+      Math.max(0, subTotal - campaignDiscount - couponDiscount)
   );
   const shippingFee = Number(pricingSummary?.shippingFee ?? localShippingFee);
   const grandTotal = Number(pricingSummary?.grandTotal ?? discountedSubTotal + shippingFee);
@@ -143,6 +177,24 @@ export default function Cart() {
     } else {
       navigate("/checkout");
     }
+  };
+
+  const applyCoupon = () => {
+    const normalized = String(couponInput || "").trim().toUpperCase();
+    if (!normalized) {
+      setCouponError("Lütfen bir kupon kodu girin.");
+      return;
+    }
+
+    setCouponError(null);
+    if (selectedCampaignId) setSelectedCampaignId(null);
+    setSelectedCouponCode(normalized);
+  };
+
+  const removeCoupon = () => {
+    setSelectedCouponCode(null);
+    setAppliedCoupon(null);
+    setCouponError(null);
   };
 
   /* ─────────── sepet boş ─────────── */
@@ -207,7 +259,19 @@ export default function Cart() {
                 </div>
               )}
 
-              {campaignDiscount > 0 && (
+              {couponDiscount > 0 && (
+                <div className="flex items-center justify-between">
+                  <span className="text-dark2">
+                    Kupon İndirimi
+                    {appliedCoupon?.code ? ` (${appliedCoupon.code})` : ""}
+                  </span>
+                  <span className="font-medium text-blue-700">
+                    -₺{couponDiscount.toFixed(2)}
+                  </span>
+                </div>
+              )}
+
+              {(campaignDiscount > 0 || couponDiscount > 0) && (
                 <div className="flex items-center justify-between text-[13px] text-gray-600">
                   <span>İndirimli Ara Toplam</span>
                   <span className="font-medium">
@@ -264,6 +328,54 @@ export default function Cart() {
             <div className="h-px bg-light2 my-4" />
 
             <div className="space-y-2">
+              <h4 className="text-sm font-semibold text-dark1">Kupon Kodu</h4>
+
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <input
+                  type="text"
+                  value={couponInput}
+                  onChange={(e) => setCouponInput(e.target.value.toUpperCase())}
+                  placeholder="Kupon kodunuzu girin"
+                  className="flex-1 rounded-md border border-light2 px-3 py-2 text-sm outline-none focus:border-dark1"
+                />
+                <button
+                  type="button"
+                  onClick={applyCoupon}
+                  disabled={pricingLoading}
+                  className="rounded-md bg-dark1 px-4 py-2 text-sm font-medium text-white transition hover:bg-dark2 disabled:opacity-60"
+                >
+                  Uygula
+                </button>
+              </div>
+
+              {couponError && (
+                <p className="text-xs text-red-600">{couponError}</p>
+              )}
+
+              {appliedCoupon?.code && (
+                <div className="flex flex-col gap-2 rounded-lg border border-blue-100 bg-blue-50 px-3 py-3 text-sm text-blue-800 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <div className="font-medium">
+                      Uygulanan kupon: {appliedCoupon.code}
+                    </div>
+                    <div className="text-xs text-blue-700">
+                      Sepet kampanyaları ile birlikte kullanılamaz.
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={removeCoupon}
+                    className="rounded-md border border-blue-200 px-3 py-1.5 text-xs font-medium text-blue-800 transition hover:bg-white"
+                  >
+                    Kuponu Kaldır
+                  </button>
+                </div>
+              )}
+            </div>
+
+            <div className="h-px bg-light2 my-4" />
+
+            <div className="space-y-2">
               <h4 className="text-sm font-semibold text-dark1">Kampanya Seçimi</h4>
 
               {pricingLoading && (
@@ -274,13 +386,22 @@ export default function Cart() {
                 <p className="text-xs text-red-600">{pricingError}</p>
               )}
 
-              {!pricingLoading && !pricingError && eligibleCampaigns.length === 0 && (
+              {appliedCoupon?.code && !pricingLoading ? (
+                <p className="text-xs text-gray-500">
+                  Kupon aktif olduğu için sepet kampanyaları devre dışı bırakıldı.
+                </p>
+              ) : null}
+
+              {!pricingLoading &&
+                !pricingError &&
+                !appliedCoupon &&
+                eligibleCampaigns.length === 0 && (
                 <p className="text-xs text-gray-500">
                   Sepetiniz için uygun kampanya bulunamadı.
                 </p>
-              )}
+                )}
 
-              {!pricingLoading && eligibleCampaigns.length > 0 && (
+              {!pricingLoading && !appliedCoupon && eligibleCampaigns.length > 0 && (
                 <div className="space-y-2 text-sm">
                   <label className="flex items-center gap-2 cursor-pointer">
                     <input
@@ -305,7 +426,11 @@ export default function Cart() {
                             type="radio"
                             name="campaign"
                             checked={checked}
-                            onChange={() => setSelectedCampaignId(cid)}
+                            onChange={() => {
+                              if (selectedCouponCode) setSelectedCouponCode(null);
+                              setCouponError(null);
+                              setSelectedCampaignId(cid);
+                            }}
                           />
                           <span>{c.name}</span>
                         </span>

@@ -133,6 +133,9 @@ export default function OrdersList() {
           const pricingCampaignDiscount = Number(
             order.pricing?.campaignDiscount ?? order.campaign?.savings ?? 0
           );
+          const pricingCouponDiscount = Number(
+            order.pricing?.couponDiscount ?? order.coupon?.savings ?? 0
+          );
           const pricingShippingFee = Number(
             order.pricing?.shippingFee ?? order.shipping?.fee ?? 0
           );
@@ -291,6 +294,17 @@ export default function OrdersList() {
                             -{fmtTL(pricingCampaignDiscount)}
                           </span>
                         </div>
+                        {pricingCouponDiscount > 0 && (
+                          <div className="flex items-center justify-between text-blue-700">
+                            <span>
+                              Kupon İndirimi
+                              {order.coupon?.code ? ` (${order.coupon.code})` : ""}
+                            </span>
+                            <span className="font-medium">
+                              -{fmtTL(pricingCouponDiscount)}
+                            </span>
+                          </div>
+                        )}
                         <div className="flex items-center justify-between">
                           <span className="text-gray-600">Kargo</span>
                           <span className="font-medium">
@@ -308,6 +322,11 @@ export default function OrdersList() {
                       {order.campaign?.name && (
                         <p className="mt-2 text-xs text-emerald-700">
                           Uygulanan kampanya: <b>{order.campaign.name}</b>
+                        </p>
+                      )}
+                      {order.coupon?.code && (
+                        <p className="mt-2 text-xs text-blue-700">
+                          Uygulanan kupon: <b>{order.coupon.code}</b>
                         </p>
                       )}
                     </div>

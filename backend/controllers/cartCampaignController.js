@@ -257,15 +257,20 @@ exports.listHeaderCampaigns = async (_req, res) => {
 
 exports.previewCartPricing = async (req, res) => {
   try {
-    const { cartItems, selectedCampaignId } = req.body || {};
+    const { cartItems, selectedCampaignId, couponCode, customerEmail } =
+      req.body || {};
     const pricing = await calculateCartPricing(cartItems, {
       selectedCampaignId,
+      couponCode,
+      customerEmail,
+      customerUserId: req.user?.userId || null,
       includeEligibleCampaigns: true,
     });
     return res.json({
       summary: pricing.summary,
       eligibleCampaigns: pricing.eligibleCampaigns,
       appliedCampaign: pricing.appliedCampaign,
+      appliedCoupon: pricing.appliedCoupon,
     });
   } catch (err) {
     const status = err?.status || 500;
@@ -273,6 +278,6 @@ exports.previewCartPricing = async (req, res) => {
     if (!err?.status) {
       console.error("[CartCampaign][preview] error:", err);
     }
-    return res.status(status).json({ message });
+    return res.status(status).json({ message, source: err?.source || null });
   }
 };

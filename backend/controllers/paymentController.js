@@ -7,6 +7,7 @@ const fallbackData = require("../config/fallback.json");
 const { dispatchOrderPlacedMail } = require("../utils/orderMailDispatch");
 const { applyStockChanges } = require("../utils/updateStock");
 const { calculateCartPricing } = require("../services/cartPricingService");
+const { recordCouponUsageForOrder } = require("../utils/couponUsageService");
 
 /* Frontend base (ilk origin) */
 const FRONTEND_BASE = (() => {
@@ -17,6 +18,8 @@ const FRONTEND_BASE = (() => {
     .filter(Boolean)[0];
   return first || "http://localhost:5173";
 })();
+
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/i;
 
 /* helpers */
 function tlToKurus(n) {
@@ -36,6 +39,47 @@ function getClientIp(req) {
   if (ip.startsWith("::ffff:")) ip = ip.replace("::ffff:", ""); // IPv4-mapped
   ip = ip.split(":").slice(-1)[0]; // son parçayı al (port vs)
   return ip;
+}
+
+function normalizeEmail(value) {
+  return String(value || "").trim().toLowerCase();
+}
+
+function normalizeTrPhone(value) {
+  const digits = String(value || "").replace(/\D/g, "");
+
+  if (digits.length === 10) return `+90${digits}`;
+  if (digits.length === 11 && digits.startsWith("0")) {
+    return `+90${digits.slice(1)}`;
+  }
+  if (digits.length === 12 && digits.startsWith("90")) {
+    return `+${digits}`;
+  }
+
+  return "";
+}
+
+function normalizeIdentityNumber(value) {
+  return String(value || "")
+    .replace(/\D/g, "")
+    .slice(0, 11);
+}
+
+async function persistCouponUsage(order, tag) {
+  try {
+    await recordCouponUsageForOrder(order);
+  } catch (err) {
+    const isDuplicate = err?.code === 11000;
+    const prefix = tag ? `[PAYMENT][${tag}]` : "[PAYMENT]";
+    if (isDuplicate) {
+      console.warn(`${prefix} coupon usage already recorded`, {
+        orderId: String(order?._id || ""),
+        couponId: String(order?.coupon?.couponId || ""),
+      });
+      return;
+    }
+    console.warn(`${prefix} coupon usage record failed:`, err?.message || err);
+  }
 }
 
 function buildPaytrBasket(order) {
@@ -121,20 +165,38 @@ function buildPaytrBasket(order) {
 
 exports.startGuestPaymentSession = async (req, res) => {
   try {
-    const { cartItems, address, guest, selectedCampaignId } = req.body || {};
+    const { cartItems, address, guest, selectedCampaignId, couponCode } =
+      req.body || {};
+    const normalizedGuest = {
+      firstName: String(guest?.firstName || "").trim(),
+      lastName: String(guest?.lastName || "").trim(),
+      email: normalizeEmail(guest?.email),
+      phone: normalizeTrPhone(guest?.phone),
+      identityNumber: normalizeIdentityNumber(guest?.identityNumber),
+      registrationAddress: String(guest?.registrationAddress || "").trim(),
+    };
+    const normalizedAddress = {
+      title:
+        String(address?.title || "Teslimat Adresi").trim() || "Teslimat Adresi",
+      mainaddress: String(address?.mainaddress || "").trim(),
+      street: String(address?.street || "").trim(),
+      district: String(address?.district || "").trim(),
+      city: String(address?.city || "").trim(),
+      postalCode: String(address?.postalCode || "").trim(),
+    };
 
     // 1) Basit zorunlu alan kontrolü (fallback YOK)
     const missing = [];
-    if (!guest?.firstName) missing.push("guest.firstName");
-    if (!guest?.lastName) missing.push("guest.lastName");
-    if (!guest?.email) missing.push("guest.email");
-    if (!guest?.phone) missing.push("guest.phone");
-    if (!guest?.registrationAddress) missing.push("guest.registrationAddress");
+    if (!normalizedGuest.firstName) missing.push("guest.firstName");
+    if (!normalizedGuest.lastName) missing.push("guest.lastName");
+    if (!normalizedGuest.email) missing.push("guest.email");
+    if (!String(guest?.phone || "").trim()) missing.push("guest.phone");
+    if (!normalizedGuest.registrationAddress) missing.push("guest.registrationAddress");
 
-    if (!address?.title) missing.push("address.title");
-    if (!address?.mainaddress) missing.push("address.mainaddress");
-    if (!address?.street) missing.push("address.street");
-    if (!address?.city) missing.push("address.city");
+    if (!normalizedAddress.title) missing.push("address.title");
+    if (!normalizedAddress.mainaddress) missing.push("address.mainaddress");
+    if (!normalizedAddress.street) missing.push("address.street");
+    if (!normalizedAddress.city) missing.push("address.city");
 
     if (!Array.isArray(cartItems) || cartItems.length === 0)
       missing.push("cartItems");
@@ -146,18 +208,35 @@ exports.startGuestPaymentSession = async (req, res) => {
       });
     }
 
+    const invalid = [];
+    if (!EMAIL_REGEX.test(normalizedGuest.email)) invalid.push("guest.email");
+    if (!normalizedGuest.phone) invalid.push("guest.phone");
+    if (
+      String(guest?.identityNumber || "").trim() &&
+      normalizedGuest.identityNumber.length !== 11
+    ) {
+      invalid.push("guest.identityNumber");
+    }
+
+    if (invalid.length) {
+      return res.status(422).json({
+        message: "Lütfen alıcı bilgilerinizi kontrol edin.",
+        invalid,
+      });
+    }
+
     let pricing;
     try {
       pricing = await calculateCartPricing(cartItems, {
         selectedCampaignId,
+        couponCode,
+        customerEmail: normalizedGuest.email,
         includeEligibleCampaigns: true,
       });
     } catch (err) {
       const status = err?.status || 500;
-      const message = err?.status
-        ? err.message
-        : "Sepet doğrulanamadı.";
-      return res.status(status).json({ message });
+      const message = err?.status ? err.message : "Sepet doğrulanamadı.";
+      return res.status(status).json({ message, source: err?.source || null });
     }
 
     // 2) merchant_oid / orderNumber üret
@@ -168,20 +247,20 @@ exports.startGuestPaymentSession = async (req, res) => {
     const orderNumber = Math.floor(1e9 + Math.random() * 9e9).toString();
 
     // 3) Order yarat (user YOK, guest DOLU)
-    const identityNumber = String(guest.identityNumber || "").trim();
+    const identityNumber = normalizedGuest.identityNumber;
     const identityFallbackUsed = identityNumber === "";
 
     await Order.create({
       orderNumber,
       user: undefined,
       guest: {
-        firstName: guest.firstName,
-        lastName: guest.lastName,
-        email: guest.email,
-        phone: guest.phone,
+        firstName: normalizedGuest.firstName,
+        lastName: normalizedGuest.lastName,
+        email: normalizedGuest.email,
+        phone: normalizedGuest.phone,
         identityNumber:
           identityNumber || fallbackData.identityNumber,
-        registrationAddress: guest.registrationAddress,
+        registrationAddress: normalizedGuest.registrationAddress,
         identityFallbackUsed,
       },
       items: pricing.items,
@@ -195,20 +274,32 @@ exports.startGuestPaymentSession = async (req, res) => {
             details: pricing.appliedCampaign.details,
           }
         : null,
+      coupon: pricing.appliedCoupon
+        ? {
+            couponId: pricing.appliedCoupon.couponId,
+            code: pricing.appliedCoupon.code,
+            discountType: pricing.appliedCoupon.discountType,
+            discountValue: pricing.appliedCoupon.discountValue,
+            minimumSubtotal: pricing.appliedCoupon.minimumSubtotal,
+            savings: pricing.appliedCoupon.savings,
+            details: pricing.appliedCoupon.details,
+          }
+        : null,
       pricing: {
         subTotal: pricing.summary.subTotal,
         campaignDiscount: pricing.summary.campaignDiscount,
+        couponDiscount: pricing.summary.couponDiscount,
         discountedSubTotal: pricing.summary.discountedSubTotal,
         shippingFee: pricing.summary.shippingFee,
         grandTotal: pricing.summary.grandTotal,
       },
       address: {
-        title: String(address.title || "Teslimat Adresi").trim() || "Teslimat Adresi",
-        mainaddress: String(address.mainaddress || "").trim(),
-        street: String(address.street || "").trim(),
-        district: String(address.district || "").trim(),
-        city: String(address.city || "").trim(),
-        postalCode: String(address.postalCode || "").trim(),
+        title: normalizedAddress.title,
+        mainaddress: normalizedAddress.mainaddress,
+        street: normalizedAddress.street,
+        district: normalizedAddress.district,
+        city: normalizedAddress.city,
+        postalCode: normalizedAddress.postalCode,
       },
       conversationId,
       status: "pending",
@@ -225,6 +316,7 @@ exports.startGuestPaymentSession = async (req, res) => {
       inlineUrl: `${process.env.BACKEND_PUBLIC_URL}/api/v1/payment/inline/${conversationId}`,
       summary: pricing.summary,
       appliedCampaign: pricing.appliedCampaign,
+      appliedCoupon: pricing.appliedCoupon,
       eligibleCampaigns: pricing.eligibleCampaigns,
     });
   } catch (e) {
@@ -235,7 +327,8 @@ exports.startGuestPaymentSession = async (req, res) => {
 /** 1) Ödeme oturumunu başlat (pending Order) */
 exports.startPaymentSession = async (req, res) => {
   try {
-    const { cartItems, addressId, useFallback, selectedCampaignId } = req.body;
+    const { cartItems, addressId, useFallback, selectedCampaignId, couponCode } =
+      req.body;
     const userId = req.user.userId;
     const userDoc = await User.findById(userId).lean();
 
@@ -298,14 +391,15 @@ exports.startPaymentSession = async (req, res) => {
     try {
       pricing = await calculateCartPricing(cartItems, {
         selectedCampaignId,
+        couponCode,
+        customerUserId: userId,
+        customerEmail: email,
         includeEligibleCampaigns: true,
       });
     } catch (err) {
       const status = err?.status || 500;
-      const message = err?.status
-        ? err.message
-        : "Sepet doğrulanamadı.";
-      return res.status(status).json({ message });
+      const message = err?.status ? err.message : "Sepet doğrulanamadı.";
+      return res.status(status).json({ message, source: err?.source || null });
     }
 
     // PayTR merchant_oid şartına uygun benzersiz ID (alfanümerik, 64 max)
@@ -330,9 +424,21 @@ exports.startPaymentSession = async (req, res) => {
             details: pricing.appliedCampaign.details,
           }
         : null,
+      coupon: pricing.appliedCoupon
+        ? {
+            couponId: pricing.appliedCoupon.couponId,
+            code: pricing.appliedCoupon.code,
+            discountType: pricing.appliedCoupon.discountType,
+            discountValue: pricing.appliedCoupon.discountValue,
+            minimumSubtotal: pricing.appliedCoupon.minimumSubtotal,
+            savings: pricing.appliedCoupon.savings,
+            details: pricing.appliedCoupon.details,
+          }
+        : null,
       pricing: {
         subTotal: pricing.summary.subTotal,
         campaignDiscount: pricing.summary.campaignDiscount,
+        couponDiscount: pricing.summary.couponDiscount,
         discountedSubTotal: pricing.summary.discountedSubTotal,
         shippingFee: pricing.summary.shippingFee,
         grandTotal: pricing.summary.grandTotal,
@@ -360,6 +466,7 @@ exports.startPaymentSession = async (req, res) => {
       inlineUrl: `${process.env.BACKEND_PUBLIC_URL}/api/v1/payment/inline/${conversationId}`,
       summary: pricing.summary,
       appliedCampaign: pricing.appliedCampaign,
+      appliedCoupon: pricing.appliedCoupon,
       eligibleCampaigns: pricing.eligibleCampaigns,
     });
   } catch (e) {
@@ -635,6 +742,8 @@ exports.mockComplete = async (req, res) => {
       }
     }
 
+    await persistCouponUsage(order, "mock-complete");
+
     // Opsiyonel: mock akışında mail de gönder (dev/test için faydalı)
     if (!order.customerMailSentAt || !order.adminMailSentAt) {
       try {
@@ -687,6 +796,7 @@ exports.paytrCallback = async (req, res) => {
 
       // ➋ idempotency: zaten paid ise / stok düşmüşse tekrar dokunma
       if (order.status === "paid" && order.stockUpdated) {
+        await persistCouponUsage(order, "callback-idempotent");
         return res.send("OK");
       }
 
@@ -708,6 +818,8 @@ exports.paytrCallback = async (req, res) => {
         await order.save();
         return res.send("OK");
       }
+
+      await persistCouponUsage(order, "callback");
 
       // Mail (tek sefer)
       if (!order.customerMailSentAt || !order.adminMailSentAt) {

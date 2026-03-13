@@ -51,6 +51,7 @@ export default function OrdersPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [sortOrder, setSortOrder] = useState("desc");
   const [statusFilter, setStatusFilter] = useState("");
+  const [listMode, setListMode] = useState("active");
 
   useEffect(() => {
     api
@@ -67,7 +68,10 @@ export default function OrdersPage() {
   }, []);
 
   useEffect(() => {
-    let result = [...orders];
+    let result =
+      listMode === "pending"
+        ? orders.filter((o) => o.status === "pending")
+        : orders.filter((o) => o.status !== "pending");
     if (searchTerm) {
       const s = searchTerm.toLowerCase();
       result = result.filter((o) => o.orderNumber?.toLowerCase().includes(s));
@@ -82,7 +86,7 @@ export default function OrdersPage() {
     );
 
     setFilteredOrders(result);
-  }, [orders, searchTerm, sortOrder, statusFilter]);
+  }, [listMode, orders, searchTerm, sortOrder, statusFilter]);
 
   const handleStatusChange = (id, newStatus) => {
     setOrders((prev) =>
@@ -121,6 +125,9 @@ export default function OrdersPage() {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
     })}`;
+
+  const pendingCount = orders.filter((o) => o.status === "pending").length;
+  const activeCount = orders.filter((o) => o.status !== "pending").length;
 
   const getProductMeta = (item) => {
     const populatedProduct =
@@ -176,7 +183,7 @@ export default function OrdersPage() {
           <div className="flex items-center gap-2 text-dark2 min-w-0">
             <FaBoxOpen />
             <h1 className="text-xl font-semibold text-dark1 truncate">
-              Siparişler
+              {listMode === "pending" ? "Pending Siparişler" : "Siparişler"}
             </h1>
             <span className="text-xs bg-light1 text-dark2 px-2 py-0.5 rounded shrink-0">
               {filteredOrders.length}
@@ -184,6 +191,37 @@ export default function OrdersPage() {
           </div>
 
           <div className="flex w-full md:w-auto flex-col sm:flex-row gap-3">
+            <div className="flex rounded-lg border border-light2 bg-white p-1">
+              <button
+                type="button"
+                onClick={() => {
+                  setListMode("active");
+                  setStatusFilter("");
+                }}
+                className={`rounded-md px-3 py-2 text-sm font-medium transition ${
+                  listMode === "active"
+                    ? "bg-dark1 text-white"
+                    : "text-dark2 hover:bg-light1"
+                }`}
+              >
+                Siparişler ({activeCount})
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setListMode("pending");
+                  setStatusFilter("");
+                }}
+                className={`rounded-md px-3 py-2 text-sm font-medium transition ${
+                  listMode === "pending"
+                    ? "bg-amber-500 text-white"
+                    : "text-dark2 hover:bg-light1"
+                }`}
+              >
+                Pending Listele ({pendingCount})
+              </button>
+            </div>
+
             <input
               type="text"
               placeholder="Sipariş no ara…"
@@ -240,6 +278,9 @@ export default function OrdersPage() {
             );
             const pricingCampaignDiscount = Number(
               order.pricing?.campaignDiscount ?? order.campaign?.savings ?? 0
+            );
+            const pricingCouponDiscount = Number(
+              order.pricing?.couponDiscount ?? order.coupon?.savings ?? 0
             );
             const pricingShippingFee = Number(
               order.pricing?.shippingFee ?? order.shipping?.fee ?? 0
@@ -400,7 +441,7 @@ export default function OrdersPage() {
                     </table>
                   </div>
 
-                  <div className="mt-4 grid grid-cols-1 gap-2 text-sm sm:grid-cols-2 lg:grid-cols-4">
+                  <div className="mt-4 grid grid-cols-1 gap-2 text-sm sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5">
                     <div className="rounded-lg bg-light1/70 px-3 py-2">
                       Ara Toplam:{" "}
                       <b className="text-dark1">{fmtPrice(pricingSubTotal)}</b>
@@ -408,6 +449,11 @@ export default function OrdersPage() {
                     <div className="rounded-lg bg-emerald-50 px-3 py-2 text-emerald-800">
                       Kampanya: <b>-{fmtPrice(pricingCampaignDiscount)}</b>
                     </div>
+                    {pricingCouponDiscount > 0 && (
+                      <div className="rounded-lg bg-blue-50 px-3 py-2 text-blue-800">
+                        Kupon: <b>-{fmtPrice(pricingCouponDiscount)}</b>
+                      </div>
+                    )}
                     <div className="rounded-lg bg-light1/70 px-3 py-2">
                       Kargo:{" "}
                       <b className="text-dark1">{fmtPrice(pricingShippingFee)}</b>
@@ -420,6 +466,12 @@ export default function OrdersPage() {
                   {order.campaign?.name && (
                     <div className="mt-3 text-sm text-emerald-700">
                       Uygulanan kampanya: <b>{order.campaign.name}</b>
+                    </div>
+                  )}
+
+                  {order.coupon?.code && (
+                    <div className="mt-2 text-sm text-blue-700">
+                      Uygulanan kupon: <b>{order.coupon.code}</b>
                     </div>
                   )}
 

@@ -99,6 +99,11 @@ export default function AdminLayout({ children }) {
         path: "/admin/cart-campaigns",
       },
       {
+        label: "Kuponlar",
+        icon: <TagIcon className="w-5 h-5" />,
+        path: "/admin/coupons",
+      },
+      {
         label: "Kullanıcılar",
         icon: <UserCircleIcon className="w-5 h-5" />,
         path: "/admin/users",

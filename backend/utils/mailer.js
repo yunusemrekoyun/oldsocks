@@ -251,6 +251,7 @@ function buildItemsTable(order) {
 function buildPricingTable(order) {
   const pricing = order?.pricing || {};
   const campaignSavings = Number(order?.campaign?.savings || pricing.campaignDiscount || 0);
+  const couponSavings = Number(order?.coupon?.savings || pricing.couponDiscount || 0);
   const shippingFee = Number(pricing.shippingFee ?? order?.shipping?.fee ?? 0);
   const subTotal = Number(pricing.subTotal || order.totalPrice || 0);
   const discountedSubTotal = Number(pricing.discountedSubTotal || order.totalPrice || 0);
@@ -270,6 +271,18 @@ function buildPricingTable(order) {
               }</td>
               <td align="right" style="padding:6px 0;color:#047857;">-${escapeHtml(
                 formatMoney(campaignSavings)
+              )}</td>
+            </tr>`
+          : ""
+      }
+      ${
+        couponSavings > 0
+          ? `<tr>
+              <td style="padding:6px 0;color:#1d4ed8;">Kupon İndirimi${
+                order?.coupon?.code ? ` (${escapeHtml(order.coupon.code)})` : ""
+              }</td>
+              <td align="right" style="padding:6px 0;color:#1d4ed8;">-${escapeHtml(
+                formatMoney(couponSavings)
               )}</td>
             </tr>`
           : ""
@@ -393,6 +406,13 @@ function buildOrderCustomerText(order, context) {
     Number(order?.campaign?.savings || order?.pricing?.campaignDiscount || 0) > 0
       ? `Kampanya İndirimi: -${formatMoney(
           order?.campaign?.savings || order?.pricing?.campaignDiscount || 0
+        )}`
+      : null,
+    Number(order?.coupon?.savings || order?.pricing?.couponDiscount || 0) > 0
+      ? `Kupon İndirimi${
+          order?.coupon?.code ? ` (${order.coupon.code})` : ""
+        }: -${formatMoney(
+          order?.coupon?.savings || order?.pricing?.couponDiscount || 0
         )}`
       : null,
     `Kargo: ${Number(order?.pricing?.shippingFee || order?.shipping?.fee || 0) > 0 ? formatMoney(
