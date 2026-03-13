@@ -59,16 +59,28 @@ exports.updateOrderStatus = async (req, res) => {
       return res.status(404).json({ message: "Sipariş bulunamadı." });
     }
 
+    const previousStatus = order.status;
+    const wasPaidWithStockApplied = order.status === "paid" && order.stockUpdated;
+
     // status değiştir
     order.status = status;
     if (status === "paid") {
       order.adminSeenAt = null;
 
-      try {
-        await applyStockChanges(order);
-        console.log("[OrderController] Admin manuel paid → stok güncellendi.");
-      } catch (e) {
-        console.error("[OrderController] Stok düşürme hatası:", e);
+      if (!wasPaidWithStockApplied) {
+        try {
+          await applyStockChanges(order);
+          order.stockUpdated = true;
+          console.log("[OrderController] Admin manuel paid → stok güncellendi.");
+        } catch (e) {
+          order.status = previousStatus;
+          order.stockUpdated = false;
+          console.error("[OrderController] Stok düşürme hatası:", e);
+          return res.status(409).json({
+            message:
+              "Stok yetersizligi nedeniyle siparis paid durumuna alinamadi.",
+          });
+        }
       }
 
       if (!order.customerMailSentAt || !order.adminMailSentAt) {
@@ -101,9 +113,23 @@ exports.getMyOrders = async (req, res) => {
 };
 
 exports.getOrderById = async (req, res) => {
-  const order = await Order.findById(req.params.id);
-  if (!order) return res.status(404).json({ message: "Sipariş bulunamadı." });
-  res.json(order);
+  try {
+    const order = await Order.findById(req.params.id);
+    if (!order) return res.status(404).json({ message: "Sipariş bulunamadı." });
+
+    const isAdmin = req.user?.role === "admin";
+    const isOwner =
+      order.user && String(order.user) === String(req.user?.userId || "");
+
+    if (!isAdmin && !isOwner) {
+      return res.status(403).json({ message: "Bu siparişe erişim yetkiniz yok." });
+    }
+
+    res.json(order);
+  } catch (err) {
+    console.error("getOrderById error:", err);
+    res.status(500).json({ message: "Sipariş alınırken hata oluştu." });
+  }
 };
 
 exports.confirmOrderPayment = async (req, res) => {

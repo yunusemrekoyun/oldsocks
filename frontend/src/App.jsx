@@ -25,6 +25,7 @@ import CheckoutPage from "./pages/CheckoutPage";
 import PaymentResultPage from "./pages/PaymentResultPage";
 import NotFoundPage from "./pages/NotFoundPage";
 import PaymentPage from "./pages/PaymentPage";
+import ResetPasswordPage from "./pages/ResetPasswordPage";
 import ScrollToTop from "./components/common/ScrollToTop";
 import AgreementPage from "./pages/AgreementPage";
 import KvkkPage from "./pages/KvkkPage";
@@ -83,6 +84,7 @@ export default function App() {
           />
           <Route path="/payment-result" element={<PaymentResultPage />} />
           <Route path="/auth" element={<AuthPage />} />
+          <Route path="/reset-password" element={<ResetPasswordPage />} />
           <Route path="/profile" element={<AuthPage />} />
           <Route path="*" element={<NotFoundPage />} />
         </Route>

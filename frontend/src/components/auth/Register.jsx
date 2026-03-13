@@ -4,6 +4,7 @@ import api from "../../../api";
 // eslint-disable-next-line no-unused-vars
 import { motion } from "framer-motion";
 import { IMaskInput } from "react-imask";
+import { getPasswordValidation } from "../../utils/passwordRules";
 
 const Register = ({ onSwitch }) => {
   const [formData, setFormData] = useState({
@@ -20,31 +21,9 @@ const Register = ({ onSwitch }) => {
   const [success, setSuccess] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
-  // ---------- ŞİFRE KURALLARI ----------
-  const passwordRules = useMemo(
-    () => [
-      { id: "min8", label: "En az 8 karakter", test: (s) => s.length >= 8 },
-      {
-        id: "upper",
-        label: "En az 1 büyük harf",
-        test: (s) => /[A-ZÇĞİÖŞÜ]/.test(s),
-      },
-      {
-        id: "lower",
-        label: "En az 1 küçük harf",
-        test: (s) => /[a-zçğıöşü]/.test(s),
-      },
-      { id: "digit", label: "En az 1 rakam", test: (s) => /\d/.test(s) },
-    ],
-    []
-  );
-
   const passwordValidation = useMemo(() => {
-    const s = formData.password || "";
-    const results = passwordRules.map((r) => ({ ...r, ok: r.test(s) }));
-    const allOk = results.every((r) => r.ok);
-    return { results, allOk };
-  }, [formData.password, passwordRules]);
+    return getPasswordValidation(formData.password || "");
+  }, [formData.password]);
 
   const handleChange = (e) => {
     const { name, value } = e.target; // IMaskInput da target.value verir
@@ -76,13 +55,17 @@ const Register = ({ onSwitch }) => {
     }
 
     try {
-      const res = await api.post("/auth/register", {
-        firstName: formData.firstName.trim(),
-        lastName: formData.lastName.trim(),
-        email: formData.email.trim(),
-        password: formData.password,
-        phone: toE164IfAny(formData.phone) || undefined, // opsiyonel
-      });
+      const res = await api.post(
+        "/auth/register",
+        {
+          firstName: formData.firstName.trim(),
+          lastName: formData.lastName.trim(),
+          email: formData.email.trim(),
+          password: formData.password,
+          phone: toE164IfAny(formData.phone) || undefined, // opsiyonel
+        },
+        { skipAuthRefresh: true }
+      );
 
       if (res.status === 201) {
         setSuccess(true);

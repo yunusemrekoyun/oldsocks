@@ -1,10 +1,12 @@
 // backend/routes/users.js
 const router = require("express").Router();
+const { rateLimit, ipKeyGenerator } = require("express-rate-limit");
 const { verifyToken } = require("../middleware/auth");
 const { allowRoles } = require("../middleware/roles");
 const {
   getMe,
   updateMe,
+  changePassword,
   getAddresses,
   addAddress,
   updateAddress,
@@ -15,9 +17,18 @@ const {
   deleteUser,
 } = require("../controllers/userController");
 
+const changePasswordLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => ipKeyGenerator(req.ip),
+});
+
 // — Normal user endpoints —
 router.get("/me", verifyToken, getMe); // GET    /api/v1/users/me
 router.put("/me", verifyToken, updateMe); // PUT    /api/v1/users/me
+router.post("/me/password", verifyToken, changePasswordLimiter, changePassword);
 
 // — Address management for logged-in user —
 router.get("/me/addresses", verifyToken, getAddresses); // GET    /api/v1/users/me/addresses

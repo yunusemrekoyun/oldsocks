@@ -3,6 +3,7 @@ import api from "../../../api"; // axios instance, otomatik multipart desteği v
 import { AuthContext } from "../../context/AuthContext";
 import defaultAvatar from "../../assets/user/fallback-avatar.png";
 import { FaTrashAlt, FaCamera, FaUpload } from "react-icons/fa";
+import UserPasswordForm from "./UserPasswordForm";
 
 export default function UserAccount() {
   const { isLoggedIn } = useContext(AuthContext);
@@ -275,6 +276,8 @@ export default function UserAccount() {
           </div>
         )}
       </div>
+
+      <UserPasswordForm />
     </div>
   );
 }

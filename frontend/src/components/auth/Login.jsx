@@ -5,7 +5,7 @@ import api from "../../../api";
 // eslint-disable-next-line no-unused-vars
 import { motion } from "framer-motion";
 
-const Login = ({ onSwitch }) => {
+const Login = ({ onSwitch, onForgotPassword }) => {
   const [form, setForm] = useState({ email: "", password: "" });
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
@@ -25,7 +25,9 @@ const Login = ({ onSwitch }) => {
     setLoading(true);
 
     try {
-      const { data } = await api.post("/auth/login", form);
+      const { data } = await api.post("/auth/login", form, {
+        skipAuthRefresh: true,
+      });
       // httpOnly refresh cookie backend tarafından set ediliyor
       localStorage.setItem("accessToken", data.accessToken);
       setIsLoggedIn(true);
@@ -117,6 +119,16 @@ const Login = ({ onSwitch }) => {
           {loading ? "Giriş Yapılıyor…" : "Giriş Yap"}
         </button>
       </form>
+
+      <div className="mt-4 text-center">
+        <button
+          type="button"
+          onClick={onForgotPassword}
+          className="text-sm font-medium text-dark2 hover:text-dark1 hover:underline"
+        >
+          Sifremi Unuttum
+        </button>
+      </div>
 
       <p className="text-sm text-center mt-6 text-dark2">
         Hesabınız yok mu?{" "}

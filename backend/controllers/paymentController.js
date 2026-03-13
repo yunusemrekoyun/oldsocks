@@ -608,18 +608,31 @@ exports.mockComplete = async (req, res) => {
       return res.status(400).json({ message: "Eksik parametre." });
     }
 
-    const order = await Order.findOneAndUpdate(
-      { conversationId },
-      {
-        status: "paid",
-        paymentId: `mock_${conversationId}`,
-        adminSeenAt: null,
-      },
-      { new: true }
-    );
+    const order = await Order.findOne({ conversationId });
 
     if (!order) {
       return res.status(404).json({ message: "Sipariş bulunamadı." });
+    }
+
+    if (!(order.status === "paid" && order.stockUpdated)) {
+      order.status = "paid";
+      order.paymentId = `mock_${conversationId}`;
+      order.adminSeenAt = null;
+
+      try {
+        await applyStockChanges(order);
+        order.stockUpdated = true;
+      } catch (e) {
+        console.error("[PAYMENT][mock-complete] stock error:", e);
+        order.status = "cancelled";
+        order.cancelReason = "stock_unavailable";
+        order.cancelledAt = new Date();
+        order.stockUpdated = false;
+        await order.save();
+        return res
+          .status(409)
+          .json({ message: "Stok yetersizligi nedeniyle sipariş iptal edildi." });
+      }
     }
 
     // Opsiyonel: mock akışında mail de gönder (dev/test için faydalı)

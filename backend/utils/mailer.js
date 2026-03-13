@@ -539,6 +539,72 @@ function applyOrderMailResult(order, result, date = new Date()) {
   return order;
 }
 
+function buildPasswordResetHtml({ user, resetLink, expiresAt }) {
+  const fullName =
+    [user?.firstName || "", user?.lastName || ""].join(" ").trim() ||
+    "Degerli Musterimiz";
+
+  return baseEmailLayout({
+    preheader: "Sifre sifirlama talebiniz alindi.",
+    eyebrow: "Hesap Guvenligi",
+    title: "Sifrenizi Yenileyin",
+    subtitle: "Bu talep size aitse asagidaki baglantiyi kullanarak yeni sifrenizi belirleyebilirsiniz.",
+    bodyHtml: `
+      <p style="margin:0 0 18px;font-size:15px;line-height:1.8;color:#374151;">
+        Merhaba <strong>${escapeHtml(fullName)}</strong>, hesabiniz icin bir sifre sifirlama talebi alindi.
+      </p>
+      <div style="padding:18px;border:1px solid #e5e7eb;border-radius:18px;background:#fafafa;">
+        <div style="font-size:12px;letter-spacing:0.14em;text-transform:uppercase;color:#6b7280;margin-bottom:8px;">Gecerlilik Suresi</div>
+        <div style="font-size:15px;line-height:1.8;color:#111827;">${escapeHtml(
+          formatDate(expiresAt)
+        )} tarihine kadar</div>
+      </div>
+      <div style="margin-top:24px;">
+        <a href="${escapeHtml(
+          resetLink
+        )}" style="display:inline-block;padding:14px 24px;border-radius:999px;background:#111827;color:#ffffff;text-decoration:none;font-weight:700;">
+          Sifreyi Yenile
+        </a>
+      </div>
+      <p style="margin:20px 0 0;font-size:14px;line-height:1.8;color:#6b7280;">
+        Bu talep size ait degilse bu e-postayi dikkate almayabilirsiniz. Mevcut sifreniz degismez.
+      </p>
+    `,
+  });
+}
+
+function buildPasswordResetText({ user, resetLink, expiresAt }) {
+  const fullName =
+    [user?.firstName || "", user?.lastName || ""].join(" ").trim() ||
+    "Degerli Musterimiz";
+
+  return [
+    "Oldsocks - Sifre Sifirlama",
+    "",
+    `Merhaba ${fullName},`,
+    "Hesabiniz icin bir sifre sifirlama talebi alindi.",
+    `Baglanti gecerlilik suresi: ${formatDate(expiresAt)}`,
+    "",
+    resetLink,
+    "",
+    "Bu talep size ait degilse bu e-postayi dikkate almayabilirsiniz.",
+  ].join("\n");
+}
+
+async function sendPasswordResetMail({ user, resetLink, expiresAt }) {
+  const email = normalizeEmailAddress(user?.email);
+  if (!isValidEmailAddress(email)) {
+    throw new Error("Gecerli alici e-posta adresi bulunamadi.");
+  }
+
+  await safeSend({
+    to: email,
+    subject: "Sifre sifirlama baglantiniz",
+    html: buildPasswordResetHtml({ user, resetLink, expiresAt }),
+    text: buildPasswordResetText({ user, resetLink, expiresAt }),
+  });
+}
+
 function buildCommentModerationHtml({ title, subtitle, contentBlocks }) {
   const bodyHtml = `
     <p style="margin:0 0 18px;font-size:15px;line-height:1.8;color:#374151;">${escapeHtml(
@@ -723,6 +789,7 @@ module.exports = {
   getAdminRecipients,
   sendContactMail,
   sendNewsletterNewBlog,
+  sendPasswordResetMail,
   sendOrderPlacedMail,
   sendPendingCommentMail,
   sendPendingReplyMail,

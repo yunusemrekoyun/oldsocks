@@ -24,6 +24,7 @@ const UserSchema = new mongoose.Schema(
     avatar: { type: String },
     role: { type: String, enum: ["user", "admin"], default: "user" },
     refreshTokens: { type: [String], default: [] },
+    tokenVersion: { type: Number, default: 0 },
   },
   {
     timestamps: true,

@@ -1,6 +1,9 @@
 // backend/controllers/userController.js
 const User = require("../models/User");
+const PasswordResetToken = require("../models/PasswordResetToken");
 const bcrypt = require("bcrypt");
+const { COOKIE_OPTIONS } = require("../utils/authTokens");
+const { validatePasswordPolicy } = require("../utils/passwordPolicy");
 
 // — Me endpoints —
 
@@ -8,7 +11,7 @@ const bcrypt = require("bcrypt");
 exports.getMe = async (req, res) => {
   try {
     const user = await User.findById(req.user.userId).select(
-      "-password -refreshTokens"
+      "-password -refreshTokens -tokenVersion"
     );
     if (!user)
       return res.status(404).json({ message: "Kullanıcı bulunamadı." });
@@ -27,7 +30,6 @@ exports.updateMe = async (req, res) => {
       "lastName",
       "email",
       "phone",
-      "password",
       "avatar",
     ];
 
@@ -49,7 +51,7 @@ exports.updateMe = async (req, res) => {
     const user = await User.findByIdAndUpdate(req.user.userId, updates, {
       new: true,
       runValidators: true,
-    }).select("-password -refreshTokens");
+    }).select("-password -refreshTokens -tokenVersion");
     res.json(user);
   } catch (err) {
     console.error(err);
@@ -130,7 +132,7 @@ exports.deleteAddress = async (req, res) => {
 // (Bunlar değişmedi; önceki haliyle kullanabilirsiniz)
 exports.getAllUsers = async (req, res) => {
   try {
-    const users = await User.find().select("-password -refreshTokens");
+    const users = await User.find().select("-password -refreshTokens -tokenVersion");
     res.json(users);
   } catch (err) {
     console.error(err);
@@ -141,7 +143,7 @@ exports.getAllUsers = async (req, res) => {
 exports.getUserById = async (req, res) => {
   try {
     const user = await User.findById(req.params.id).select(
-      "-password -refreshTokens"
+      "-password -refreshTokens -tokenVersion"
     );
     if (!user)
       return res.status(404).json({ message: "Kullanıcı bulunamadı." });
@@ -154,15 +156,57 @@ exports.getUserById = async (req, res) => {
 
 exports.updateUser = async (req, res) => {
   try {
-    const updates = { ...req.body };
-    if (updates.password) {
-      updates.password = await bcrypt.hash(updates.password, 10);
+    const allowedFields = [
+      "firstName",
+      "lastName",
+      "email",
+      "phone",
+      "avatar",
+      "role",
+      "addresses",
+      "password",
+    ];
+    const updates = {};
+    for (const field of allowedFields) {
+      if (Object.prototype.hasOwnProperty.call(req.body, field)) {
+        updates[field] = req.body[field];
+      }
     }
-    const user = await User.findByIdAndUpdate(req.params.id, updates, {
+
+    if (Object.keys(updates).length === 0) {
+      return res.status(400).json({ message: "Güncellenecek alan bulunamadı." });
+    }
+
+    let passwordChanged = false;
+    const updateDoc = { $set: {} };
+
+    if (updates.password) {
+      const validation = validatePasswordPolicy(updates.password);
+      if (!validation.ok) {
+        return res.status(400).json({ message: validation.message });
+      }
+      updateDoc.$set.password = await bcrypt.hash(updates.password, 10);
+      updateDoc.$set.refreshTokens = [];
+      updateDoc.$inc = { tokenVersion: 1 };
+      passwordChanged = true;
+    }
+
+    for (const [key, value] of Object.entries(updates)) {
+      if (key === "password") continue;
+      updateDoc.$set[key] = value;
+    }
+
+    const user = await User.findByIdAndUpdate(req.params.id, updateDoc, {
       new: true,
-    }).select("-password -refreshTokens");
+      runValidators: true,
+    }).select("-password -refreshTokens -tokenVersion");
     if (!user)
       return res.status(404).json({ message: "Kullanıcı bulunamadı." });
+
+    if (passwordChanged) {
+      await PasswordResetToken.deleteMany({ user: req.params.id });
+    }
+
     res.json(user);
   } catch (err) {
     console.error(err);
@@ -179,5 +223,55 @@ exports.deleteUser = async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Silme sırasında hata oluştu." });
+  }
+};
+
+exports.changePassword = async (req, res) => {
+  try {
+    const currentPassword = String(req.body?.currentPassword || "");
+    const newPassword = String(req.body?.newPassword || "");
+
+    if (!currentPassword || !newPassword) {
+      return res
+        .status(400)
+        .json({ message: "Mevcut sifre ve yeni sifre zorunludur." });
+    }
+
+    const validation = validatePasswordPolicy(newPassword);
+    if (!validation.ok) {
+      return res.status(400).json({ message: validation.message });
+    }
+
+    const user = await User.findById(req.user.userId);
+    if (!user) {
+      return res.status(404).json({ message: "Kullanıcı bulunamadı." });
+    }
+
+    const matches = await bcrypt.compare(currentPassword, user.password);
+    if (!matches) {
+      return res.status(400).json({ message: "Mevcut sifre hatali." });
+    }
+
+    const sameAsCurrent = await bcrypt.compare(newPassword, user.password);
+    if (sameAsCurrent) {
+      return res
+        .status(400)
+        .json({ message: "Yeni sifre mevcut sifrenizle ayni olamaz." });
+    }
+
+    user.password = await bcrypt.hash(newPassword, 10);
+    user.refreshTokens = [];
+    user.tokenVersion = Number(user.tokenVersion || 0) + 1;
+    await user.save();
+    await PasswordResetToken.deleteMany({ user: user._id });
+
+    return res
+      .clearCookie("refreshToken", COOKIE_OPTIONS)
+      .json({ message: "Sifreniz guncellendi. Lutfen tekrar giris yapin." });
+  } catch (err) {
+    console.error(err);
+    return res
+      .status(500)
+      .json({ message: "Sifre guncellenirken hata olustu." });
   }
 };
