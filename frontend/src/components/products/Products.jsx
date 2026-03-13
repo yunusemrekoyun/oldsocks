@@ -1,19 +1,14 @@
-// src/components/products/Products.jsx
 import React from "react";
 import ProductItem from "./ProductItem";
-import useProductsCache from "../../hooks/useProductsCache";
+import { getVariantColors } from "../../utils/productVariants";
 
-export default function Products({ products: propProducts }) {
-  const { data: cachedProducts, loading } = useProductsCache();
-  const products = Array.isArray(propProducts)
-    ? propProducts
-    : cachedProducts || [];
+export default function Products({
+  products = [],
+  variantColorMap = new Map(),
+}) {
+  const safeProducts = Array.isArray(products) ? products : [];
 
-  if (!Array.isArray(propProducts) && loading) {
-    return <div className="text-center py-10">Ürünler yükleniyor…</div>;
-  }
-
-  if (products.length === 0) {
+  if (safeProducts.length === 0) {
     return <div className="text-center py-10">Ürün bulunamadı.</div>;
   }
 
@@ -37,7 +32,7 @@ export default function Products({ products: propProducts }) {
 
   return (
     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-6 mt-8">
-      {products.map((p) => {
+      {safeProducts.map((p) => {
         const { price, discountedPrice, discountRate } = toCardPricing(p);
 
         const stock = Array.isArray(p.sizes)
@@ -55,6 +50,7 @@ export default function Products({ products: propProducts }) {
             discountedPrice={discountedPrice} // ← final
             discountRate={discountRate} // ← hesaplanan yüzde
             stock={stock}
+            variantColors={getVariantColors(p, variantColorMap)}
           />
         );
       })}

@@ -1,5 +1,5 @@
 // src/pages/ShopPage.jsx
-import React, { useState, useEffect, useMemo, useRef } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { ChevronDownIcon } from "@heroicons/react/24/outline";
 import BreadCrumb from "../components/breadCrumb/BreadCrumb";
@@ -8,6 +8,7 @@ import Products from "../components/products/Products";
 import api from "../../api";
 import useProductsCache from "../hooks/useProductsCache";
 import useCategoriesCache from "../hooks/useCategoriesCache";
+import { buildVariantColorMap } from "../utils/productVariants";
 
 const SORT_OPTIONS = [
   { value: "newest", label: "Tarihe Göre: En Yeni" },
@@ -38,7 +39,6 @@ export default function ShopPage() {
 
   // lazy-load
   const [visibleCount, setVisibleCount] = useState(20);
-  const browseRef = useRef(null);
 
   // Varsayılan filtreler
   const defaultFilters = {
@@ -102,6 +102,10 @@ export default function ShopPage() {
   const baseList = miniItems || campaignItems || allProducts;
   const pageLoading =
     campaignItems || miniItems ? false : productsLoading || categoriesLoading;
+  const variantColorMap = useMemo(
+    () => buildVariantColorMap(allProducts),
+    [allProducts]
+  );
 
   /* 5) Kampanya varsa priceRange ayarla */
   useEffect(() => {
@@ -267,18 +271,16 @@ export default function ShopPage() {
             </div>
           </header>
 
-          <Products products={sortedProducts.slice(0, visibleCount)} />
+          <Products
+            products={sortedProducts.slice(0, visibleCount)}
+            variantColorMap={variantColorMap}
+          />
 
           {visibleCount < sortedProducts.length && !(campaignItems || miniItems) && (
-            <div ref={browseRef} className="mt-10 text-center">
+            <div className="mt-10 text-center">
               <button
                 className="px-6 py-2 border border-dark1 text-dark1 rounded-full hover:bg-dark1 hover:text-white transition"
-                onClick={() => {
-                  setVisibleCount((prev) => prev + 20);
-                  setTimeout(() => {
-                    browseRef.current?.scrollIntoView({ behavior: "smooth" });
-                  }, 100);
-                }}
+                onClick={() => setVisibleCount((prev) => prev + 20)}
               >
                 Daha Fazla Yükle
               </button>

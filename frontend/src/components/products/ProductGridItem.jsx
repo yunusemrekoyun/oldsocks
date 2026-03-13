@@ -3,50 +3,10 @@ import React, { useEffect, useRef, useState, useMemo } from "react";
 import PropTypes from "prop-types";
 import { Link } from "react-router-dom";
 import { FaVolumeMute, FaVolumeUp, FaPlay } from "react-icons/fa";
-import api from "../../../api";
+import { getResponsiveImageProps } from "../../utils/cloudinaryMedia";
+import { toCssColor } from "../../utils/productVariants";
 
 const MOBILE_VIDEO_EVENT = "product-mobile-play";
-
-/* TR/EN renk adlarını güvenli CSS rengine çevir */
-const colorMap = {
-  siyah: "#000000",
-  black: "#000000",
-  beyaz: "#ffffff",
-  white: "#ffffff",
-  kırmızı: "#ff0000",
-  kirmizi: "#ff0000",
-  red: "#ff0000",
-  mavi: "#0000ff",
-  blue: "#0000ff",
-  lacivert: "#001a4d",
-  navy: "#001a4d",
-  yeşil: "#008000",
-  yesil: "#008000",
-  green: "#008000",
-  sarı: "#ffd100",
-  sari: "#ffd100",
-  yellow: "#ffd100",
-  pembe: "#ff69b4",
-  pink: "#ff69b4",
-  mor: "#6a0dad",
-  purple: "#6a0dad",
-  gri: "#808080",
-  gray: "#808080",
-  grey: "#808080",
-  kahverengi: "#8b4513",
-  brown: "#8b4513",
-  turuncu: "#ff7f00",
-  orange: "#ff7f00",
-  bej: "#f5f5dc",
-  beige: "#f5f5dc",
-};
-const toCssColor = (val) => {
-  if (!val) return "#ddd";
-  const k = String(val).trim().toLowerCase();
-  if (/^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(k)) return k;
-  if (/^rgba?\(/i.test(k)) return k;
-  return colorMap[k] || k;
-};
 
 const fmt = (n) =>
   Number(n || 0).toLocaleString("tr-TR", {
@@ -63,6 +23,7 @@ const ProductGridItem = ({
   discountedPrice, // normalize: indirim varsa FINAL, yoksa null/undefined
   discountRate, // opsiyonel: rozet için yüzde
   stock,
+  variantColors,
 }) => {
   const videoRef = useRef(null);
 
@@ -71,10 +32,6 @@ const ProductGridItem = ({
   const [isHovered, setIsHovered] = useState(false);
   const [mobileWantsPlay, setMobileWantsPlay] = useState(false);
   const [isMuted, setIsMuted] = useState(true);
-
-  // renk varyantları
-  const [variants, setVariants] = useState([]); // [{_id, color}]
-  const [loadingColors, setLoadingColors] = useState(true);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -110,35 +67,6 @@ const ProductGridItem = ({
     }
     return 0;
   }, [discountRate, hasDiscount, price, discountedPrice]);
-
-  /* ----- Varyant renklerini çek ----- */
-  useEffect(() => {
-    let alive = true;
-    (async () => {
-      try {
-        setLoadingColors(true);
-        const { data: prod } = await api.get(`/products/${id}`);
-        const baseId = prod?.parentProductId || prod?._id;
-        if (!baseId) {
-          if (alive)
-            setVariants(prod?.color ? [{ _id: id, color: prod.color }] : []);
-          return;
-        }
-        const { data: group } = await api.get(`/products?varyantsOf=${baseId}`);
-        const normalized = Array.isArray(group)
-          ? group.filter((v) => !!v.color)
-          : [];
-        if (alive) setVariants(normalized);
-      } catch {
-        if (alive) setVariants([]);
-      } finally {
-        if (alive) setLoadingColors(false);
-      }
-    })();
-    return () => {
-      alive = false;
-    };
-  }, [id]);
 
   /* ---------- Desktop (hover) ---------- */
   const handleMouseEnter = () => {
@@ -205,10 +133,23 @@ const ProductGridItem = ({
 
   const shouldShowVideo =
     !!video && (isHoverCapable || (isTouch && mobileWantsPlay));
+  const posterImage = useMemo(
+    () =>
+      getResponsiveImageProps(poster, {
+        widths: [320, 480, 640, 768],
+        defaultWidth: 640,
+        sizes:
+          "(max-width: 640px) 50vw, (max-width: 1024px) 25vw, 25vw",
+        crop: "fill",
+        aspectRatio: "3:4",
+        gravity: "auto",
+      }),
+    [poster]
+  );
 
   const colorDots = useMemo(
-    () => (variants.length ? variants : []),
-    [variants]
+    () => (Array.isArray(variantColors) ? variantColors : []),
+    [variantColors]
   );
 
   return (
@@ -256,7 +197,7 @@ const ProductGridItem = ({
           <video
             ref={videoRef}
             src={video || undefined}
-            poster={poster || undefined}
+            poster={posterImage.src || undefined}
             muted
             playsInline
             preload={isHoverCapable ? "metadata" : "none"}
@@ -269,9 +210,14 @@ const ProductGridItem = ({
           />
         ) : (
           <img
-            src={poster || ""}
+            src={posterImage.src || ""}
+            srcSet={posterImage.srcSet}
+            sizes={posterImage.sizes}
             alt={name}
             loading="lazy"
+            decoding="async"
+            width="640"
+            height="853"
             className="absolute inset-0 w-full h-full object-cover transition duration-300 group-hover:scale-105"
             onError={(e) => {
               e.currentTarget.style.background = "#f3f4f6";
@@ -281,11 +227,7 @@ const ProductGridItem = ({
         )}
 
         {/* ► DİKEY RENK NOKTALARI */}
-        {loadingColors ? (
-          <div className="absolute bottom-2 right-2 z-10 pointer-events-none">
-            <span className="block w-6 h-12 bg-white/50 rounded-md shadow-sm animate-pulse" />
-          </div>
-        ) : colorDots.length > 0 ? (
+        {colorDots.length > 0 ? (
           <div className="absolute bottom-2 right-2 z-10 pointer-events-none flex flex-col gap-1">
             {colorDots.map((v) => (
               <span
@@ -352,6 +294,12 @@ ProductGridItem.propTypes = {
   discountedPrice: PropTypes.number, // opsiyonel
   discountRate: PropTypes.number, // opsiyonel
   stock: PropTypes.number.isRequired,
+  variantColors: PropTypes.arrayOf(
+    PropTypes.shape({
+      _id: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
+      color: PropTypes.string,
+    })
+  ),
 };
 
 ProductGridItem.defaultProps = {
@@ -359,6 +307,7 @@ ProductGridItem.defaultProps = {
   poster: null,
   discountedPrice: null,
   discountRate: 0,
+  variantColors: [],
 };
 
 export default ProductGridItem;

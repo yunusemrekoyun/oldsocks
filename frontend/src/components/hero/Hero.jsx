@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import api from "../../../api";
 import { Swiper, SwiperSlide } from "swiper/react";
 import { Autoplay, Pagination } from "swiper/modules";
+import { getResponsiveImageProps } from "../../utils/cloudinaryMedia";
 import "swiper/css";
 import "swiper/css/pagination";
 
@@ -68,13 +69,23 @@ export default function Hero() {
 
   const renderMedia = (item, refIfSingle = null) => {
     if (item.kind === "image") {
+      const imageProps = getResponsiveImageProps(item.url, {
+        widths: [640, 960, 1280, 1600, 1920, 2400],
+        defaultWidth: 1600,
+        sizes: "100vw",
+      });
+
       return (
         <img
           ref={refIfSingle || null}
-          src={item.url}
+          src={imageProps.src}
+          srcSet={imageProps.srcSet}
+          sizes={imageProps.sizes}
           alt="Hero"
+          loading="eager"
+          fetchPriority="high"
+          decoding="async"
           className="w-full h-full object-cover object-center block"
-          // poster ihtiyacı yok; img için yok.
         />
       );
     }
@@ -86,7 +97,7 @@ export default function Hero() {
         loop
         muted
         playsInline
-        preload="auto"
+        preload="metadata"
         className="w-full h-full object-cover object-center block"
       />
     );

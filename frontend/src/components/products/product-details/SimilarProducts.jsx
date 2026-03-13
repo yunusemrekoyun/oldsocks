@@ -1,9 +1,13 @@
 // src/components/products/product-details/SimilarProducts.jsx
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import useProductsCache from "../../../hooks/useProductsCache";
 import SimilarProductsItem from "./SimilarProductsItem";
 import { Swiper, SwiperSlide } from "swiper/react";
 import { Autoplay, FreeMode } from "swiper/modules";
+import {
+  buildVariantColorMap,
+  getVariantColors,
+} from "../../../utils/productVariants";
 import "swiper/css";
 import "swiper/css/free-mode";
 
@@ -11,6 +15,8 @@ export default function SimilarProducts({ categoryId, currentProductId }) {
   const [items, setItems] = useState([]);
   const { data: allProducts, loading } = useProductsCache();
   const [error, setError] = useState("");
+  const all = Array.isArray(allProducts) ? allProducts : [];
+  const variantColorMap = useMemo(() => buildVariantColorMap(all), [all]);
 
   useEffect(() => {
     if (!categoryId || !allProducts) {
@@ -103,6 +109,7 @@ export default function SimilarProducts({ categoryId, currentProductId }) {
                 name={p.name}
                 price={price}
                 discountedPrice={discountedPrice ?? undefined}
+                variantColors={getVariantColors(p, variantColorMap)}
               />
             </SwiperSlide>
           );

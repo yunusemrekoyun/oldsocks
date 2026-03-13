@@ -2,6 +2,7 @@
 import React, { useMemo } from "react";
 import useProductsCache from "../../hooks/useProductsCache";
 import NewProductItem from "./NewProductItem";
+import { buildVariantColorMap, getVariantColors } from "../../utils/productVariants";
 
 // Kart için fiyat normalize edici (tek kaynak)
 const toCardPricing = (p) => {
@@ -22,6 +23,7 @@ const toCardPricing = (p) => {
 export default function NewProducts() {
   const { data: allProducts, loading } = useProductsCache();
   const all = Array.isArray(allProducts) ? allProducts : [];
+  const variantColorMap = useMemo(() => buildVariantColorMap(all), [all]);
 
   // Rastgele 4 ürün seç
   const items = useMemo(() => {
@@ -68,6 +70,7 @@ export default function NewProducts() {
                 discountedPrice={discountedPrice}
                 discountRate={discountRate}
                 stock={stock}
+                variantColors={getVariantColors(p, variantColorMap)}
               />
             );
           })}

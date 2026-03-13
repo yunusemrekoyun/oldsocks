@@ -1,6 +1,10 @@
 import React, { useState, useMemo } from "react";
 import useProductsCache from "../../hooks/useProductsCache";
 import ProductGridItem from "./ProductGridItem";
+import {
+  buildVariantColorMap,
+  getVariantColors,
+} from "../../utils/productVariants";
 
 /* Seed'li PRNG (mulberry32) */
 function mulberry32(seed) {
@@ -33,15 +37,17 @@ function shuffleWithSeed(arr, seed) {
 
 export default function ProductGrid({ limit = 4, title = "Ürünler" }) {
   const { data: allProducts, loading } = useProductsCache();
+  const all = Array.isArray(allProducts) ? allProducts : [];
+  const variantColorMap = useMemo(() => buildVariantColorMap(all), [all]);
 
   // Her mount’ta tek seferlik rastgele seed üret
   const [seed] = useState(() => Math.floor(Math.random() * 1_000_000));
 
   const products = useMemo(() => {
-    if (!allProducts) return [];
-    const shuffled = shuffleWithSeed(allProducts, seed);
+    if (!all.length) return [];
+    const shuffled = shuffleWithSeed(all, seed);
     return shuffled.slice(0, Math.max(0, limit));
-  }, [allProducts, seed, limit]);
+  }, [all, seed, limit]);
 
   if (loading || !allProducts) {
     return (
@@ -93,6 +99,7 @@ export default function ProductGrid({ limit = 4, title = "Ürünler" }) {
                 discountedPrice={discountedPrice}
                 discountRate={discountRate}
                 stock={stock}
+                variantColors={getVariantColors(p, variantColorMap)}
               />
             );
           })}

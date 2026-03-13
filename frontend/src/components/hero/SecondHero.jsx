@@ -2,6 +2,7 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom"; // ← import ettik
 import api from "../../../api";
+import { getResponsiveImageProps } from "../../utils/cloudinaryMedia";
 
 export default function SecondHero() {
   const [campaign, setCampaign] = useState(null);
@@ -17,9 +18,13 @@ export default function SecondHero() {
   if (!campaign) return null;
 
   const { title, subtitle, buttonText, imageUrl, items } = campaign;
+  const imageProps = getResponsiveImageProps(imageUrl, {
+    widths: [640, 960, 1280, 1600, 1920],
+    defaultWidth: 1280,
+    sizes: "100vw",
+  });
 
   const handleClick = () => {
-
     // 2) /shop sayfasına yönlendir, state ile aktar
     navigate("/shop", {
       state: {
@@ -34,8 +39,12 @@ export default function SecondHero() {
       {/* Arka plan */}
       <div className="w-full h-[60vh] md:h-[70vh] lg:h-[80vh] overflow-hidden">
         <img
-          src={imageUrl}
+          src={imageProps.src}
+          srcSet={imageProps.srcSet}
+          sizes={imageProps.sizes}
           alt={title}
+          loading="lazy"
+          decoding="async"
           className="w-full h-full object-cover"
         />
       </div>
