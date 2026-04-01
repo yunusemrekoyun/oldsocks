@@ -1,5 +1,5 @@
 // src/pages/admin/OrdersPage.jsx
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import api from "../../../api";
 import { Listbox } from "@headlessui/react";
 import {
@@ -14,6 +14,7 @@ import {
 } from "react-icons/fa";
 import useUnseenOrders from "../../hooks/useUnseenOrders";
 import ToastAlert from "../../components/ui/ToastAlert";
+import OrderDetailsModal from "../modals/OrderDetailsModal";
 
 const STATUS_LABELS = {
   pending: "Sipariş oluşturuldu",
@@ -45,6 +46,12 @@ export default function OrdersPage() {
   const [loading, setLoading] = useState(true);
   const [updatingId, setUpdatingId] = useState(null);
   const [imageViewer, setImageViewer] = useState(null);
+  const [detailOrderId, setDetailOrderId] = useState(null);
+  const [detailOrder, setDetailOrder] = useState(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState("");
+  const detailRequestRef = useRef(0);
+  const mountedRef = useRef(true);
   const [toast, setToast] = useState(null);
   const { markSeen } = useUnseenOrders();
 
@@ -95,6 +102,13 @@ export default function OrdersPage() {
   };
 
   useEffect(() => {
+    return () => {
+      mountedRef.current = false;
+      detailRequestRef.current += 1;
+    };
+  }, []);
+
+  useEffect(() => {
     const doSeen = () => markSeen();
     doSeen();
     window.addEventListener("focus", doSeen);
@@ -118,6 +132,43 @@ export default function OrdersPage() {
     } finally {
       setUpdatingId(null);
     }
+  };
+
+  const openOrderDetails = async (id) => {
+    const requestId = detailRequestRef.current + 1;
+    detailRequestRef.current = requestId;
+    const existingOrder = orders.find((entry) => entry._id === id) || null;
+
+    setDetailOrderId(id);
+    setDetailOrder(existingOrder);
+    setDetailError("");
+    setDetailLoading(true);
+
+    try {
+      const { data } = await api.get(`/orders/${id}`, { timeout: 8000 });
+      if (!mountedRef.current || detailRequestRef.current !== requestId) return;
+      setDetailOrder(data);
+    } catch (err) {
+      if (!mountedRef.current || detailRequestRef.current !== requestId) return;
+      console.error("Order detail fetch failed", err);
+      setDetailError(
+        existingOrder
+          ? "Ek sipariş detayları yüklenemedi. Listedeki mevcut veriler gösteriliyor."
+          : "Sipariş detayı alınamadı."
+      );
+    } finally {
+      if (mountedRef.current && detailRequestRef.current === requestId) {
+        setDetailLoading(false);
+      }
+    }
+  };
+
+  const closeOrderDetails = () => {
+    detailRequestRef.current += 1;
+    setDetailOrderId(null);
+    setDetailOrder(null);
+    setDetailError("");
+    setDetailLoading(false);
   };
 
   const fmtPrice = (n) =>
@@ -176,6 +227,15 @@ export default function OrdersPage() {
           </div>
         </div>
       )}
+
+      <OrderDetailsModal
+        open={Boolean(detailOrderId)}
+        order={detailOrder}
+        loading={detailLoading}
+        error={detailError}
+        onClose={closeOrderDetails}
+        onPreviewImage={setImageViewer}
+      />
 
       {/* --- Üst Araçlar --- */}
       <div className="sticky top-0 z-10 bg-white/80 backdrop-blur supports-[backdrop-filter]:bg-white/60 border border-light2 rounded-xl p-4 shadow-sm">
@@ -533,7 +593,18 @@ export default function OrdersPage() {
                       </Listbox>
                     </div>
 
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                      <button
+                        type="button"
+                        onClick={() => openOrderDetails(order._id)}
+                        disabled={detailLoading && detailOrderId === order._id}
+                        className="rounded-lg border border-light2 px-4 py-2 text-sm font-medium text-dark1 transition hover:bg-light1 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        {detailLoading && detailOrderId === order._id
+                          ? "Yükleniyor..."
+                          : "Sipariş Detayı"}
+                      </button>
+
                       {changed ? (
                         <button
                           onClick={() => updateStatus(order._id)}

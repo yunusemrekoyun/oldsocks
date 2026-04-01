@@ -126,12 +126,18 @@ exports.getMyOrders = async (req, res) => {
 
 exports.getOrderById = async (req, res) => {
   try {
-    const order = await Order.findById(req.params.id);
+    const order = await Order.findById(req.params.id)
+      .populate("user", "firstName lastName email phone")
+      .populate("items.productId", "images name");
     if (!order) return res.status(404).json({ message: "Sipariş bulunamadı." });
 
     const isAdmin = req.user?.role === "admin";
+    const ownerId =
+      order.user && typeof order.user === "object"
+        ? order.user._id
+        : order.user;
     const isOwner =
-      order.user && String(order.user) === String(req.user?.userId || "");
+      ownerId && String(ownerId) === String(req.user?.userId || "");
 
     if (!isAdmin && !isOwner) {
       return res.status(403).json({ message: "Bu siparişe erişim yetkiniz yok." });
