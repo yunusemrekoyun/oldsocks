@@ -37,6 +37,7 @@ lerna-debug.log*
 # === Özelleştirilmiş ayarlar ===
 *.bak
 *.tmp
+maintenance-page/
 
 # === OS tarafından oluşturulan ===
 Thumbs.db
