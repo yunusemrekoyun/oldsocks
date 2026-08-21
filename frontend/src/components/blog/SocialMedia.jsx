@@ -15,7 +15,7 @@ export default function SocialMedia() {
   useEffect(() => {
     api
       .get("/instagram-posts")
-      .then(({ data }) => setPosts(data.filter((p) => p.active)))
+      .then(({ data }) => setPosts(Array.isArray(data) ? data : []))
       .catch(console.error);
   }, []);
 

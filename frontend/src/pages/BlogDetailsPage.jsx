@@ -1,5 +1,5 @@
 // src/pages/BlogDetailsPage.jsx
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import api from "../../api";
 
@@ -16,6 +16,7 @@ import RecentBlog from "../components/blog/RecentBlog";
 import Tags from "../components/blog/Tags";
 import SocialMedia from "../components/blog/SocialMedia";
 import NewsLetter from "../components/blog/NewsLetter";
+import { formatTurkishDate } from "../utils/date";
 
 export default function BlogDetailsPage() {
   const { slug } = useParams();
@@ -37,7 +38,7 @@ export default function BlogDetailsPage() {
   }, [slug]);
 
   // Yorumları getir
-  const fetchComments = () => {
+  const fetchComments = useCallback(() => {
     if (!blog) return;
     setLoadingComments(true);
 
@@ -46,12 +47,12 @@ export default function BlogDetailsPage() {
       .then(({ data }) => setComments(data))
       .catch((err) => console.error("Yorumlar yüklenemedi:", err))
       .finally(() => setLoadingComments(false));
-  };
+  }, [blog]);
 
   // Blog yüklendiğinde yorumları çek
   useEffect(() => {
     if (blog) fetchComments();
-  }, [blog]);
+  }, [blog, fetchComments]);
 
   if (loading) return <div className="py-10 text-center">Yükleniyor…</div>;
   if (!blog)
@@ -60,13 +61,14 @@ export default function BlogDetailsPage() {
     );
 
   // Tarih, yazar, kategori vs.
-  const date = new Date(blog.publishedAt || blog.createdAt)
-    .toLocaleDateString("en-US", { day: "numeric", month: "short" })
-    .replace(",", "");
-  const authorName = `${blog.author.firstName} ${blog.author.lastName}`;
-  const authorAvatar = blog.author.avatar;
-  const categoryNames = blog.categories.map((c) => c.name).join(", ");
-  const paragraphs = blog.content.split(/\n\s*\n/);
+  const date = formatTurkishDate(blog.publishedAt || blog.createdAt);
+  const authorName =
+    [blog.author?.firstName, blog.author?.lastName].filter(Boolean).join(" ") ||
+    "Oldscks";
+  const authorAvatar = blog.author?.avatar;
+  const categoryNames = Array.isArray(blog.categories)
+    ? blog.categories.map((c) => c?.name).filter(Boolean).join(", ")
+    : "";
 
   return (
     <>
@@ -82,7 +84,7 @@ export default function BlogDetailsPage() {
             author={authorName}
             category={categoryNames}
             comments={comments.length}
-            paragraphs={paragraphs}
+            content={blog.content}
             quote={blog.excerpt}
           />
 
@@ -91,7 +93,7 @@ export default function BlogDetailsPage() {
           <BlogOwner
             avatar={authorAvatar}
             name={authorName}
-            bio={blog.author.bio || ""}
+            bio={blog.author?.bio || ""}
           />
 
           {/* Dinamik yorum listesi */}

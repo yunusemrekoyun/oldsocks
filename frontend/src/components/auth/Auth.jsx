@@ -5,7 +5,7 @@ import Register from "./Register";
 import ForgotPassword from "./ForgotPassword";
 import { AnimatePresence } from "framer-motion";
 
-const Auth = () => {
+const Auth = ({ redirectTo }) => {
   const [mode, setMode] = useState("login");
 
   return (
@@ -14,6 +14,7 @@ const Auth = () => {
         {mode === "login" && (
           <Login
             key="login"
+            redirectTo={redirectTo}
             onSwitch={() => setMode("register")}
             onForgotPassword={() => setMode("forgot")}
           />

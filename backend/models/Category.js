@@ -10,7 +10,13 @@ const CategorySchema = new mongoose.Schema(
     },
     image: {
       type: String,
-      required: true,
+      default: "",
+    },
+    imageAsset: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "MediaAsset",
+      default: null,
+      index: true,
     },
     parent: {
       type: mongoose.Schema.Types.ObjectId,

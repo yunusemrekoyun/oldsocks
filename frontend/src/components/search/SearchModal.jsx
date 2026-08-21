@@ -1,7 +1,8 @@
-import React, { useEffect, useState, useRef } from "react";
-import { FaSearch } from "react-icons/fa";
+import React, { useCallback, useEffect, useState, useRef } from "react";
+import { FaSearch, FaTimes } from "react-icons/fa";
 import { useNavigate } from "react-router-dom";
 import api from "../../../api";
+import { formatTry } from "../../utils/currency";
 
 export default function SearchModal({ open, onClose }) {
   const [allProducts, setAllProducts] = useState([]);
@@ -12,6 +13,15 @@ export default function SearchModal({ open, onClose }) {
 
   const [isVisible, setIsVisible] = useState(open);
   const [isClosing, setIsClosing] = useState(false);
+
+  const handleClose = useCallback(() => {
+    setIsClosing(true);
+    setTimeout(() => {
+      setIsVisible(false);
+      setIsClosing(false);
+      onClose();
+    }, 200);
+  }, [onClose]);
 
   // Veriler çekilsin
   useEffect(() => {
@@ -54,36 +64,47 @@ export default function SearchModal({ open, onClose }) {
     };
     if (isVisible) document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
-  }, [isVisible]);
+  }, [handleClose, isVisible]);
+
+  useEffect(() => {
+    if (!isVisible) return undefined;
+    const onKeyDown = (event) => {
+      if (event.key === "Escape") handleClose();
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [handleClose, isVisible]);
 
   const handleSelect = (id) => {
     handleClose();
     navigate(`/product-details/${id}`);
   };
 
-  const handleClose = () => {
-    setIsClosing(true);
-    setTimeout(() => {
-      setIsVisible(false);
-      setIsClosing(false);
-      onClose();
-    }, 200);
-  };
-
   if (!isVisible) return null;
 
   return (
     <div
+      role="dialog"
+      aria-modal="true"
+      aria-label="Ürün arama"
       className={`fixed inset-0 bg-black bg-opacity-50 backdrop-blur-sm flex items-center justify-center z-50 transition-opacity ${
         isClosing ? "fade-out" : "fade-in"
       }`}
     >
       <div
         ref={containerRef}
-        className={`bg-white rounded-xl w-full max-w-lg mx-4 p-6 transform transition-transform duration-200 ${
+        className={`relative bg-white rounded-xl w-full max-w-lg mx-4 p-6 transform transition-transform duration-200 ${
           isClosing ? "scale-out" : "scale-in"
         }`}
       >
+        <button
+          type="button"
+          onClick={handleClose}
+          aria-label="Aramayı kapat"
+          className="absolute right-4 top-4 rounded-full p-2 text-gray-500 transition hover:bg-gray-100 hover:text-dark1"
+        >
+          <FaTimes />
+        </button>
         <div className="flex items-center mb-4 border-b pb-2">
           <FaSearch className="text-gray-500 mr-2" />
           <input
@@ -100,10 +121,11 @@ export default function SearchModal({ open, onClose }) {
           {query ? (
             results.length ? (
               results.map((p) => (
-                <div
+                <button
+                  type="button"
                   key={p._id}
                   onClick={() => handleSelect(p._id)}
-                  className="py-3 px-4 hover:bg-gray-100 cursor-pointer flex items-center justify-between rounded transition group"
+                  className="w-full py-3 px-4 hover:bg-gray-100 cursor-pointer flex items-center justify-between rounded transition group text-left"
                 >
                   <div className="flex items-center space-x-4">
                     {p.images?.[0] && (
@@ -124,11 +146,10 @@ export default function SearchModal({ open, onClose }) {
                   </div>
                   <div className="text-right space-y-1 min-w-[80px]">
                     <div className="text-dark1 font-semibold">
-                      ₺{p.price.toFixed(2)}
+                      {formatTry(p.price)}
                     </div>
-                    <div className="text-yellow-400 text-xs">★★★★★</div>
                   </div>
-                </div>
+                </button>
               ))
             ) : (
               <div className="text-center text-gray-500 py-4">

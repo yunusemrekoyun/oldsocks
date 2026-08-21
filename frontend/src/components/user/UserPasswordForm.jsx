@@ -34,12 +34,12 @@ export default function UserPasswordForm() {
     setSuccess("");
 
     if (form.newPassword !== form.confirmPassword) {
-      setError("Yeni sifre alanlari eslesmiyor.");
+      setError("Yeni şifre alanları eşleşmiyor.");
       return;
     }
 
     if (!passwordValidation.allOk) {
-      setError("Yeni sifre guvenlik kurallarini saglamiyor.");
+      setError("Yeni şifre güvenlik kurallarını sağlamıyor.");
       return;
     }
 
@@ -51,7 +51,7 @@ export default function UserPasswordForm() {
       });
 
       setSuccess(
-        data?.message || "Sifreniz guncellendi. Lutfen tekrar giris yapin."
+        data?.message || "Şifreniz güncellendi. Lütfen tekrar giriş yapın."
       );
       setForm({
         currentPassword: "",
@@ -67,7 +67,7 @@ export default function UserPasswordForm() {
     } catch (err) {
       setError(
         err?.response?.data?.message ||
-          "Sifre guncellenemedi. Lutfen tekrar deneyin."
+          "Şifre güncellenemedi. Lütfen tekrar deneyin."
       );
     } finally {
       setLoading(false);
@@ -79,10 +79,10 @@ export default function UserPasswordForm() {
       <div className="mb-5 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h3 className="text-lg sm:text-xl font-semibold text-dark1">
-            Sifre Degistir
+            Şifre Değiştir
           </h3>
           <p className="text-sm leading-6 text-dark2">
-            Mevcut sifrenizi girin, ardindan yeni sifrenizi belirleyin.
+            Mevcut şifrenizi girin, ardından yeni şifrenizi belirleyin.
           </p>
         </div>
         <button
@@ -90,7 +90,7 @@ export default function UserPasswordForm() {
           onClick={() => setShowPasswords((prev) => !prev)}
           className="self-start text-sm font-medium text-dark2 hover:text-dark1 hover:underline"
         >
-          {showPasswords ? "Sifreleri gizle" : "Sifreleri goster"}
+          {showPasswords ? "Şifreleri gizle" : "Şifreleri göster"}
         </button>
       </div>
 
@@ -108,7 +108,7 @@ export default function UserPasswordForm() {
             htmlFor="currentPassword"
             className="mb-1 block text-sm font-semibold text-dark2"
           >
-            Mevcut sifre
+            Mevcut şifre
           </label>
           <input
             id="currentPassword"
@@ -126,7 +126,7 @@ export default function UserPasswordForm() {
             htmlFor="newPassword"
             className="mb-1 block text-sm font-semibold text-dark2"
           >
-            Yeni sifre
+            Yeni şifre
           </label>
           <input
             id="newPassword"
@@ -154,7 +154,7 @@ export default function UserPasswordForm() {
             htmlFor="confirmPassword"
             className="mb-1 block text-sm font-semibold text-dark2"
           >
-            Yeni sifre (tekrar)
+            Yeni şifre (tekrar)
           </label>
           <input
             id="confirmPassword"
@@ -173,7 +173,7 @@ export default function UserPasswordForm() {
             disabled={loading}
             className="w-full rounded-lg bg-dark1 py-3 font-semibold text-white transition hover:bg-dark2 disabled:opacity-50 sm:w-auto sm:px-8"
           >
-            {loading ? "Guncelleniyor..." : "Sifreyi Degistir"}
+            {loading ? "Güncelleniyor..." : "Şifreyi Değiştir"}
           </button>
         </div>
       </form>

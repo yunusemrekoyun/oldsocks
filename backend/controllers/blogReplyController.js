@@ -1,4 +1,6 @@
 const BlogCommentReply = require("../models/BlogCommentReply");
+const BlogComment = require("../models/BlogComment");
+const mongoose = require("mongoose");
 
 // Admin: tüm yanıtları listele (approved filtresiyle)
 exports.getAllReplies = async (req, res) => {
@@ -90,11 +92,29 @@ exports.getRepliesByComment = async (req, res) => {
 // Logged-in user: yeni yanıt ekle (onayda)
 exports.createReply = async (req, res) => {
   try {
+    const text = String(req.body?.text || "").trim();
+    if (text.length < 2 || text.length > 1000) {
+      return res.status(400).json({
+        message: "Yanıt 2 ile 1000 karakter arasında olmalıdır.",
+      });
+    }
+    if (!mongoose.isValidObjectId(req.params.commentId)) {
+      return res.status(404).json({ message: "Yorum bulunamadı." });
+    }
+    const comment = await BlogComment.findOne({
+      _id: req.params.commentId,
+      approved: true,
+    });
+    if (!comment) {
+      return res.status(404).json({ message: "Yorum bulunamadı." });
+    }
     const reply = await BlogCommentReply.create({
       comment: req.params.commentId,
       author: req.user.userId,
-      text: req.body.text,
+      text,
     });
+    comment.replies.addToSet(reply._id);
+    await comment.save();
     res.status(201).json(reply);
   } catch (err) {
     console.error(err);
@@ -113,7 +133,13 @@ exports.deleteReply = async (req, res) => {
     ) {
       return res.status(403).json({ message: "Bu yanıtı silemezsiniz." });
     }
-    await BlogCommentReply.findByIdAndDelete(req.params.id);
+    await Promise.all([
+      BlogCommentReply.findByIdAndDelete(req.params.id),
+      BlogComment.updateOne(
+        { _id: reply.comment },
+        { $pull: { replies: reply._id } }
+      ),
+    ]);
     res.json({ message: "Yanıt silindi." });
   } catch (err) {
     console.error(err);

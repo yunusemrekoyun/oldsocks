@@ -25,7 +25,8 @@ import {
   ChevronDownIcon,
   ChevronRightIcon,
   TruckIcon,
-  MegaphoneIcon, // ⬅️ yeni
+  MegaphoneIcon,
+  CircleStackIcon,
 } from "@heroicons/react/24/solid";
 
 /* --------- Küçük yardımcı --------- */
@@ -128,11 +129,15 @@ export default function AdminLayout({ children }) {
         icon: <ShoppingBagIcon className="w-5 h-5" />,
         path: "/admin/orders",
       },
-      // ⬇️ YENİ NAV ITEM
       {
         label: "Duyuru Barı",
         icon: <MegaphoneIcon className="w-5 h-5" />,
         path: "/admin/announcement-bar",
+      },
+      {
+        label: "Medya Bakımı",
+        icon: <CircleStackIcon className="w-5 h-5" />,
+        path: "/admin/media-maintenance",
       },
     ],
     []
@@ -415,7 +420,8 @@ export default function AdminLayout({ children }) {
       replies: "Yanıtlar",
       "instagram-posts": "Instagram",
       discounts: "İndirimler",
-      "announcement-bar": "Duyuru Barı", // ⬅️ breadcrumb
+      "announcement-bar": "Duyuru Barı",
+      "media-maintenance": "Medya Bakımı",
     };
     return parts.map((p) => map[p] || p);
   }, [location.pathname]);

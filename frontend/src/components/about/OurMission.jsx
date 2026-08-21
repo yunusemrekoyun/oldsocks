@@ -1,6 +1,6 @@
 // src/components/about/OurMission.jsx
 import React from "react";
-import missionImg from "../../assets/about/mission.png";
+import missionImg from "../../assets/about/mission.webp";
 
 const OurMission = () => (
   <section className="py-20 px-4">
@@ -20,6 +20,10 @@ const OurMission = () => (
         <img
           src={missionImg}
           alt="Oldsocks Misyon"
+          loading="lazy"
+          decoding="async"
+          width="1200"
+          height="1600"
           className="w-full h-[600px] object-cover object-center"
         />
       </div>

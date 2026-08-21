@@ -6,6 +6,7 @@ import { useAuth } from "../context/AuthContext";
 import AuthRequiredModal from "../components/auth/AuthRequireModal";
 import ToastAlert from "../components/ui/ToastAlert";
 import api from "../../api";
+import { formatTry } from "../utils/currency";
 
 export default function CheckoutPage() {
   const {
@@ -21,6 +22,8 @@ export default function CheckoutPage() {
   const [loading, setLoading] = useState(false);
   const [addresses, setAddresses] = useState([]);
   const [addrLoading, setAddrLoading] = useState(true);
+  const [addrError, setAddrError] = useState("");
+  const [addressReloadKey, setAddressReloadKey] = useState(0);
   const [selectedAddress, setSelectedAddress] = useState(null);
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [toast, setToast] = useState(null);
@@ -140,15 +143,30 @@ export default function CheckoutPage() {
     pricingSummary?.freeShippingThreshold ?? shipping?.freeShippingThreshold ?? null;
 
   useEffect(() => {
+    let alive = true;
+    setAddrLoading(true);
+    setAddrError("");
     api
       .get("/users/me/addresses")
       .then(({ data }) => {
-        const list = data || [];
+        if (!alive) return;
+        const list = Array.isArray(data) ? data : [];
         setAddresses(list);
         if (list.length) setSelectedAddress(list[0]._id);
       })
-      .finally(() => setAddrLoading(false));
-  }, []);
+      .catch(() => {
+        if (!alive) return;
+        setAddresses([]);
+        setAddrError("Adresleriniz alınamadı. Bağlantınızı kontrol edip tekrar deneyin.");
+      })
+      .finally(() => {
+        if (alive) setAddrLoading(false);
+      });
+
+    return () => {
+      alive = false;
+    };
+  }, [addressReloadKey]);
 
   if (authLoading) return <div className="p-4">Yükleniyor…</div>;
 
@@ -168,6 +186,21 @@ export default function CheckoutPage() {
 
   if (addrLoading) return <div className="p-4">Adresler yükleniyor…</div>;
 
+  if (addrError) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center p-6 text-center">
+        <p className="mb-4 text-red-700">{addrError}</p>
+        <button
+          type="button"
+          onClick={() => setAddressReloadKey((value) => value + 1)}
+          className="rounded bg-dark1 px-5 py-2 text-white"
+        >
+          Tekrar Dene
+        </button>
+      </div>
+    );
+  }
+
   if (addresses.length === 0) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center p-6">
@@ -184,7 +217,7 @@ export default function CheckoutPage() {
     );
   }
 
-  const attemptPayment = async (useFallback = false) => {
+  const attemptPayment = async () => {
     if (!selectedAddress) {
       setToast({ type: "error", msg: "Lütfen bir adres seçin." });
       return;
@@ -194,14 +227,9 @@ export default function CheckoutPage() {
       const { data } = await api.post("/payment/start", {
         cartItems: items,
         addressId: selectedAddress,
-        useFallback,
         selectedCampaignId: selectedCampaignId || null,
         couponCode: selectedCouponCode || null,
       });
-
-      if (data?.missing && !useFallback) {
-        return attemptPayment(true);
-      }
 
       if (data?.conversationId) {
         const serverSummary = data.summary || null;
@@ -309,11 +337,11 @@ export default function CheckoutPage() {
                   <p className="text-sm text-gray-600">Beden: {it.size}</p>
                 )}
                 <p className="text-sm text-gray-600">
-                  Adet: {it.qty} × ₺{it.price.toFixed(2)}
+                  Adet: {it.qty} × {formatTry(it.price)}
                 </p>
               </div>
               <div className="font-semibold">
-                ₺{(it.price * it.qty).toFixed(2)}
+                {formatTry(it.price * it.qty)}
               </div>
             </li>
           ))}
@@ -322,13 +350,13 @@ export default function CheckoutPage() {
         <div className="space-y-2 border-t pt-4 text-lg font-semibold">
           <div className="flex justify-between">
             <span>Ara Toplam:</span>
-            <span>₺{displaySubTotal.toFixed(2)}</span>
+            <span>{formatTry(displaySubTotal)}</span>
           </div>
 
           {displayCampaignDiscount > 0 && (
             <div className="flex justify-between text-emerald-700 text-base">
               <span>Kampanya İndirimi</span>
-              <span>-₺{displayCampaignDiscount.toFixed(2)}</span>
+              <span>-{formatTry(displayCampaignDiscount)}</span>
             </div>
           )}
 
@@ -338,14 +366,14 @@ export default function CheckoutPage() {
                 Kupon İndirimi
                 {appliedCoupon?.code ? ` (${appliedCoupon.code})` : ""}
               </span>
-              <span>-₺{displayCouponDiscount.toFixed(2)}</span>
+              <span>-{formatTry(displayCouponDiscount)}</span>
             </div>
           )}
 
           {(displayCampaignDiscount > 0 || displayCouponDiscount > 0) && (
             <div className="flex justify-between text-base">
               <span>İndirimli Ara Toplam:</span>
-              <span>₺{displayDiscountedSubTotal.toFixed(2)}</span>
+              <span>{formatTry(displayDiscountedSubTotal)}</span>
             </div>
           )}
 
@@ -359,12 +387,12 @@ export default function CheckoutPage() {
               displayIsFree ? (
                 <span className="flex items-center gap-2">
                   <span className="line-through text-gray-500">
-                    ₺{Number(shipping?.fee ?? displayShippingFee).toFixed(2)}
+                    {formatTry(shipping?.fee ?? displayShippingFee)}
                   </span>
                   <span className="text-emerald-600 font-bold">Ücretsiz</span>
                 </span>
               ) : (
-                <span>₺{displayShippingFee.toFixed(2)}</span>
+                <span>{formatTry(displayShippingFee)}</span>
               )
             ) : (
               <span className="text-gray-500">Tanımlı kargo yok</span>
@@ -373,14 +401,14 @@ export default function CheckoutPage() {
 
           {displayFreeShippingThreshold != null && !displayIsFree && (
             <p className="text-sm text-gray-500">
-              ₺{Number(displayFreeShippingThreshold).toFixed(0)} ve üzeri
+              {formatTry(displayFreeShippingThreshold, { fractionDigits: 0 })} ve üzeri
               alışverişlerde kargo ücretsiz.
             </p>
           )}
 
           <div className="flex justify-between text-xl">
             <span>Genel Toplam:</span>
-            <span className="text-primary">₺{displayGrandTotal.toFixed(2)}</span>
+            <span className="text-primary">{formatTry(displayGrandTotal)}</span>
           </div>
         </div>
 
@@ -415,7 +443,7 @@ export default function CheckoutPage() {
         <AuthRequiredModal
           open
           onClose={() => setShowLoginModal(false)}
-          onLogin={() => navigate("/profile")}
+          onLogin={() => navigate("/auth", { state: { from: "/checkout" } })}
         />
       )}
 

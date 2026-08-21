@@ -4,6 +4,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { useCart } from "../context/useCart";
 import ToastAlert from "../components/ui/ToastAlert";
 import api from "../../api";
+import { formatTry } from "../utils/currency";
 
 export default function PaymentPage() {
   const containerRef = useRef(null);
@@ -184,7 +185,7 @@ export default function PaymentPage() {
                       {it.name}
                     </p>
                     <p className="text-xs text-gray-600">
-                      Adet: {it.qty} × ₺{it.price?.toFixed?.(2) || it.price}
+                      Adet: {it.qty} × {formatTry(it.price)}
                     </p>
                     {it.size && (
                       <p className="text-xs text-gray-600">Beden: {it.size}</p>
@@ -194,7 +195,7 @@ export default function PaymentPage() {
                     )}
                   </div>
                   <div className="font-semibold text-sm sm:text-base whitespace-nowrap">
-                    ₺{(it.price * it.qty).toFixed(2)}
+                    {formatTry(it.price * it.qty)}
                   </div>
                 </li>
               ))}
@@ -205,13 +206,13 @@ export default function PaymentPage() {
               <div className="space-y-2 text-base sm:text-lg font-semibold border-t pt-4 mt-4">
                 <div className="flex justify-between">
                   <span>Ara Toplam</span>
-                  <span>₺{Number(summary.subTotal || 0).toFixed(2)}</span>
+                  <span>{formatTry(summary.subTotal || 0)}</span>
                 </div>
 
                 {Number(summary.campaignDiscount || 0) > 0 && (
                   <div className="flex justify-between text-emerald-700">
                     <span>Kampanya İndirimi</span>
-                    <span>-₺{Number(summary.campaignDiscount || 0).toFixed(2)}</span>
+                    <span>-{formatTry(summary.campaignDiscount || 0)}</span>
                   </div>
                 )}
 
@@ -223,7 +224,7 @@ export default function PaymentPage() {
                         ? ` (${summary.appliedCoupon.code})`
                         : ""}
                     </span>
-                    <span>-₺{Number(summary.couponDiscount || 0).toFixed(2)}</span>
+                    <span>-{formatTry(summary.couponDiscount || 0)}</span>
                   </div>
                 )}
 
@@ -232,12 +233,11 @@ export default function PaymentPage() {
                   <div className="flex justify-between">
                     <span>İndirimli Ara Toplam</span>
                     <span>
-                      ₺
-                      {Number(
+                      {formatTry(
                         summary.discountedSubTotal ??
                           Number(summary.subTotal || 0) -
                             Number(summary.campaignDiscount || 0)
-                      ).toFixed(2)}
+                      )}
                     </span>
                   </div>
                 )}
@@ -250,21 +250,21 @@ export default function PaymentPage() {
                   {summary.isFree ? (
                     <span className="flex items-center gap-2">
                       <span className="line-through text-gray-500">
-                        ₺{Number(summary.shippingFee || 0).toFixed(2)}
+                        {formatTry(summary.shippingFee || 0)}
                       </span>
                       <span className="text-emerald-600 font-bold">
                         Ücretsiz
                       </span>
                     </span>
                   ) : (
-                    <span>₺{Number(summary.shippingFee || 0).toFixed(2)}</span>
+                    <span>{formatTry(summary.shippingFee || 0)}</span>
                   )}
                 </div>
 
                 <div className="flex justify-between text-xl">
                   <span>Genel Toplam</span>
                   <span className="text-primary">
-                    ₺{Number(summary.grandTotal || 0).toFixed(2)}
+                    {formatTry(summary.grandTotal || 0)}
                   </span>
                 </div>
 
@@ -282,7 +282,9 @@ export default function PaymentPage() {
 
                 {summary.isFree && summary.freeShippingThreshold != null && (
                   <p className="text-xs text-emerald-700">
-                    ₺{Number(summary.freeShippingThreshold).toFixed(0)} ve üzeri
+                    {formatTry(summary.freeShippingThreshold, {
+                      fractionDigits: 0,
+                    })} ve üzeri
                     alışverişlerde kargo ücretsiz.
                   </p>
                 )}
@@ -291,7 +293,7 @@ export default function PaymentPage() {
               // summary yoksa: eski davranış (sadece ürün toplamı)
               <div className="flex justify-between items-center text-base sm:text-lg font-semibold border-t pt-4 mt-4">
                 <span>Toplam</span>
-                <span>₺{totalPrice.toFixed(2)}</span>
+                <span>{formatTry(totalPrice)}</span>
               </div>
             )}
 

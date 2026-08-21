@@ -35,8 +35,8 @@ export default function AddressForm({ address, onSuccess, onCancel }) {
     return (
       form.title.trim() &&
       form.mainaddress.trim() &&
-      form.city.trim() &&
-      form.postalCode.trim()
+      form.street.trim() &&
+      form.city.trim()
     );
   }, [form]);
 
@@ -68,8 +68,8 @@ export default function AddressForm({ address, onSuccess, onCancel }) {
           {address ? "Adresi Düzenle" : "Yeni Adres Ekle"}
         </h3>
         <p className="text-xs sm:text-sm text-gray-600 mt-1">
-          Zorunlu alanlar: <b>Adres Başlığı</b>, <b>Adres</b>, <b>Şehir</b>,{" "}
-          <b>Posta Kodu</b>.
+          Zorunlu alanlar: <b>Adres Başlığı</b>, <b>Adres</b>, <b>Sokak/Cadde</b>{" "}
+          ve <b>Şehir</b>.
         </p>
       </header>
 
@@ -114,12 +114,13 @@ export default function AddressForm({ address, onSuccess, onCancel }) {
         {/* Sokak / Cadde */}
         <div>
           <label className="block text-sm font-medium text-dark1 mb-1">
-            Sokak / Cadde <span className="text-gray-400">(isteğe bağlı)</span>
+            Sokak / Cadde <span className="text-red-600">*</span>
           </label>
           <input
-            name="street"
-            value={form.street}
-            onChange={handleChange}
+              name="street"
+              value={form.street}
+              onChange={handleChange}
+              required
             placeholder="Sokak / Cadde"
             className="w-full rounded-xl border border-light2 px-3 py-3 text-sm sm:text-base outline-none focus:border-dark1 focus:ring-2 focus:ring-dark1/10 transition"
           />
@@ -156,13 +157,12 @@ export default function AddressForm({ address, onSuccess, onCancel }) {
           </div>
           <div>
             <label className="block text-sm font-medium text-dark1 mb-1">
-              Posta Kodu <span className="text-red-600">*</span>
+              Posta Kodu <span className="text-gray-400">(isteğe bağlı)</span>
             </label>
             <input
               name="postalCode"
               value={form.postalCode}
               onChange={handleChange}
-              required
               inputMode="numeric"
               placeholder="PK"
               className="w-full rounded-xl border border-light2 px-3 py-3 text-sm sm:text-base outline-none focus:border-dark1 focus:ring-2 focus:ring-dark1/10 transition"

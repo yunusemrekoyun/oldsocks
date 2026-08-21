@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import api from "../../../api";
 import { Swiper, SwiperSlide } from "swiper/react";
 import { Autoplay, Pagination } from "swiper/modules";
-import { getResponsiveImageProps } from "../../utils/cloudinaryMedia";
+import { getResponsiveImageProps } from "../../utils/media";
 import "swiper/css";
 import "swiper/css/pagination";
 
@@ -69,7 +69,7 @@ export default function Hero() {
 
   const renderMedia = (item, refIfSingle = null) => {
     if (item.kind === "image") {
-      const imageProps = getResponsiveImageProps(item.url, {
+      const imageProps = getResponsiveImageProps(item.media || item.url, {
         widths: [640, 960, 1280, 1600, 1920, 2400],
         defaultWidth: 1600,
         sizes: "100vw",
@@ -89,17 +89,36 @@ export default function Hero() {
         />
       );
     }
+    const mobileVideo = item.media?.videos?.find((source) => source.name === "mobile");
+    const desktopVideo =
+      item.media?.videos?.find((source) => source.name === "desktop") ||
+      item.media?.videos?.find((source) => source.name === "detail");
+    const poster =
+      item.media?.posters?.find((source) => source.name === "poster-desktop")?.url ||
+      item.media?.posters?.[0]?.url;
     return (
       <video
         ref={refIfSingle || null}
-        src={item.url}
+        src={!mobileVideo && !desktopVideo ? item.url : undefined}
+        poster={poster}
         autoPlay
         loop
         muted
         playsInline
         preload="metadata"
         className="w-full h-full object-cover object-center block"
-      />
+      >
+        {mobileVideo && (
+          <source
+            src={mobileVideo.url}
+            type={mobileVideo.mime || "video/mp4"}
+            media="(max-width: 767px)"
+          />
+        )}
+        {desktopVideo && (
+          <source src={desktopVideo.url} type={desktopVideo.mime || "video/mp4"} />
+        )}
+      </video>
     );
   };
 
@@ -130,7 +149,7 @@ export default function Hero() {
     <section className="relative w-full h-[100vh] overflow-hidden">
       <Swiper
         modules={[Autoplay, Pagination]}
-        loop={true}
+        rewind
         autoplay={{ delay: 5000, disableOnInteraction: false }}
         pagination={{ clickable: true }}
         className="w-full h-full"

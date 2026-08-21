@@ -37,7 +37,10 @@ function shuffleWithSeed(arr, seed) {
 
 export default function ProductGrid({ limit = 4, title = "Ürünler" }) {
   const { data: allProducts, loading } = useProductsCache();
-  const all = Array.isArray(allProducts) ? allProducts : [];
+  const all = useMemo(
+    () => (Array.isArray(allProducts) ? allProducts : []),
+    [allProducts]
+  );
   const variantColorMap = useMemo(() => buildVariantColorMap(all), [all]);
 
   // Her mount’ta tek seferlik rastgele seed üret
@@ -83,7 +86,9 @@ export default function ProductGrid({ limit = 4, title = "Ürünler" }) {
           {products.map((p) => {
             const { price, discountedPrice, discountRate } = toCardPricing(p);
             const posterUrl =
-              p.poster || (Array.isArray(p.images) ? p.images[0] : null);
+              p.media?.images?.[0] ||
+              p.poster ||
+              (Array.isArray(p.images) ? p.images[0] : null);
             const stock = Array.isArray(p.sizes)
               ? p.sizes.reduce((sum, s) => sum + (s.stock || 0), 0)
               : 0;

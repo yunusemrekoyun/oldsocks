@@ -4,6 +4,7 @@ import Window from "../../components/ui/Window";
 
 const STATUS_LABELS = {
   pending: "Sipariş oluşturuldu",
+  payment_review: "Ödeme incelemede",
   paid: "Ödeme alındı",
   shipped: "Kargoya verildi",
   completed: "Sipariş tamamlandı",
@@ -12,10 +13,20 @@ const STATUS_LABELS = {
 
 const STATUS_STYLES = {
   pending: "bg-amber-100 text-amber-800",
+  payment_review: "bg-orange-100 text-orange-900",
   paid: "bg-blue-100 text-blue-800",
   shipped: "bg-indigo-100 text-indigo-800",
   completed: "bg-green-100 text-green-800",
   cancelled: "bg-red-100 text-red-700",
+};
+
+const REASON_LABELS = {
+  amount_mismatch_after_payment:
+    "Ödeme tutarı sipariş toplamından düşük; manuel kontrol gerekiyor.",
+  stock_unavailable_after_payment:
+    "Ödeme alındıktan sonra yeterli stok bulunamadı; manuel kontrol gerekiyor.",
+  payment_failed: "Ödeme sağlayıcısı işlemin başarısız olduğunu bildirdi.",
+  stock_unavailable: "Sipariş tamamlanırken yeterli stok bulunamadı.",
 };
 
 function fmtPrice(value) {
@@ -219,6 +230,10 @@ export default function OrderDetailsModal({
       { label: "Payment ID", value: valueOrDash(order.paymentId) },
       { label: "Oluşturulma", value: fmtDate(order.createdAt) },
       { label: "Güncellenme", value: fmtDate(order.updatedAt) },
+      {
+        label: "Ödemenin Alındığı Tarih",
+        value: fmtDate(order.paymentReceivedAt),
+      },
       { label: "İptal Tarihi", value: fmtDate(order.cancelledAt) },
       { label: "Admin Görme Tarihi", value: fmtDate(order.adminSeenAt) },
       { label: "Stok Güncellendi", value: fmtBool(order.stockUpdated) },
@@ -226,7 +241,12 @@ export default function OrderDetailsModal({
       { label: "Müşteri Mail", value: fmtDate(order.customerMailSentAt) },
       { label: "Admin Mail", value: fmtDate(order.adminMailSentAt) },
       { label: "Order Mail", value: fmtDate(order.orderMailSentAt) },
-      { label: "İptal Sebebi", value: valueOrDash(order.cancelReason) },
+      {
+        label: "İnceleme / İptal Sebebi",
+        value: valueOrDash(
+          REASON_LABELS[order.cancelReason] || order.cancelReason
+        ),
+      },
     ].filter(({ value }) => value !== "-");
 
     content = (

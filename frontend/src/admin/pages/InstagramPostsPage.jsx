@@ -54,7 +54,7 @@ export default function InstagramPostsPage() {
   /* ─────── Verileri çek ─────── */
   const fetchPosts = useCallback(async () => {
     try {
-      const { data } = await api.get("/instagram-posts");
+      const { data } = await api.get("/instagram-posts/admin");
       setPosts(data);
     } catch {
       setToast({ msg: "Gönderiler alınamadı.", type: "error" });

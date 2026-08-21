@@ -29,7 +29,7 @@ function validatePasswordPolicy(password) {
     message:
       failedRules.length === 0
         ? ""
-        : `Sifre kurallari saglanmiyor: ${failedRules
+        : `Şifre kuralları sağlanmıyor: ${failedRules
             .map((rule) => rule.label)
             .join(", ")}`,
   };

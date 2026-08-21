@@ -43,7 +43,10 @@ const pickRandomItems = (list, count) => {
 
 export default function NewProducts() {
   const { data: allProducts, loading } = useProductsCache();
-  const all = Array.isArray(allProducts) ? allProducts : [];
+  const all = useMemo(
+    () => (Array.isArray(allProducts) ? allProducts : []),
+    [allProducts]
+  );
   const variantColorMap = useMemo(() => buildVariantColorMap(all), [all]);
 
   // En yeni 10 üründen rastgele 4 ürün seç
@@ -75,7 +78,9 @@ export default function NewProducts() {
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-6">
           {items.map((p) => {
             const posterUrl =
-              p.poster || (Array.isArray(p.images) ? p.images[0] : null);
+              p.media?.images?.[0] ||
+              p.poster ||
+              (Array.isArray(p.images) ? p.images[0] : null);
 
             const { price, discountedPrice, discountRate } = toCardPricing(p);
 

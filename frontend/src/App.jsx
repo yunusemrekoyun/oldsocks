@@ -7,14 +7,14 @@ import {
   Navigate,
 } from "react-router-dom";
 import Layout from "./components/layout/Layout";
-import AdminLayout from "./admin/layout/AdminLayout";
 import RequireAdmin from "./components/auth/RequireAdmin";
 import RequireAuth from "./components/auth/RequireAuth";
-import HomePage from "./pages/HomePage";
-import ShopPage from "./pages/ShopPage";
-import CartPage from "./pages/CartPage";
 import ScrollToTop from "./components/common/ScrollToTop";
 
+const AdminLayout = lazy(() => import("./admin/layout/AdminLayout"));
+const HomePage = lazy(() => import("./pages/HomePage"));
+const ShopPage = lazy(() => import("./pages/ShopPage"));
+const CartPage = lazy(() => import("./pages/CartPage"));
 const GuestCheckoutPage = lazy(() => import("./pages/GuestCheckoutPage"));
 const AboutPage = lazy(() => import("./pages/AboutPage"));
 const BlogPage = lazy(() => import("./pages/BlogPage"));
@@ -48,6 +48,7 @@ const ShippingMethodsPage = lazy(() => import("./admin/pages/ShippingMethodsPage
 const AnnouncementBarPage = lazy(() => import("./admin/pages/AnnouncementBarPage"));
 const CartCampaignsPage = lazy(() => import("./admin/pages/CartCampaignsPage"));
 const CouponsPage = lazy(() => import("./admin/pages/CouponsPage"));
+const MediaMaintenancePage = lazy(() => import("./admin/pages/MediaMaintenancePage"));
 
 function RouteFallback() {
   return <div className="min-h-[40vh] py-16 text-center">Yükleniyor…</div>;
@@ -103,7 +104,7 @@ export default function App() {
                 </AdminLayout>
               }
             >
-              <Route index element={<div>Hoş geldin Admin!</div>} />
+              <Route index element={<Navigate to="products" replace />} />
               <Route path="products" element={<ProductListPage />} />
               <Route path="discounts" element={<DiscountsPage />} />
               <Route path="cart-campaigns" element={<CartCampaignsPage />} />
@@ -121,6 +122,7 @@ export default function App() {
               <Route path="hero-videos" element={<HeroVideoPage />} />
               <Route path="shipping" element={<ShippingMethodsPage />} />
               <Route path="announcement-bar" element={<AnnouncementBarPage />} />
+              <Route path="media-maintenance" element={<MediaMaintenancePage />} />
               <Route path="*" element={<Navigate to="/admin" replace />} />
             </Route>
           </Route>

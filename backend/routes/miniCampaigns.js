@@ -5,10 +5,6 @@ const router = express.Router();
 const ctrl = require("../controllers/miniCampaignController");
 const { verifyToken } = require("../middleware/auth");
 const { allowRoles } = require("../middleware/roles");
-const {
-  uploadMiniCampaignImage,
-  withUploadGuard,
-} = require("../middleware/upload");
 
 // — Public —
 // Tüm mini kampanyalar
@@ -24,7 +20,6 @@ router.post(
   "/",
   verifyToken,
   allowRoles("admin"),
-  withUploadGuard(uploadMiniCampaignImage.single("image")),
   ctrl.createMiniCampaign
 );
 // Güncelle
@@ -32,7 +27,6 @@ router.put(
   "/:id",
   verifyToken,
   allowRoles("admin"),
-  withUploadGuard(uploadMiniCampaignImage.single("image")),
   ctrl.updateMiniCampaign
 );
 // Sil

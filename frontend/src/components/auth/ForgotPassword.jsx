@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { motion } from "framer-motion";
+import { motion as Motion } from "framer-motion";
 import api from "../../../api";
 
 const ForgotPassword = ({ onBackToLogin }) => {
@@ -22,13 +22,13 @@ const ForgotPassword = ({ onBackToLogin }) => {
       );
       setSuccess(
         data?.message ||
-          "Eger bu e-posta ile kayitli bir hesap varsa, sifre sifirlama baglantisi gonderildi."
+          "Eğer bu e-posta ile kayıtlı bir hesap varsa, şifre sıfırlama bağlantısı gönderildi."
       );
       setEmail("");
     } catch (err) {
       setError(
         err?.response?.data?.message ||
-          "Istek gonderilemedi. Lutfen tekrar deneyin."
+          "İstek gönderilemedi. Lütfen tekrar deneyin."
       );
     } finally {
       setLoading(false);
@@ -36,17 +36,17 @@ const ForgotPassword = ({ onBackToLogin }) => {
   };
 
   return (
-    <motion.div
+    <Motion.div
       initial={{ opacity: 0, y: 30 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -30 }}
       transition={{ duration: 0.4 }}
       className="w-full max-w-md mx-auto bg-white border border-light2 rounded-2xl shadow-lg p-8 text-dark1"
     >
-      <h2 className="text-3xl font-bold text-center mb-3">Sifremi Unuttum</h2>
+      <h2 className="text-3xl font-bold text-center mb-3">Şifremi Unuttum</h2>
       <p className="text-sm text-center text-dark2 mb-6 leading-6">
-        E-posta adresinizi girin. Hesabiniz varsa sifre yenileme baglantisi
-        gonderilir.
+        E-posta adresinizi girin. Hesabınız varsa şifre yenileme bağlantısı
+        gönderilir.
       </p>
 
       {success && (
@@ -81,22 +81,22 @@ const ForgotPassword = ({ onBackToLogin }) => {
           disabled={loading}
           className="w-full py-3 rounded-lg bg-dark1 text-white font-semibold hover:bg-dark2 transition disabled:opacity-50"
         >
-          {loading ? "Gonderiliyor..." : "Sifirla Linki Gonder"}
+          {loading ? "Gönderiliyor..." : "Sıfırlama Bağlantısı Gönder"}
         </button>
       </form>
 
       <p className="text-sm text-center mt-6 text-dark2">
-        Giris ekranina geri donmek icin{" "}
+        Giriş ekranına geri dönmek için{" "}
         <button
           type="button"
           onClick={onBackToLogin}
           className="text-dark1 font-semibold hover:underline"
         >
-          tiklayin
+          tıklayın
         </button>
         .
       </p>
-    </motion.div>
+    </Motion.div>
   );
 };
 

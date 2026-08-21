@@ -4,6 +4,7 @@ import { useCart } from "../../context/useCart";
 import { FaTrash, FaPlus, FaMinus } from "react-icons/fa";
 import { Link } from "react-router-dom";
 import api from "../../../api";
+import { formatTry } from "../../utils/currency";
 
 export default function CartItem({ item }) {
   const { removeFromCart, addToCart, updateQty } = useCart?.() || {};
@@ -154,11 +155,11 @@ export default function CartItem({ item }) {
             <p className="text-gray-600">
               Fiyat:{" "}
               <span className="text-dark1 font-medium">
-                ₺{Number(item.price).toFixed(2)}
+                {formatTry(item.price)}
               </span>
             </p>
             <p className="text-dark1 font-semibold">
-              Toplam: ₺{(Number(item.price) * Number(item.qty)).toFixed(2)}
+              Toplam: {formatTry(Number(item.price) * Number(item.qty))}
             </p>
           </div>
         </div>

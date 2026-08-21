@@ -4,6 +4,42 @@ const PasswordResetToken = require("../models/PasswordResetToken");
 const bcrypt = require("bcrypt");
 const { COOKIE_OPTIONS } = require("../utils/authTokens");
 const { validatePasswordPolicy } = require("../utils/passwordPolicy");
+const {
+  isValidEmailAddress,
+  normalizeEmailAddress,
+} = require("../utils/email");
+
+const ADDRESS_FIELDS = [
+  "title",
+  "street",
+  "mainaddress",
+  "city",
+  "district",
+  "postalCode",
+];
+const ADDRESS_LIMITS = {
+  title: 80,
+  street: 180,
+  mainaddress: 500,
+  city: 100,
+  district: 120,
+  postalCode: 20,
+};
+
+function sanitizeAddress(body = {}) {
+  const address = {};
+  for (const field of ADDRESS_FIELDS) {
+    address[field] = String(body?.[field] || "").trim();
+    if (address[field].length > ADDRESS_LIMITS[field]) {
+      return { error: "Adres alanlarından biri izin verilen uzunluğu aşıyor." };
+    }
+  }
+  const missing = ["title", "street", "mainaddress", "city"].filter(
+    (field) => !address[field]
+  );
+  if (missing.length) return { error: "Lütfen zorunlu adres alanlarını doldurun." };
+  return { address };
+}
 
 // — Me endpoints —
 
@@ -25,13 +61,7 @@ exports.getMe = async (req, res) => {
 // Profil güncelleme
 exports.updateMe = async (req, res) => {
   try {
-    const allowedFields = [
-      "firstName",
-      "lastName",
-      "email",
-      "phone",
-      "avatar",
-    ];
+    const allowedFields = ["firstName", "lastName", "email", "phone"];
 
     const updates = {};
     for (const field of allowedFields) {
@@ -44,8 +74,27 @@ exports.updateMe = async (req, res) => {
       return res.status(400).json({ message: "Güncellenecek alan bulunamadı." });
     }
 
-    if (updates.password) {
-      updates.password = await bcrypt.hash(updates.password, 10);
+    for (const field of ["firstName", "lastName"]) {
+      if (Object.prototype.hasOwnProperty.call(updates, field)) {
+        updates[field] = String(updates[field] || "").trim();
+        if (updates[field].length < 2 || updates[field].length > 80) {
+          return res.status(400).json({
+            message: `${field === "firstName" ? "Ad" : "Soyad"} 2 ile 80 karakter arasında olmalıdır.`,
+          });
+        }
+      }
+    }
+    if (Object.prototype.hasOwnProperty.call(updates, "email")) {
+      updates.email = normalizeEmailAddress(updates.email);
+      if (!isValidEmailAddress(updates.email) || updates.email.length > 100) {
+        return res.status(400).json({ message: "Geçerli bir e-posta girin." });
+      }
+    }
+    if (Object.prototype.hasOwnProperty.call(updates, "phone")) {
+      updates.phone = String(updates.phone || "").trim();
+      if (updates.phone && !/^\+[1-9]\d{9,14}$/.test(updates.phone)) {
+        return res.status(400).json({ message: "Geçerli bir telefon numarası girin." });
+      }
     }
 
     const user = await User.findByIdAndUpdate(req.user.userId, updates, {
@@ -55,6 +104,9 @@ exports.updateMe = async (req, res) => {
     res.json(user);
   } catch (err) {
     console.error(err);
+    if (err?.code === 11000) {
+      return res.status(409).json({ message: "E-posta zaten kullanımda." });
+    }
     res.status(500).json({ message: "Profil güncellenirken hata oluştu." });
   }
 };
@@ -65,6 +117,9 @@ exports.updateMe = async (req, res) => {
 exports.getAddresses = async (req, res) => {
   try {
     const user = await User.findById(req.user.userId).select("addresses");
+    if (!user) {
+      return res.status(404).json({ message: "Kullanıcı bulunamadı." });
+    }
     res.json(user.addresses);
   } catch (err) {
     console.error(err);
@@ -75,16 +130,20 @@ exports.getAddresses = async (req, res) => {
 // Yeni adres ekle
 exports.addAddress = async (req, res) => {
   try {
-    const { title, street, mainaddress, city, district, postalCode } = req.body;
+    const normalized = sanitizeAddress(req.body);
+    if (normalized.error) {
+      return res.status(400).json({ message: normalized.error });
+    }
     const user = await User.findById(req.user.userId);
-    user.addresses.push({
-      title,
-      street,
-      mainaddress,
-      city,
-      district,
-      postalCode,
-    });
+    if (!user) {
+      return res.status(404).json({ message: "Kullanıcı bulunamadı." });
+    }
+    if (user.addresses.length >= 20) {
+      return res.status(409).json({
+        message: "Bir hesapta en fazla 20 adres saklanabilir.",
+      });
+    }
+    user.addresses.push(normalized.address);
     await user.save();
     res.status(201).json(user.addresses);
   } catch (err) {
@@ -97,11 +156,17 @@ exports.addAddress = async (req, res) => {
 exports.updateAddress = async (req, res) => {
   try {
     const { addrId } = req.params;
-    const updates = { ...req.body };
+    const normalized = sanitizeAddress(req.body);
+    if (normalized.error) {
+      return res.status(400).json({ message: normalized.error });
+    }
     const user = await User.findById(req.user.userId);
+    if (!user) {
+      return res.status(404).json({ message: "Kullanıcı bulunamadı." });
+    }
     const addr = user.addresses.id(addrId);
     if (!addr) return res.status(404).json({ message: "Adres bulunamadı." });
-    Object.assign(addr, updates);
+    Object.assign(addr, normalized.address);
     await user.save();
     res.json(addr);
   } catch (err) {
@@ -115,6 +180,9 @@ exports.deleteAddress = async (req, res) => {
   try {
     const { addrId } = req.params;
     const user = await User.findById(req.user.userId);
+    if (!user) {
+      return res.status(404).json({ message: "Kullanıcı bulunamadı." });
+    }
     const addr = user.addresses.id(addrId);
     if (!addr) return res.status(404).json({ message: "Adres bulunamadı." });
 
@@ -234,7 +302,7 @@ exports.changePassword = async (req, res) => {
     if (!currentPassword || !newPassword) {
       return res
         .status(400)
-        .json({ message: "Mevcut sifre ve yeni sifre zorunludur." });
+        .json({ message: "Mevcut şifre ve yeni şifre zorunludur." });
     }
 
     const validation = validatePasswordPolicy(newPassword);
@@ -249,14 +317,14 @@ exports.changePassword = async (req, res) => {
 
     const matches = await bcrypt.compare(currentPassword, user.password);
     if (!matches) {
-      return res.status(400).json({ message: "Mevcut sifre hatali." });
+      return res.status(400).json({ message: "Mevcut şifre hatalı." });
     }
 
     const sameAsCurrent = await bcrypt.compare(newPassword, user.password);
     if (sameAsCurrent) {
       return res
         .status(400)
-        .json({ message: "Yeni sifre mevcut sifrenizle ayni olamaz." });
+        .json({ message: "Yeni şifre mevcut şifrenizle aynı olamaz." });
     }
 
     user.password = await bcrypt.hash(newPassword, 10);
@@ -267,11 +335,11 @@ exports.changePassword = async (req, res) => {
 
     return res
       .clearCookie("refreshToken", COOKIE_OPTIONS)
-      .json({ message: "Sifreniz guncellendi. Lutfen tekrar giris yapin." });
+      .json({ message: "Şifreniz güncellendi. Lütfen tekrar giriş yapın." });
   } catch (err) {
     console.error(err);
     return res
       .status(500)
-      .json({ message: "Sifre guncellenirken hata olustu." });
+      .json({ message: "Şifre güncellenirken hata oluştu." });
   }
 };

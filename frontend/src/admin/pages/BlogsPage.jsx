@@ -22,6 +22,12 @@ import ToastAlert from "../../components/ui/ToastAlert";
 import ConfirmDialog from "../../components/ui/ConfirmDialog";
 import { v4 as uuidv4 } from "uuid";
 import { useUploadQueue } from "../../context/UploadQueueContext";
+import {
+  mediaErrorMessage,
+  startMediaPreparation,
+  uploadMediaFile,
+  validateMediaFile,
+} from "../../services/mediaUpload";
 
 /* ───── Silme Onayı ───── */
 const ConfirmModal = ({ open, onClose, onConfirm, message }) => {
@@ -118,7 +124,7 @@ export default function BlogsPage() {
     setLoading(true);
     try {
       const [{ data: bs }, { data: cats }, { data: users }] = await Promise.all(
-        [api.get("/blogs"), api.get("/blog-categories"), api.get("/users")]
+        [api.get("/blogs/admin"), api.get("/blog-categories"), api.get("/users")]
       );
       setBlogs(bs);
       setCategories(cats);
@@ -168,7 +174,7 @@ export default function BlogsPage() {
 
   const openEdit = async (b) => {
     try {
-      const { data } = await api.get(`/blogs/${b._id}`);
+      const { data } = await api.get(`/blogs/admin/${b._id}`);
       setForm({
         _id: data._id,
         title: data.title,
@@ -240,48 +246,58 @@ export default function BlogsPage() {
       return;
     }
 
-    const fd = new FormData();
-    fd.append("title", form.title);
-    fd.append("subtitle", form.subtitle);
-    fd.append("excerpt", form.excerpt);
-    fd.append("content", form.content);
-    fd.append("categories", JSON.stringify(form.categories));
-    fd.append("author", form.author);
-    fd.append("tags", JSON.stringify(form.tagsArray));
-    fd.append("status", form.status); // ✅ yeni
-    if (form.coverImage) fd.append("coverImage", form.coverImage);
-
     const id = uuidv4();
     addTask({ id, name: form.title || "Blog", progress: 0 });
 
-    const cfg = {
-      headers: { "Content-Type": "multipart/form-data" },
-      onUploadProgress: (ev) => {
-        if (!ev.total) return;
-        const pct = Math.round((ev.loaded * 100) / ev.total);
-        updateTask(id, { progress: pct });
-      },
-    };
-
     try {
+      const asset = form.coverImage
+        ? await uploadMediaFile(form.coverImage, "blog_cover", {
+            onProgress: (progress) =>
+              updateTask(id, {
+                progress:
+                  progress.phase === "processing"
+                    ? 95
+                    : progress.phase === "ready"
+                    ? 100
+                    : Math.round(progress.percent * 0.9),
+                phase: progress.phase,
+                status: progress.phase,
+              }),
+          })
+        : null;
+      const payload = {
+        title: form.title,
+        subtitle: form.subtitle,
+        excerpt: form.excerpt,
+        content: form.content,
+        categories: form.categories,
+        author: form.author,
+        tags: form.tagsArray,
+        status: form.status,
+        ...(asset ? { coverImageAssetId: asset.id } : {}),
+      };
       if (form._id) {
-        await api.put(`/blogs/${form._id}`, fd, cfg);
+        await api.put(`/blogs/${form._id}`, payload);
       } else {
-        await api.post("/blogs", fd, cfg);
+        await api.post("/blogs", payload);
       }
 
       updateTask(id, { progress: 100, status: "success" });
       setTimeout(() => removeTask(id), 2000);
 
-      const { data } = await api.get("/blogs");
+      const { data } = await api.get("/blogs/admin");
       setBlogs(data);
       setDirty(false);
       setDialogOpen(false);
-    } catch {
+    } catch (error) {
+      const message = mediaErrorMessage(
+        error,
+        error.response?.data?.message || "Blog kaydedilemedi"
+      );
       updateTask(id, {
         progress: 100,
         status: "error",
-        errorMsg: "Blog kaydedilemedi",
+        errorMsg: message,
       });
       setTimeout(() => removeTask(id), 4000);
     }
@@ -729,17 +745,27 @@ export default function BlogsPage() {
                     onChange={(e) => {
                       const file = e.target.files?.[0];
                       if (!file) return;
-                      setForm((f) => ({
-                        ...f,
-                        coverImage: file,
-                        coverPreview: URL.createObjectURL(file),
-                      }));
-                      setDirty(true);
+                      try {
+                        validateMediaFile(file, "blog_cover");
+                        startMediaPreparation(file, "blog_cover");
+                        setForm((f) => ({
+                          ...f,
+                          coverImage: file,
+                          coverPreview: URL.createObjectURL(file),
+                        }));
+                        setDirty(true);
+                      } catch (error) {
+                        setToast({
+                          msg: mediaErrorMessage(error),
+                          type: "error",
+                        });
+                        e.target.value = "";
+                      }
                     }}
                   />
                 </label>
                 <Typography variant="small" className="text-gray-500 mt-1">
-                  1200×600 önerilir. JPG/PNG.
+                  1200×600 önerilir. JPG/PNG/WebP/HEIC; sunucuda optimize edilir.
                 </Typography>
               </div>
 

@@ -2,7 +2,7 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom"; // ← import ettik
 import api from "../../../api";
-import { getResponsiveImageProps } from "../../utils/cloudinaryMedia";
+import { getResponsiveImageProps } from "../../utils/media";
 
 export default function SecondHero() {
   const [campaign, setCampaign] = useState(null);
@@ -18,7 +18,7 @@ export default function SecondHero() {
   if (!campaign) return null;
 
   const { title, subtitle, buttonText, imageUrl, items } = campaign;
-  const imageProps = getResponsiveImageProps(imageUrl, {
+  const imageProps = getResponsiveImageProps(campaign.media || imageUrl, {
     widths: [640, 960, 1280, 1600, 1920],
     defaultWidth: 1280,
     sizes: "100vw",

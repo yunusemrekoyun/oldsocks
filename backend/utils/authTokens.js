@@ -1,4 +1,5 @@
 const jwt = require("jsonwebtoken");
+const crypto = require("node:crypto");
 
 const COOKIE_OPTIONS = {
   httpOnly: true,
@@ -30,8 +31,18 @@ function createRefreshToken(user) {
       tokenVersion: getTokenVersion(user),
     },
     process.env.JWT_REFRESH_SECRET,
-    { expiresIn: process.env.JWT_REFRESH_EXPIRES_IN }
+    {
+      expiresIn: process.env.JWT_REFRESH_EXPIRES_IN,
+      jwtid: crypto.randomUUID(),
+    }
   );
+}
+
+function hashRefreshToken(token) {
+  return crypto
+    .createHash("sha256")
+    .update(String(token || ""))
+    .digest("hex");
 }
 
 module.exports = {
@@ -39,4 +50,5 @@ module.exports = {
   createAccessToken,
   createRefreshToken,
   getTokenVersion,
+  hashRefreshToken,
 };

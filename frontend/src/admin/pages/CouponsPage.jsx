@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import api from "../../../api";
 import { FaEdit, FaPowerOff, FaPlus, FaSearch, FaTag, FaTrash } from "react-icons/fa";
 import ToastAlert from "../../components/ui/ToastAlert";
@@ -51,9 +51,12 @@ export default function CouponsPage() {
   const [confirmDelete, setConfirmDelete] = useState(null);
   const [toast, setToast] = useState(null);
 
-  const notify = (msg, type = "info") => setToast({ msg, type });
+  const notify = useCallback(
+    (msg, type = "info") => setToast({ msg, type }),
+    []
+  );
 
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     setLoading(true);
     try {
       const [{ data: couponData }, { data: productData }] = await Promise.all([
@@ -68,11 +71,11 @@ export default function CouponsPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [notify]);
 
   useEffect(() => {
     fetchData();
-  }, []);
+  }, [fetchData]);
 
   const productMap = useMemo(
     () => new Map(products.map((product) => [String(product._id), product])),

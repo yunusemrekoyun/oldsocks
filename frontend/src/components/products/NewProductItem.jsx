@@ -3,8 +3,9 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import PropTypes from "prop-types";
 import { Link } from "react-router-dom";
 import { FaVolumeMute, FaVolumeUp, FaPlay } from "react-icons/fa";
-import { getResponsiveImageProps } from "../../utils/cloudinaryMedia";
+import { getResponsiveImageProps } from "../../utils/media";
 import { toCssColor } from "../../utils/productVariants";
+import { formatTry } from "../../utils/currency";
 
 const MOBILE_VIDEO_EVENT = "product-mobile-play";
 
@@ -68,12 +69,6 @@ export default function NewProductItem({
     return 0;
   }, [discountRate, hasDiscount, price, discountedPrice]);
 
-  const fmt = (n) =>
-    `${Number(n || 0).toLocaleString("tr-TR", {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    })}₺`;
-
   /* ---------- Desktop (hover) ---------- */
   const handleMouseEnter = () => {
     if (!isHoverCapable) return;
@@ -118,9 +113,10 @@ export default function NewProductItem({
   }, [id]);
 
   useEffect(() => {
+    const currentVideoRef = videoRef;
     return () => {
       try {
-        videoRef.current?.pause();
+        currentVideoRef.current?.pause();
       } catch {}
     };
   }, []);
@@ -271,16 +267,16 @@ export default function NewProductItem({
         {hasDiscount ? (
           <div className="text-center">
             <div className="text-xs text-gray-500 line-through">
-              {fmt(price)}
+              {formatTry(price)}
             </div>
             {/* İndirimliyse kırmızı */}
             <div className="text-base font-semibold text-red-600">
-              {fmt(discountedPrice)}
+              {formatTry(discountedPrice)}
             </div>
           </div>
         ) : (
           <p className="text-center text-base font-semibold text-dark2">
-            {fmt(price)}
+            {formatTry(price)}
           </p>
         )}
       </div>

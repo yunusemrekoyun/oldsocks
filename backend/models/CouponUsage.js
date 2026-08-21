@@ -49,7 +49,7 @@ CouponUsageSchema.index(
   { couponId: 1, emailKey: 1 },
   {
     unique: true,
-    partialFilterExpression: { emailKey: { $type: "string", $ne: "" } },
+    partialFilterExpression: { emailKey: { $type: "string", $gt: "" } },
   }
 );
 

@@ -4,8 +4,9 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import PropTypes from "prop-types";
 import { FaVolumeMute, FaVolumeUp, FaPlay } from "react-icons/fa";
-import { getResponsiveImageProps } from "../../../utils/cloudinaryMedia";
+import { getResponsiveImageProps } from "../../../utils/media";
 import { toCssColor } from "../../../utils/productVariants";
+import { formatTry } from "../../../utils/currency";
 
 const MOBILE_VIDEO_EVENT = "product-mobile-play";
 
@@ -111,9 +112,10 @@ export default function SimilarProductItem({
 
   // Unmount’ta durdur
   useEffect(() => {
+    const currentVideoRef = videoRef;
     return () => {
       try {
-        videoRef.current?.pause();
+        currentVideoRef.current?.pause();
       } catch {}
     };
   }, []);
@@ -265,15 +267,15 @@ export default function SimilarProductItem({
         {hasDiscount ? (
           <div className="text-center">
             <p className="text-xs text-gray-500 line-through">
-              {price.toFixed(2)}₺
+              {formatTry(price)}
             </p>
             <p className="text-sm font-bold text-red-600">
-              {discountedPrice.toFixed(2)}₺
+              {formatTry(discountedPrice)}
             </p>
           </div>
         ) : (
           <p className="text-dark1 font-bold text-sm text-center mt-1">
-            {price.toFixed(2)}₺
+            {formatTry(price)}
           </p>
         )}
       </div>

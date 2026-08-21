@@ -1,9 +1,10 @@
 import React, { useMemo, useState, useEffect } from "react";
 import { IMaskInput } from "react-imask";
-import { useNavigate } from "react-router-dom";
+import { Navigate, useNavigate } from "react-router-dom";
 import { useCart } from "../context/useCart";
 import ToastAlert from "../components/ui/ToastAlert";
 import api from "../../api";
+import { formatTry } from "../utils/currency";
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/i;
 const GUEST_FIELD_KEYS = [
@@ -11,7 +12,6 @@ const GUEST_FIELD_KEYS = [
   "lastName",
   "email",
   "phone",
-  "identityNumber",
   "mainaddress",
   "street",
   "city",
@@ -26,12 +26,6 @@ function getPhoneDigits(value) {
 function toE164TrPhone(value) {
   const digits = getPhoneDigits(value);
   return digits.length === 10 ? `+90${digits}` : "";
-}
-
-function normalizeIdentityNumber(value) {
-  return String(value || "")
-    .replace(/\D/g, "")
-    .slice(0, 11);
 }
 
 function validateGuestCheckout(buyer, address) {
@@ -50,11 +44,6 @@ function validateGuestCheckout(buyer, address) {
   const phoneDigits = getPhoneDigits(buyer.phone);
   if (phoneDigits.length !== 10) {
     errors.phone = "Telefon numarasını 10 haneli girin.";
-  }
-
-  const identityNumber = normalizeIdentityNumber(buyer.identityNumber);
-  if (buyer.identityNumber.trim() && identityNumber.length !== 11) {
-    errors.identityNumber = "T.C. Kimlik No 11 haneli olmalı.";
   }
 
   if (!address.mainaddress.trim()) {
@@ -95,7 +84,6 @@ export default function GuestCheckoutPage() {
     lastName: "",
     email: "",
     phone: "",
-    identityNumber: "",
   });
   const [address, setAddress] = useState({
     title: "Teslimat Adresi",
@@ -284,7 +272,6 @@ export default function GuestCheckoutPage() {
           lastName: buyer.lastName.trim(),
           email: buyer.email.trim().toLowerCase(),
           phone: toE164TrPhone(buyer.phone),
-          identityNumber: normalizeIdentityNumber(buyer.identityNumber) || "11111111111",
           registrationAddress: address.mainaddress.trim(),
         },
         address: {
@@ -367,8 +354,7 @@ export default function GuestCheckoutPage() {
   };
 
   if (items.length === 0) {
-    navigate("/cart", { replace: true });
-    return null;
+    return <Navigate to="/cart" replace />;
   }
 
   return (
@@ -388,6 +374,7 @@ export default function GuestCheckoutPage() {
               onChange={(e) => setBuyerField("firstName", e.target.value)}
               onBlur={() => touchField("firstName")}
               autoComplete="given-name"
+              maxLength={80}
             />
             {touched.firstName && validationErrors.firstName && (
               <p className="mt-1 text-xs text-red-600">
@@ -407,6 +394,7 @@ export default function GuestCheckoutPage() {
               onChange={(e) => setBuyerField("lastName", e.target.value)}
               onBlur={() => touchField("lastName")}
               autoComplete="family-name"
+              maxLength={80}
             />
             {touched.lastName && validationErrors.lastName && (
               <p className="mt-1 text-xs text-red-600">
@@ -429,6 +417,7 @@ export default function GuestCheckoutPage() {
               autoComplete="email"
               inputMode="email"
               placeholder="ornek@mail.com"
+              maxLength={100}
             />
             {touched.email && validationErrors.email && (
               <p className="mt-1 text-xs text-red-600">{validationErrors.email}</p>
@@ -469,32 +458,6 @@ export default function GuestCheckoutPage() {
             )}
           </div>
 
-          <div className="sm:col-span-2">
-            <label htmlFor="identityNumber" className="block text-sm mb-1">
-              T.C. Kimlik No (Opsiyonel)
-            </label>
-            <input
-              id="identityNumber"
-              className={getFieldClassName("identityNumber")}
-              value={buyer.identityNumber}
-              onChange={(e) =>
-                setBuyerField(
-                  "identityNumber",
-                  normalizeIdentityNumber(e.target.value)
-                )
-              }
-              onBlur={() => touchField("identityNumber")}
-              inputMode="numeric"
-              maxLength={11}
-              placeholder="11 haneli T.C. Kimlik No"
-            />
-            <p className="mt-1 text-xs text-dark2">Girilecekse sadece rakam ve 11 hane olmalı.</p>
-            {touched.identityNumber && validationErrors.identityNumber && (
-              <p className="mt-1 text-xs text-red-600">
-                {validationErrors.identityNumber}
-              </p>
-            )}
-          </div>
         </div>
 
         <div className="space-y-3 mb-6">
@@ -510,6 +473,7 @@ export default function GuestCheckoutPage() {
               onBlur={() => touchField("mainaddress")}
               placeholder="Sokak, bina, daire no…"
               autoComplete="street-address"
+              maxLength={500}
             />
             {touched.mainaddress && validationErrors.mainaddress && (
               <p className="mt-1 text-xs text-red-600">
@@ -529,6 +493,7 @@ export default function GuestCheckoutPage() {
                 value={address.district}
                 onChange={(e) => setAddressField("district", e.target.value)}
                 autoComplete="address-level3"
+                maxLength={120}
               />
             </div>
             <div>
@@ -542,6 +507,7 @@ export default function GuestCheckoutPage() {
                 onChange={(e) => setAddressField("street", e.target.value)}
                 onBlur={() => touchField("street")}
                 autoComplete="address-line2"
+                maxLength={180}
               />
               {touched.street && validationErrors.street && (
                 <p className="mt-1 text-xs text-red-600">{validationErrors.street}</p>
@@ -558,6 +524,7 @@ export default function GuestCheckoutPage() {
                 onChange={(e) => setAddressField("city", e.target.value)}
                 onBlur={() => touchField("city")}
                 autoComplete="address-level2"
+                maxLength={100}
               />
               {touched.city && validationErrors.city && (
                 <p className="mt-1 text-xs text-red-600">{validationErrors.city}</p>
@@ -576,6 +543,7 @@ export default function GuestCheckoutPage() {
               onChange={(e) => setAddressField("postalCode", e.target.value)}
               autoComplete="postal-code"
               inputMode="numeric"
+              maxLength={20}
             />
           </div>
         </div>
@@ -592,10 +560,12 @@ export default function GuestCheckoutPage() {
                   <p className="text-sm text-gray-600">Beden: {it.size}</p>
                 )}
                 <p className="text-sm text-gray-600">
-                  Adet: {it.qty} × ₺{it.price.toFixed(2)}
+                  Adet: {it.qty} × {formatTry(it.price)}
                 </p>
               </div>
-              <div className="font-semibold">₺{(it.price * it.qty).toFixed(2)}</div>
+              <div className="font-semibold">
+                {formatTry(it.price * it.qty)}
+              </div>
             </li>
           ))}
         </ul>
@@ -603,13 +573,13 @@ export default function GuestCheckoutPage() {
         <div className="space-y-2 border-t pt-4 text-lg font-semibold">
           <div className="flex justify-between">
             <span>Ara Toplam:</span>
-            <span>₺{displaySubTotal.toFixed(2)}</span>
+            <span>{formatTry(displaySubTotal)}</span>
           </div>
 
           {displayCampaignDiscount > 0 && (
             <div className="flex justify-between text-emerald-700 text-base">
               <span>Kampanya İndirimi</span>
-              <span>-₺{displayCampaignDiscount.toFixed(2)}</span>
+              <span>-{formatTry(displayCampaignDiscount)}</span>
             </div>
           )}
 
@@ -619,14 +589,14 @@ export default function GuestCheckoutPage() {
                 Kupon İndirimi
                 {appliedCoupon?.code ? ` (${appliedCoupon.code})` : ""}
               </span>
-              <span>-₺{displayCouponDiscount.toFixed(2)}</span>
+              <span>-{formatTry(displayCouponDiscount)}</span>
             </div>
           )}
 
           {(displayCampaignDiscount > 0 || displayCouponDiscount > 0) && (
             <div className="flex justify-between text-base">
               <span>İndirimli Ara Toplam:</span>
-              <span>₺{displayDiscountedSubTotal.toFixed(2)}</span>
+              <span>{formatTry(displayDiscountedSubTotal)}</span>
             </div>
           )}
 
@@ -640,12 +610,12 @@ export default function GuestCheckoutPage() {
               displayIsFree ? (
                 <span className="flex items-center gap-2">
                   <span className="line-through text-gray-500">
-                    ₺{Number(shipping?.fee ?? displayShippingFee).toFixed(2)}
+                    {formatTry(shipping?.fee ?? displayShippingFee)}
                   </span>
                   <span className="text-emerald-600 font-bold">Ücretsiz</span>
                 </span>
               ) : (
-                <span>₺{displayShippingFee.toFixed(2)}</span>
+                <span>{formatTry(displayShippingFee)}</span>
               )
             ) : (
               <span className="text-gray-500">Tanımlı kargo yok</span>
@@ -654,14 +624,14 @@ export default function GuestCheckoutPage() {
 
           {displayFreeShippingThreshold != null && !displayIsFree && (
             <p className="text-sm text-gray-500">
-              ₺{Number(displayFreeShippingThreshold).toFixed(0)} ve üzeri
+              {formatTry(displayFreeShippingThreshold, { fractionDigits: 0 })} ve üzeri
               alışverişlerde kargo ücretsiz.
             </p>
           )}
 
           <div className="flex justify-between text-xl">
             <span>Genel Toplam:</span>
-            <span className="text-primary">₺{displayGrandTotal.toFixed(2)}</span>
+            <span className="text-primary">{formatTry(displayGrandTotal)}</span>
           </div>
         </div>
 

@@ -2,6 +2,7 @@
 const BlogComment = require("../models/BlogComment");
 const BlogCommentReply = require("../models/BlogCommentReply");
 const Blog = require("../models/Blog");
+const mongoose = require("mongoose");
 
 // mailer
 const {
@@ -105,16 +106,31 @@ exports.getCommentsByBlog = async (req, res) => {
 // Logged-in user: yeni yorum ekle (onayda)
 exports.createComment = async (req, res) => {
   try {
+    const text = String(req.body?.text || "").trim();
+    if (text.length < 2 || text.length > 1000) {
+      return res.status(400).json({
+        message: "Yorum 2 ile 1000 karakter arasında olmalıdır.",
+      });
+    }
+    if (!mongoose.isValidObjectId(req.params.blogId)) {
+      return res.status(404).json({ message: "Blog bulunamadı." });
+    }
+    const post = await Blog.findOne({
+      _id: req.params.blogId,
+      status: "published",
+    }).select("title slug");
+    if (!post) {
+      return res.status(404).json({ message: "Blog bulunamadı." });
+    }
     const comment = await BlogComment.create({
       blog: req.params.blogId,
       author: req.user.userId,
-      text: req.body.text,
+      text,
       // approved: false (default)
     });
 
     // Admin’e e-posta bildirimi (onay bekliyor)
     try {
-      const post = await Blog.findById(req.params.blogId).select("title slug");
       await sendPendingCommentMail({ comment, post });
     } catch (mailErr) {
       console.error("Onay bekleyen yorum maili gönderilemedi:", mailErr);
@@ -140,7 +156,10 @@ exports.deleteComment = async (req, res) => {
       return res.status(403).json({ message: "Bu yorumu silemezsiniz." });
     }
 
-    await BlogComment.findByIdAndDelete(req.params.id);
+    await Promise.all([
+      BlogComment.findByIdAndDelete(req.params.id),
+      BlogCommentReply.deleteMany({ comment: req.params.id }),
+    ]);
     res.json({ message: "Yorum silindi." });
   } catch (err) {
     console.error(err);

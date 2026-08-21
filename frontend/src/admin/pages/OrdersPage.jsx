@@ -11,6 +11,7 @@ import {
   FaCheckCircle,
   FaBan,
   FaTimes,
+  FaExclamationTriangle,
 } from "react-icons/fa";
 import useUnseenOrders from "../../hooks/useUnseenOrders";
 import ToastAlert from "../../components/ui/ToastAlert";
@@ -18,6 +19,7 @@ import OrderDetailsModal from "../modals/OrderDetailsModal";
 
 const STATUS_LABELS = {
   pending: "Sipariş oluşturuldu",
+  payment_review: "Ödeme incelemede",
   paid: "Ödeme alındı",
   shipped: "Kargoya verildi",
   completed: "Sipariş tamamlandı",
@@ -26,6 +28,7 @@ const STATUS_LABELS = {
 
 const STATUS_STYLES = {
   pending: "bg-amber-100 text-amber-800",
+  payment_review: "bg-orange-100 text-orange-900",
   paid: "bg-blue-100 text-blue-800",
   shipped: "bg-indigo-100 text-indigo-800",
   completed: "bg-green-100 text-green-800",
@@ -34,6 +37,9 @@ const STATUS_STYLES = {
 
 const STATUS_ICON = {
   pending: <FaClock className="inline -mt-0.5 mr-1" />,
+  payment_review: (
+    <FaExclamationTriangle className="inline -mt-0.5 mr-1" />
+  ),
   paid: <FaCheck className="inline -mt-0.5 mr-1" />,
   shipped: <FaTruck className="inline -mt-0.5 mr-1" />,
   completed: <FaCheckCircle className="inline -mt-0.5 mr-1" />,
@@ -128,7 +134,12 @@ export default function OrdersPage() {
       );
     } catch (err) {
       console.error("Status update failed", err);
-      setToast({ type: "error", msg: "Sipariş durumu güncellenemedi." });
+      setToast({
+        type: "error",
+        msg:
+          err?.response?.data?.message ||
+          "Sipariş durumu güncellenemedi.",
+      });
     } finally {
       setUpdatingId(null);
     }
@@ -387,6 +398,13 @@ export default function OrdersPage() {
 
                 {/* Ürün listesi (scrollable on mobile) */}
                 <div className="px-5 py-4">
+                  {order.status === "payment_review" && (
+                    <div className="mb-4 rounded-xl border border-orange-300 bg-orange-50 px-4 py-3 text-sm text-orange-950">
+                      <strong>Ödeme alındı, manuel kontrol gerekiyor.</strong>{" "}
+                      PayTR tutarını ve ürün stoklarını doğrulayın. İade işlemi
+                      tamamlanmadan siparişi iptal durumuna almayın.
+                    </div>
+                  )}
                   <div className="rounded-xl border border-light2 overflow-x-auto">
                     <table className="w-full min-w-[560px] text-sm sm:min-w-[680px]">
                       <thead className="bg-light1 text-dark2">
@@ -553,8 +571,13 @@ export default function OrdersPage() {
                             <FaChevronDown className="absolute right-2 opacity-60" />
                           </Listbox.Button>
                           <Listbox.Options className="absolute mt-1 w-56 sm:w-64 bg-white border border-light2 rounded-lg shadow-lg z-10 text-sm overflow-hidden">
-                            {Object.entries(STATUS_LABELS).map(
-                              ([key, label]) => {
+                            {Object.entries(STATUS_LABELS)
+                              .filter(
+                                ([key]) =>
+                                  key !== "payment_review" ||
+                                  order.status === "payment_review"
+                              )
+                              .map(([key, label]) => {
                                 const cls =
                                   STATUS_STYLES[key] || "bg-light1 text-dark1";
                                 return (
@@ -586,8 +609,7 @@ export default function OrdersPage() {
                                     )}
                                   </Listbox.Option>
                                 );
-                              }
-                            )}
+                              })}
                           </Listbox.Options>
                         </div>
                       </Listbox>

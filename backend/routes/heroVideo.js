@@ -3,7 +3,6 @@ const express = require("express");
 const router = express.Router();
 const { verifyToken } = require("../middleware/auth");
 const { allowRoles } = require("../middleware/roles");
-const { uploadHeroVideo } = require("../middleware/upload");
 const ctrl = require("../controllers/heroVideoController");
 
 // Admin video yükleme
@@ -11,7 +10,6 @@ router.post(
   "/",
   verifyToken,
   allowRoles("admin"),
-  uploadHeroVideo.single("video"),
   ctrl.uploadVideo
 );
 

@@ -20,20 +20,14 @@ import ToastAlert from "../../components/ui/ToastAlert";
 import api from "../../../api";
 import { v4 as uuidv4 } from "uuid";
 import { useUploadQueue } from "../../context/UploadQueueContext";
+import {
+  mediaErrorMessage,
+  startMediaPreparation,
+  uploadMediaFile,
+  validateMediaFile,
+} from "../../services/mediaUpload";
 
 /* ───── Görsel/Video yardımcıları ───── */
-const MAX_IMAGE_BYTES = 10 * 1024 * 1024; // ≈10MB hedef (gerekirse sıkıştır)
-const IMAGE_TARGET_WIDTH = 1920; // hero için güvenli genişlik
-const JPEG_START_QUALITY = 0.92;
-const JPEG_MIN_QUALITY = 0.85;
-
-// Videoları client-side transcode edemiyoruz; yalnızca rehber uyarılar:
-const ACCEPTED_VIDEO_MIMES = [
-  "video/mp4",
-  "video/webm",
-  "video/quicktime", // mov
-];
-
 const isHeic = (file) => {
   const name = (file?.name || "").toLowerCase();
   const type = (file?.type || "").toLowerCase();
@@ -46,76 +40,6 @@ const isHeic = (file) => {
 };
 const isImage = (file) => (file?.type || "").startsWith("image/");
 const isVideo = (file) => (file?.type || "").startsWith("video/");
-
-const ensureJpegName = (name = "image.jpg") =>
-  name.replace(/\.[^.]+$/, "") + ".jpg";
-
-/** Gerekiyorsa görseli JPEG'e dönüştürüp ~1920px genişliğe indirger; kalite alt sınırını 0.85'te tutar */
-async function maybeOptimizeImage(file) {
-  // PNG/JPEG dışı ise (ör. WEBP), ya da boyut çok büyükse JPEG'e dönüştürüp downscale yapalım
-  const mustConvert =
-    !["image/jpeg", "image/png"].includes(file.type) ||
-    file.size > MAX_IMAGE_BYTES;
-
-  if (!mustConvert) {
-    // Küçük ve zaten JPEG/PNG ise dokunma
-    return { file, previewUrl: URL.createObjectURL(file), converted: false };
-  }
-
-  // HEIC'i tarayıcı decode edemez — burada zaten daha önce engelliyoruz.
-  // File -> DataURL
-  const dataUrl = await new Promise((resolve, reject) => {
-    const fr = new FileReader();
-    fr.onload = () => resolve(fr.result);
-    fr.onerror = () => reject(new Error("Dosya okunamadı."));
-    fr.readAsDataURL(file);
-  });
-
-  // DataURL -> Image
-  const img = await new Promise((resolve, reject) => {
-    const image = new Image();
-    image.onload = () => resolve(image);
-    image.onerror = () => reject(new Error("Görsel yüklenemedi."));
-    image.src = dataUrl;
-  });
-
-  // Oranı koruyarak (büyütmeden) 1920 genişliğe sığdır
-  const scale = Math.min(1, IMAGE_TARGET_WIDTH / img.width);
-  const targetW = Math.round(img.width * scale);
-  const targetH = Math.round(img.height * scale);
-
-  const canvas = document.createElement("canvas");
-  canvas.width = targetW;
-  canvas.height = targetH;
-  const ctx = canvas.getContext("2d");
-  ctx.drawImage(img, 0, 0, targetW, targetH);
-
-  // Kaliteyi yüksek tut; yalnızca çok büyük kalırsa ufak düş
-  let q = JPEG_START_QUALITY;
-  let blob = await new Promise((res) => canvas.toBlob(res, "image/jpeg", q));
-  if (!blob) throw new Error("Görsel dönüştürülemedi.");
-
-  while (blob.size > MAX_IMAGE_BYTES && q > JPEG_MIN_QUALITY) {
-    q = Math.max(JPEG_MIN_QUALITY, q - 0.02); // küçük adımlarla
-    blob = await new Promise((res) => canvas.toBlob(res, "image/jpeg", q));
-    if (!blob) break;
-  }
-
-  if (!blob) throw new Error("Görsel dönüştürülemedi (blob).");
-
-  const outFile = new File([blob], ensureJpegName(file.name), {
-    type: "image/jpeg",
-  });
-  const previewUrl = URL.createObjectURL(blob);
-  return {
-    file: outFile,
-    previewUrl,
-    converted: true,
-    width: targetW,
-    height: targetH,
-    quality: q,
-  };
-}
 
 /* Silme Onay Modali */
 const ConfirmModal = ({ open, onClose, onConfirm, message }) => {
@@ -181,56 +105,36 @@ export default function HeroVideoPage() {
       return;
     }
 
-    // HEIC engelle
-    if (isHeic(picked)) {
-      setToast({
-        msg: "HEIC/HEIF desteklenmiyor. Lütfen JPG/PNG veya MP4/WebM/MOV seçin.",
-        type: "error",
-      });
-      inputRef.current && (inputRef.current.value = "");
-      return;
-    }
-
-    // Video için sadece bilgilendirme (transcode yok)
     if (isVideo(picked)) {
-      const t = (picked.type || "").toLowerCase();
-      if (!ACCEPTED_VIDEO_MIMES.includes(t)) {
+      try {
+        validateMediaFile(picked, "hero_video");
+        startMediaPreparation(picked, "hero_video");
+        setRawFile(picked);
+        setFile(picked);
         setToast({
-          msg: "Bu video formatı tarayıcıda sorun çıkarabilir. MP4 (H.264/AAC) veya WebM önerilir.",
-          type: "warning",
+          msg: "Video yüklendikten sonra mobil ve masaüstü sürümleri hazırlanacak.",
+          type: "info",
         });
+      } catch (error) {
+        setToast({ msg: mediaErrorMessage(error), type: "error" });
+        inputRef.current && (inputRef.current.value = "");
       }
-      // 50MB üzeri ise uyar (server limiti bilinmiyor, kullanıcıyı bilgilendir)
-      if (picked.size > 50 * 1024 * 1024) {
-        setToast({
-          msg: "Video dosyası çok büyük görünüyor (>50MB). Yükleme uzun sürebilir veya reddedilebilir.",
-          type: "warning",
-        });
-      }
-      setRawFile(picked);
-      setFile(picked); // video optimize etmiyoruz
       return;
     }
 
-    // Görsel: gerekiyorsa temkinli optimize et
-    if (isImage(picked)) {
+    if (isImage(picked) || isHeic(picked)) {
       try {
-        const {
-          file: out,
-          converted,
-        } = await maybeOptimizeImage(picked);
+        validateMediaFile(picked, "hero_image");
+        startMediaPreparation(picked, "hero_image");
         setRawFile(picked);
-        setFile(out);
+        setFile(picked);
         setToast({
-          msg: converted
-            ? "Görsel optimize edildi (yaklaşık 1920px genişlik, yüksek kalite)."
-            : "Görsel yüklenecek.",
+          msg: "Görsel sunucuda farklı ekran boyutları için optimize edilecek.",
           type: "info",
         });
       } catch (err) {
-        console.error("Image optimize error:", err);
         setToast({
-          msg: err?.message || "Görsel işlenemedi. Lütfen JPG/PNG deneyin.",
+          msg: mediaErrorMessage(err),
           type: "error",
         });
         inputRef.current && (inputRef.current.value = "");
@@ -262,10 +166,6 @@ export default function HeroVideoPage() {
   const handleUpload = async () => {
     if (!file) return;
 
-    const formData = new FormData();
-    // backend alan adı: "video" (image/video fark etmiyor)
-    formData.append("video", file);
-
     setLoading(true);
     setProgress(0);
 
@@ -278,14 +178,24 @@ export default function HeroVideoPage() {
     });
 
     try {
-      await api.post("/hero-videos", formData, {
-        onUploadProgress: (e) => {
-          if (!e.total) return;
-          const p = Math.round((e.loaded * 100) / e.total);
+      const purpose = isVideo(file) ? "hero_video" : "hero_image";
+      const asset = await uploadMediaFile(file, purpose, {
+        onProgress: (state) => {
+          const p =
+            state.phase === "processing"
+              ? 95
+              : state.phase === "ready"
+              ? 100
+              : Math.round(state.percent * 0.9);
           setProgress(p);
-          updateTask(taskId, { progress: p });
+          updateTask(taskId, {
+            progress: p,
+            phase: state.phase,
+            status: state.phase,
+          });
         },
       });
+      await api.post("/hero-videos", { mediaAssetId: asset.id });
 
       setFile(null);
       setRawFile(null);
@@ -297,7 +207,10 @@ export default function HeroVideoPage() {
       updateTask(taskId, { progress: 100, status: "success" });
       setTimeout(() => removeTask(taskId), 2000);
     } catch (err) {
-      const msg = err?.response?.data?.message || "Yükleme hatası";
+      const msg = mediaErrorMessage(
+        err,
+        err?.response?.data?.message || "Yükleme hatası"
+      );
       setToast({ msg, type: "error" });
       updateTask(taskId, {
         progress: 100,
@@ -356,7 +269,7 @@ export default function HeroVideoPage() {
                 onDragEnter={prevent}
                 onDragLeave={prevent}
                 className="flex items-center justify-between gap-3 cursor-pointer border border-gray-300 rounded-lg px-3 py-2 hover:bg-gray-50 transition w-full sm:w-80"
-                title="MP4/WebM/QuickTime video veya JPG/PNG görsel yükleyin. HEIC desteklenmez."
+                title="MP4/WebM/QuickTime video veya JPG/PNG/WebP/HEIC görsel yükleyin."
               >
                 <div className="flex items-center gap-2 min-w-0">
                   <ArrowUpTrayIcon className="w-5 h-5 text-gray-600 shrink-0" />

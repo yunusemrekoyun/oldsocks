@@ -2,7 +2,13 @@ const mongoose = require("mongoose");
 
 const HeroVideoSchema = new mongoose.Schema(
   {
-    url: { type: String, required: true },
+    url: { type: String, default: "" },
+    mediaAsset: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "MediaAsset",
+      default: null,
+      index: true,
+    },
     // yeni: medya türü (geri uyum için varsayılan 'video')
     kind: {
       type: String,

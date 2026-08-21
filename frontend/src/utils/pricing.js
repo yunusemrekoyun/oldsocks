@@ -124,7 +124,12 @@ export function resolvePricingForSubmit(pricingInput) {
       discount,
       price,
     },
-    valid: original !== null && price !== null,
+    valid:
+      original !== null &&
+      price !== null &&
+      original >= 0 &&
+      price >= 0 &&
+      price <= original,
   };
 }
 

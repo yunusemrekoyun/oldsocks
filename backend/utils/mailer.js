@@ -562,19 +562,19 @@ function applyOrderMailResult(order, result, date = new Date()) {
 function buildPasswordResetHtml({ user, resetLink, expiresAt }) {
   const fullName =
     [user?.firstName || "", user?.lastName || ""].join(" ").trim() ||
-    "Degerli Musterimiz";
+    "Değerli Müşterimiz";
 
   return baseEmailLayout({
-    preheader: "Sifre sifirlama talebiniz alindi.",
-    eyebrow: "Hesap Guvenligi",
-    title: "Sifrenizi Yenileyin",
-    subtitle: "Bu talep size aitse asagidaki baglantiyi kullanarak yeni sifrenizi belirleyebilirsiniz.",
+    preheader: "Şifre sıfırlama talebiniz alındı.",
+    eyebrow: "Hesap Güvenliği",
+    title: "Şifrenizi Yenileyin",
+    subtitle: "Bu talep size aitse aşağıdaki bağlantıyı kullanarak yeni şifrenizi belirleyebilirsiniz.",
     bodyHtml: `
       <p style="margin:0 0 18px;font-size:15px;line-height:1.8;color:#374151;">
-        Merhaba <strong>${escapeHtml(fullName)}</strong>, hesabiniz icin bir sifre sifirlama talebi alindi.
+        Merhaba <strong>${escapeHtml(fullName)}</strong>, hesabınız için bir şifre sıfırlama talebi alındı.
       </p>
       <div style="padding:18px;border:1px solid #e5e7eb;border-radius:18px;background:#fafafa;">
-        <div style="font-size:12px;letter-spacing:0.14em;text-transform:uppercase;color:#6b7280;margin-bottom:8px;">Gecerlilik Suresi</div>
+        <div style="font-size:12px;letter-spacing:0.14em;text-transform:uppercase;color:#6b7280;margin-bottom:8px;">Geçerlilik Süresi</div>
         <div style="font-size:15px;line-height:1.8;color:#111827;">${escapeHtml(
           formatDate(expiresAt)
         )} tarihine kadar</div>
@@ -583,11 +583,11 @@ function buildPasswordResetHtml({ user, resetLink, expiresAt }) {
         <a href="${escapeHtml(
           resetLink
         )}" style="display:inline-block;padding:14px 24px;border-radius:999px;background:#111827;color:#ffffff;text-decoration:none;font-weight:700;">
-          Sifreyi Yenile
+          Şifreyi Yenile
         </a>
       </div>
       <p style="margin:20px 0 0;font-size:14px;line-height:1.8;color:#6b7280;">
-        Bu talep size ait degilse bu e-postayi dikkate almayabilirsiniz. Mevcut sifreniz degismez.
+        Bu talep size ait değilse bu e-postayı dikkate almayabilirsiniz. Mevcut şifreniz değişmez.
       </p>
     `,
   });
@@ -596,30 +596,30 @@ function buildPasswordResetHtml({ user, resetLink, expiresAt }) {
 function buildPasswordResetText({ user, resetLink, expiresAt }) {
   const fullName =
     [user?.firstName || "", user?.lastName || ""].join(" ").trim() ||
-    "Degerli Musterimiz";
+    "Değerli Müşterimiz";
 
   return [
-    "Oldsocks - Sifre Sifirlama",
+    "Oldsocks - Şifre Sıfırlama",
     "",
     `Merhaba ${fullName},`,
-    "Hesabiniz icin bir sifre sifirlama talebi alindi.",
-    `Baglanti gecerlilik suresi: ${formatDate(expiresAt)}`,
+    "Hesabınız için bir şifre sıfırlama talebi alındı.",
+    `Bağlantı geçerlilik süresi: ${formatDate(expiresAt)}`,
     "",
     resetLink,
     "",
-    "Bu talep size ait degilse bu e-postayi dikkate almayabilirsiniz.",
+    "Bu talep size ait değilse bu e-postayı dikkate almayabilirsiniz.",
   ].join("\n");
 }
 
 async function sendPasswordResetMail({ user, resetLink, expiresAt }) {
   const email = normalizeEmailAddress(user?.email);
   if (!isValidEmailAddress(email)) {
-    throw new Error("Gecerli alici e-posta adresi bulunamadi.");
+    throw new Error("Geçerli alıcı e-posta adresi bulunamadı.");
   }
 
   await safeSend({
     to: email,
-    subject: "Sifre sifirlama baglantiniz",
+    subject: "Şifre sıfırlama bağlantınız",
     html: buildPasswordResetHtml({ user, resetLink, expiresAt }),
     text: buildPasswordResetText({ user, resetLink, expiresAt }),
   });

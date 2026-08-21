@@ -30,17 +30,17 @@ export default function CookiePolicyPage() {
         kapsamında makul süre boyunca saklanır.
       </p>
 
-      <h2 className="text-xl font-medium mt-8 mb-2">Onay / Reddetme</h2>
+      <h2 className="text-xl font-medium mt-8 mb-2">Bilgilendirme</h2>
       <p className="text-gray-700">
-        Sayfanın altında görünen bildirim aracılığıyla çerez kullanımını kabul
-        edebilir ya da reddedebilirsiniz. Zorunlu çerezler reddedildiğinde,
-        oturum, sepet ve ödeme işlevlerinde kısıtlamalar oluşabilir.
+        Sayfanın altında görünen bildirim, yalnızca kullanılan zorunlu çerezler
+        hakkında bilgi verir. Bu çerezler oturum, sepet ve ödeme işlevlerinin
+        çalışması için gereklidir.
       </p>
 
       <h2 className="text-xl font-medium mt-8 mb-2">İletişim</h2>
       <p className="text-gray-700">
         Sorularınız için:{" "}
-        <a className="text-blue-600 underline" href="mailto:info@example.com">
+        <a className="text-blue-600 underline" href="mailto:oldscks@gmail.com">
           oldscks@gmail.com
         </a>
       </p>

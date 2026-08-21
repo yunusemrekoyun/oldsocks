@@ -4,6 +4,7 @@ import { FaPlus, FaMinus, FaChevronDown } from "react-icons/fa";
 import { useCart } from "../../../context/useCart";
 import { useNavigate } from "react-router-dom";
 import api from "../../../../api";
+import { formatTry } from "../../../utils/currency";
 
 export default function AddToCart({
   price = 0,
@@ -131,33 +132,43 @@ export default function AddToCart({
         <button
           type="button"
           onClick={() => setOpen(!open)}
+          aria-expanded={open}
+          aria-haspopup="listbox"
           className="w-full flex items-center justify-between px-4 py-2 border border-light2 rounded-lg bg-white text-dark1 focus:outline-none"
         >
           <span>{selected || "Seçiniz"}</span>
           <FaChevronDown className="w-4 h-4 text-dark2" />
         </button>
         {open && (
-          <ul className="absolute z-20 mt-1 w-full bg-white border border-light2 rounded-lg shadow-md max-h-60 overflow-auto">
+          <ul
+            role="listbox"
+            className="absolute z-20 mt-1 w-full bg-white border border-light2 rounded-lg shadow-md max-h-60 overflow-auto"
+          >
             {options.map((opt) => {
               const disabled = isDisabled?.(opt);
+              const optionLabel = getLabel(opt);
               return (
-                <li
-                  key={getLabel(opt)}
-                  onClick={() => {
-                    if (disabled) return;
-                    onChange(getLabel(opt));
-                    setOpen(false);
-                  }}
-                  className={`px-4 py-2 cursor-pointer ${
-                    disabled
-                      ? "text-gray-400 cursor-not-allowed"
-                      : "hover:bg-light1"
-                  } ${
-                    selected === getLabel(opt) ? "bg-light2 font-medium" : ""
-                  }`}
-                >
-                  {getLabel(opt)}
-                  {disabled && " (Tükendi)"}
+                <li key={optionLabel} role="none">
+                  <button
+                    type="button"
+                    role="option"
+                    aria-selected={selected === optionLabel}
+                    disabled={disabled}
+                    onClick={() => {
+                      onChange(optionLabel);
+                      setOpen(false);
+                    }}
+                    className={`w-full px-4 py-2 text-left ${
+                      disabled
+                        ? "cursor-not-allowed text-gray-400"
+                        : "hover:bg-light1"
+                    } ${
+                      selected === optionLabel ? "bg-light2 font-medium" : ""
+                    }`}
+                  >
+                    {optionLabel}
+                    {disabled && " (Tükendi)"}
+                  </button>
                 </li>
               );
             })}
@@ -180,8 +191,15 @@ export default function AddToCart({
 
   return (
     <div className="bg-white p-6 rounded-lg shadow-md space-y-6">
-      {/* fiyat */}
-      <div className="text-3xl font-bold text-dark1">{price.toFixed(2)}₺</div>
+      <div>
+        <h1 className="text-2xl font-bold leading-tight text-dark1">
+          {productName}
+        </h1>
+        {color && <p className="mt-1 text-sm text-dark2">Renk: {color}</p>}
+        <div className="mt-3 text-3xl font-bold text-dark1">
+          {formatTry(price)}
+        </div>
+      </div>
 
       {/* beden */}
       {sizes.length > 0 && (
@@ -213,7 +231,9 @@ export default function AddToCart({
         </label>
         <div className="flex items-center">
           <button
+            type="button"
             onClick={decrement}
+            aria-label="Adeti azalt"
             className="p-2 border border-light2 rounded-l-lg hover:bg-light1 transition"
           >
             <FaMinus className="text-dark2" />
@@ -222,10 +242,13 @@ export default function AddToCart({
             type="text"
             readOnly
             value={qty}
+            aria-label="Adet"
             className="w-16 text-center border-t border-b border-light2 text-dark1 px-2 bg-white"
           />
           <button
+            type="button"
             onClick={increment}
+            aria-label="Adeti artır"
             className="p-2 border border-light2 rounded-r-lg hover:bg-light1 transition"
           >
             <FaPlus className="text-dark2" />

@@ -1,245 +1,217 @@
-// backend/controllers/categoryController.js
 const Category = require("../models/Category");
 const Product = require("../models/Product");
+const { MediaError } = require("../services/media/errors");
+const {
+  legacyAssetUrl,
+  publicAsset,
+  removeOwnerMediaReferences,
+  requireReadyAssets,
+  syncOwnerMediaReferences,
+} = require("../services/media/assets");
 
-const CATEGORIES_CACHE_TTL = 60 * 1000; // 60 sn
+const CATEGORIES_CACHE_TTL = 60 * 1000;
 let categoriesCache = { data: null, expiry: 0 };
 
 function invalidateCategoriesCache() {
   categoriesCache = { data: null, expiry: 0 };
 }
 
-// — Public —
+function parseChildren(value) {
+  if (Array.isArray(value)) return value.map(String).map((v) => v.trim()).filter(Boolean);
+  return String(value || "")
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean);
+}
 
-// Sadece ana kategorileri getir, children ile birlikte
-exports.getCategories = async (req, res) => {
+function applyCategoryMedia(category) {
+  const value = typeof category?.toObject === "function" ? category.toObject() : { ...category };
+  if (value.imageAsset && typeof value.imageAsset === "object") {
+    value.image = legacyAssetUrl(value.imageAsset, "list");
+    value.media = publicAsset(value.imageAsset, "list");
+    value.imageAssetId = String(value.imageAsset._id);
+  }
+  if (Array.isArray(value.children)) {
+    value.children = value.children.map(applyCategoryMedia);
+  }
+  return value;
+}
+
+function populatedCategory(query) {
+  return query
+    .populate("imageAsset")
+    .populate({ path: "children", select: "name image imageAsset parent", populate: "imageAsset" })
+    .populate("parent", "name");
+}
+
+async function syncCategory(category) {
+  await syncOwnerMediaReferences({
+    ownerType: "Category",
+    ownerId: category._id,
+    fields: { image: category.imageAsset ? [category.imageAsset] : [] },
+  });
+}
+
+exports.getCategories = async (_req, res) => {
   try {
-    const now = Date.now();
-    if (categoriesCache.data && now < categoriesCache.expiry) {
+    if (categoriesCache.data && Date.now() < categoriesCache.expiry) {
       return res.json(categoriesCache.data);
     }
-
-    const roots = await Category.find({ parent: null })
-      .populate("children", "name image")
-      .sort("name")
-      .lean();
-
-    categoriesCache = {
-      data: roots,
-      expiry: Date.now() + CATEGORIES_CACHE_TTL,
-    };
-    res.json(roots);
-  } catch (err) {
-    console.error(err);
+    const roots = await populatedCategory(Category.find({ parent: null }).sort("name")).lean();
+    const result = roots.map(applyCategoryMedia);
+    categoriesCache = { data: result, expiry: Date.now() + CATEGORIES_CACHE_TTL };
+    res.json(result);
+  } catch (error) {
+    console.error(error);
     res.status(500).json({ message: "Kategoriler getirilirken hata oluştu." });
   }
 };
 
-// Tek bir kategori getir (genelde detaya girerken kullanılır)
 exports.getCategory = async (req, res) => {
   try {
-    const cat = await Category.findById(req.params.id)
-      .populate("children", "name image")
-      .populate("parent", "name");
-    if (!cat) return res.status(404).json({ message: "Kategori bulunamadı." });
-    res.json(cat);
-  } catch (err) {
-    console.error(err);
+    const category = await populatedCategory(Category.findById(req.params.id));
+    if (!category) return res.status(404).json({ message: "Kategori bulunamadı." });
+    res.json(applyCategoryMedia(category));
+  } catch (error) {
+    console.error(error);
     res.status(500).json({ message: "Kategori getirilirken hata oluştu." });
   }
 };
 
-// — Admin —
-
-// Yeni kategori (+opsiyonel virgülle ayrılmış alt kategorileri de ekler)
 exports.createCategory = async (req, res) => {
   try {
-    const { name, children } = req.body;
-    const image = req.file?.path;
-    if (!name || !image) {
-      return res.status(400).json({ message: "İsim ve görsel zorunludur." });
-    }
-
-    const newCat = await Category.create({ name, image, parent: null });
-
-    // çocuk isimleri virgülle geldiyse, hepsini bu ana kategoriye bağla
-    if (children) {
-      const names = children
-        .split(",")
-        .map((c) => c.trim())
-        .filter(Boolean);
-      await Promise.all(
-        names.map((nm) =>
-          Category.create({ name: nm, image, parent: newCat._id })
-        )
-      );
-    }
-
-    // dönerken populate et
-    const populated = await Category.findById(newCat._id)
-      .populate("children", "name image")
-      .lean();
-    invalidateCategoriesCache();
-    res.status(201).json(populated);
-  } catch (err) {
-    // 🔴 Yalnızca dosya boyutu hatasını yakala
-    if (
-      err &&
-      (err.code === "LIMIT_FILE_SIZE" ||
-        /File size too large/i.test(err.message))
-    ) {
-      const maxMB = 10; // backend limitin (MB)
-      return res.status(413).json({
-        message: `Dosya boyutu çok büyük. Lütfen ${maxMB}MB altında JPG/PNG yükleyin.`,
+    const name = String(req.body.name || "").trim();
+    if (!name) return res.status(400).json({ message: "Kategori adı zorunludur." });
+    const [imageAsset] = await requireReadyAssets(req.body.imageAssetId, {
+      purpose: "category_image",
+      kind: "image",
+      min: 1,
+      max: 1,
+    });
+    const legacyUrl = legacyAssetUrl(imageAsset, "list");
+    const root = await Category.create({
+      name,
+      image: legacyUrl,
+      imageAsset: imageAsset._id,
+      parent: null,
+    });
+    await syncCategory(root);
+    for (const childName of parseChildren(req.body.children)) {
+      const child = await Category.create({
+        name: childName,
+        image: legacyUrl,
+        imageAsset: imageAsset._id,
+        parent: root._id,
       });
+      await syncCategory(child);
     }
-
-    console.error(err);
+    const populated = await populatedCategory(Category.findById(root._id));
+    invalidateCategoriesCache();
+    res.status(201).json(applyCategoryMedia(populated));
+  } catch (error) {
+    if (error instanceof MediaError) throw error;
+    console.error(error);
     res.status(500).json({ message: "Kategori oluşturulurken hata oluştu." });
   }
 };
 
 exports.updateCategory = async (req, res) => {
   try {
-    const { name, children } = req.body;
-    const updates = {};
-    if (typeof name === "string") updates.name = name;
-    if (req.file) updates.image = req.file.path;
+    const category = await Category.findById(req.params.id);
+    if (!category) return res.status(404).json({ message: "Kategori bulunamadı." });
+    if (typeof req.body.name === "string") category.name = req.body.name.trim();
+    let imageAsset = null;
+    if (req.body.imageAssetId !== undefined) {
+      [imageAsset] = await requireReadyAssets(req.body.imageAssetId, {
+        purpose: "category_image",
+        kind: "image",
+        min: 1,
+        max: 1,
+      });
+      category.imageAsset = imageAsset._id;
+      category.image = legacyAssetUrl(imageAsset, "list");
+    }
+    await category.save();
+    await syncCategory(category);
 
-    // 1) Ana kategoriyi güncelle
-    const updated = await Category.findByIdAndUpdate(req.params.id, updates, {
-      new: true,
-    });
-    if (!updated)
-      return res.status(404).json({ message: "Kategori bulunamadı." });
-
-    // 2) Çocuk listesi geldiyse, ID'leri KORUYARAK güncelle
-    if (children !== undefined) {
-      const desiredNames = children
-        .split(",")
-        .map((c) => c.trim())
-        .filter(Boolean);
-
-      const existingChildren = await Category.find({ parent: updated._id });
-
-      const desiredSet = new Set(desiredNames.map((n) => n.toLowerCase()));
-      const existingByName = new Map(
-        existingChildren.map((c) => [c.name.toLowerCase(), c])
+    const blocked = [];
+    if (req.body.children !== undefined) {
+      const desiredNames = parseChildren(req.body.children);
+      const desiredSet = new Set(desiredNames.map((name) => name.toLocaleLowerCase("tr-TR")));
+      const existing = await Category.find({ parent: category._id });
+      const byName = new Map(
+        existing.map((item) => [item.name.toLocaleLowerCase("tr-TR"), item])
       );
-
-      const toCreate = desiredNames.filter(
-        (nm) => !existingByName.has(nm.toLowerCase())
-      );
-      const toKeep = existingChildren.filter((c) =>
-        desiredSet.has(c.name.toLowerCase())
-      );
-      const toDelete = existingChildren.filter(
-        (c) => !desiredSet.has(c.name.toLowerCase())
-      );
-
-      if (toCreate.length > 0) {
-        await Promise.all(
-          toCreate.map((nm) =>
-            Category.create({
-              name: nm,
-              image: updated.image,
-              parent: updated._id,
-            })
-          )
-        );
+      for (const childName of desiredNames) {
+        if (byName.has(childName.toLocaleLowerCase("tr-TR"))) continue;
+        const child = await Category.create({
+          name: childName,
+          image: category.image,
+          imageAsset: category.imageAsset,
+          parent: category._id,
+        });
+        await syncCategory(child);
       }
-
-      const blocked = [];
-      for (const c of toDelete) {
-        const inUse = await Product.exists({ category: c._id });
-        if (inUse) {
-          blocked.push({ id: c._id.toString(), name: c.name });
+      for (const child of existing) {
+        if (desiredSet.has(child.name.toLocaleLowerCase("tr-TR"))) {
+          if (imageAsset) {
+            child.image = category.image;
+            child.imageAsset = category.imageAsset;
+            await child.save();
+            await syncCategory(child);
+          }
           continue;
         }
-        await Category.findByIdAndDelete(c._id);
-      }
-
-      if (req.file) {
-        await Category.updateMany(
-          { _id: { $in: toKeep.map((c) => c._id) } },
-          { $set: { image: updated.image } }
-        );
-      }
-
-      if (blocked.length > 0) {
-        const blockedIds = blocked.map((b) => b.id);
-        const products = await Product.find({ category: { $in: blockedIds } })
-          .select("_id name images category")
-          .limit(12 * blockedIds.length)
-          .lean();
-
-        const byCat = new Map();
-        for (const b of blocked) {
-          byCat.set(b.id, {
-            categoryId: b.id,
-            categoryName: b.name,
-            products: [],
-          });
+        if (await Product.exists({ category: child._id })) {
+          blocked.push({ id: String(child._id), name: child.name });
+          continue;
         }
-        for (const p of products) {
-          const catId = (p.category || "").toString();
-          if (!byCat.has(catId)) continue;
-          byCat.get(catId).products.push({
-            _id: p._id,
-            name: p.name,
-            image: Array.isArray(p.images) && p.images[0] ? p.images[0] : "",
-          });
-        }
-
-        const populated = await Category.findById(updated._id)
-          .populate("children", "name image")
-          .populate("parent", "name")
-          .lean();
-
-        invalidateCategoriesCache();
-        return res.status(409).json({
-          message:
-            "Bazı alt kategoriler ürüne bağlı olduğu için silinmedi. Lütfen önce bu ürünleri taşıyın ya da alt kategorileri yeniden düzenleyin.",
-          blocked,
-          productsByCategory: Array.from(byCat.values()),
-          category: populated,
-        });
+        await Category.deleteOne({ _id: child._id });
+        await removeOwnerMediaReferences("Category", child._id);
       }
     }
 
-    const populated = await Category.findById(updated._id)
-      .populate("children", "name image")
-      .populate("parent", "name")
-      .lean();
-
+    const populated = await populatedCategory(Category.findById(category._id));
     invalidateCategoriesCache();
-    res.json(populated);
-  } catch (err) {
-    // 🔴 Güncellemede de aynı kontrol
-    if (
-      err &&
-      (err.code === "LIMIT_FILE_SIZE" ||
-        /File size too large/i.test(err.message))
-    ) {
-      const maxMB = 10;
-      return res.status(413).json({
-        message: `Dosya boyutu çok büyük. Lütfen ${maxMB}MB altında JPG/PNG yükleyin.`,
+    if (blocked.length) {
+      const blockedIds = blocked.map((item) => item.id);
+      const products = await Product.find({ category: { $in: blockedIds } })
+        .select("_id name images category")
+        .limit(12 * blockedIds.length)
+        .lean();
+      return res.status(409).json({
+        message:
+          "Bazı alt kategoriler ürüne bağlı olduğu için silinmedi. Önce ürünleri taşıyın.",
+        blocked,
+        products,
+        category: applyCategoryMedia(populated),
       });
     }
-
-    console.error(err);
+    res.json(applyCategoryMedia(populated));
+  } catch (error) {
+    if (error instanceof MediaError) throw error;
+    console.error(error);
     res.status(500).json({ message: "Kategori güncellenirken hata oluştu." });
   }
 };
 
 exports.deleteCategory = async (req, res) => {
   try {
-    const cat = await Category.findByIdAndDelete(req.params.id);
-    if (!cat) return res.status(404).json({ message: "Kategori bulunamadı." });
+    const category = await Category.findById(req.params.id);
+    if (!category) return res.status(404).json({ message: "Kategori bulunamadı." });
+    const children = await Category.find({ parent: category._id });
+    const ids = [category._id, ...children.map((child) => child._id)];
+    if (await Product.exists({ category: { $in: ids } })) {
+      return res.status(409).json({
+        message: "Bu kategoriye bağlı ürünler varken kategori silinemez.",
+      });
+    }
+    await Category.deleteMany({ _id: { $in: ids } });
+    for (const id of ids) await removeOwnerMediaReferences("Category", id);
     invalidateCategoriesCache();
     res.json({ message: "Kategori silindi." });
-  } catch (err) {
-    console.error(err);
+  } catch (error) {
+    console.error(error);
     res.status(500).json({ message: "Kategori silinirken hata oluştu." });
   }
 };

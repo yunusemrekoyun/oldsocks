@@ -1,92 +1,115 @@
-// controllers/productController.js
 const Product = require("../models/Product");
 const Category = require("../models/Category");
+const { MediaError } = require("../services/media/errors");
+const {
+  CatalogValidationError,
+  parseProductPricing,
+  parseProductSizes,
+  requiredText,
+} = require("../services/catalogValidation");
+const {
+  applyProductMedia,
+  legacyAssetUrl,
+  parseAssetIds,
+  removeOwnerMediaReferences,
+  requireReadyAssets,
+  syncOwnerMediaReferences,
+} = require("../services/media/assets");
 
-const PRODUCTS_CACHE_TTL = 60 * 1000; // 60 saniye
+const PRODUCTS_CACHE_TTL = 60 * 1000;
 let productsCache = { data: null, expiry: 0 };
 
 function invalidateProductsCache() {
   productsCache = { data: null, expiry: 0 };
 }
 
-/* ------------------------------------------------------------------ */
-/*  Yardımcı Fonksiyonlar                                             */
-/* ------------------------------------------------------------------ */
+function escapeRegex(value) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
 
-/** sizes alanını güvenle parse eder.
- *  Giriş ≈ '[{"size":"M","stock":5},…]'  |  Çıkış ≈ [{ size:"M", stock:5 }, …]
- *  Boş/yanlış formata toleranslıdır, bedensiz üründe [] döner.        */
-const parseSizes = (raw) => {
-  if (!raw) return [];
-  try {
-    const arr = JSON.parse(raw);
-    return arr
-      .filter((s) => typeof s.stock === "number")
-      .map((s) => ({ size: (s.size || "").trim(), stock: s.stock }));
-  } catch {
-    return []; // hatalı JSON → bedensiz kabul
-  }
-};
+function populateProductMedia(query) {
+  return query
+    .populate("imageAssets")
+    .populate("videoAsset")
+    .populate({
+      path: "category",
+      select: "name image imageAsset parent",
+      populate: [
+        { path: "parent", select: "name" },
+        { path: "imageAsset" },
+      ],
+    });
+}
 
-/* ------------------------------------------------------------------ */
-/*  CREATE (Admin)                                                    */
-/* ------------------------------------------------------------------ */
+async function resolveProductAssets(body, options = {}) {
+  const imageAssets = await requireReadyAssets(body.imageAssetIds, {
+    purpose: "product_image",
+    kind: "image",
+    min: options.imageMin ?? 1,
+    max: 6,
+  });
+  const videoIds = parseAssetIds(body.videoAssetId);
+  const videoAssets = await requireReadyAssets(videoIds, {
+    purpose: "product_video",
+    kind: "video",
+    min: 0,
+    max: 1,
+  });
+  return { imageAssets, videoAsset: videoAssets[0] || null };
+}
+
+async function syncProductReferences(product) {
+  await syncOwnerMediaReferences({
+    ownerType: "Product",
+    ownerId: product._id,
+    fields: {
+      images: product.imageAssets || [],
+      video: product.videoAsset ? [product.videoAsset] : [],
+    },
+  });
+}
+
 exports.createProduct = async (req, res) => {
   try {
-    const {
-      name,
-      price,
-      originalPrice,
-      discount,
-      category,
-      sizes,
-      description,
-      color,
-    } = req.body;
-
-    if (!name) return res.status(400).json({ message: "Ürün adı zorunlu." });
-
+    const { category, description, color } = req.body;
+    const name = requiredText(req.body.name, "Ürün adı");
+    const pricing = parseProductPricing(req.body);
+    const sizes = parseProductSizes(req.body.sizes);
     if (!(await Category.exists({ _id: category }))) {
       return res.status(400).json({ message: "Geçersiz kategori." });
     }
-
-    const videoUrl = req.files?.video?.[0]?.path;
-    const imagesUrls = req.files?.images?.map((f) => f.path) || [];
-
-    if (imagesUrls.length === 0) {
-      return res
-        .status(400)
-        .json({ message: "En az bir ürün görseli zorunludur." });
-    }
-
+    const { imageAssets, videoAsset } = await resolveProductAssets(req.body);
     const product = await Product.create({
       name,
-      video: videoUrl || "",
-      images: imagesUrls,
-      price: Number(price),
-      originalPrice: Number(originalPrice),
-      discount: Number(discount || 0),
+      videoAsset: videoAsset?._id || null,
+      imageAssets: imageAssets.map((asset) => asset._id),
+      video: videoAsset ? legacyAssetUrl(videoAsset, "detail") : "",
+      images: imageAssets.map((asset) => legacyAssetUrl(asset, "detail")),
+      price: pricing.price,
+      originalPrice: pricing.originalPrice,
+      discount: pricing.discount,
       category,
-      sizes: parseSizes(sizes),
-      description,
-      color: color || "", // renk opsiyonel
-      parentProductId: null, // base ürün
+      sizes,
+      description: description || "",
+      color: color || "",
+      parentProductId: null,
     });
-
+    await syncProductReferences(product);
     invalidateProductsCache();
-    res.status(201).json(product);
-  } catch (err) {
-    console.error(err);
+    const populated = await populateProductMedia(Product.findById(product._id));
+    res.status(201).json(applyProductMedia(populated));
+  } catch (error) {
+    if (error instanceof MediaError) throw error;
+    if (error instanceof CatalogValidationError) {
+      return res.status(400).json({ message: error.message, details: error.details });
+    }
+    console.error(error);
     res.status(500).json({ message: "Ürün oluşturulurken hata oluştu." });
   }
 };
 
-/* ------------------------------------------------------------------ */
-/*  GET  (listeleme / varyant sorgusu)                                */
-/* ------------------------------------------------------------------ */
 exports.getProducts = async (req, res) => {
   try {
-    /* /products?varyantsOf=BASE_ID → base + child renkler */
     if (req.query.varyantsOf) {
       const baseId = req.query.varyantsOf;
       const products = await Product.find({
@@ -94,244 +117,215 @@ exports.getProducts = async (req, res) => {
       }).select("color _id name");
       return res.json(products);
     }
-
-    /* normal listeleme */
     const now = Date.now();
     if (productsCache.data && now < productsCache.expiry) {
       return res.json(productsCache.data);
     }
-
-    const products = await Product.find()
-      .sort({ createdAt: -1 })
-      .select(
-        "name video images price originalPrice discount sizes color category parentProductId createdAt"
-      )
-      .populate({
-        path: "category",
-        select: "name image parent",
-        populate: { path: "parent", select: "name" },
-      })
-      .lean();
-
-    productsCache = {
-      data: products,
-      expiry: Date.now() + PRODUCTS_CACHE_TTL,
-    };
-    res.json(products);
-  } catch (err) {
-    console.error(err);
+    const products = await populateProductMedia(
+      Product.find()
+        .sort({ createdAt: -1 })
+        .select(
+          "name video images videoAsset imageAssets price originalPrice discount sizes color category parentProductId createdAt"
+        )
+    ).lean();
+    const result = products.map((product) => applyProductMedia(product, "list"));
+    productsCache = { data: result, expiry: Date.now() + PRODUCTS_CACHE_TTL };
+    res.json(result);
+  } catch (error) {
+    console.error(error);
     res.status(500).json({ message: "Ürünler getirilirken hata oluştu." });
   }
 };
 
-/* ------------------------------------------------------------------ */
-/*  GET SINGLE                                                        */
-/* ------------------------------------------------------------------ */
 exports.getProduct = async (req, res) => {
   try {
-    const product = await Product.findById(req.params.id)
-      .select(
-        "video images price originalPrice discount category sizes description color name parentProductId"
+    const product = await populateProductMedia(
+      Product.findById(req.params.id).select(
+        "video images videoAsset imageAssets price originalPrice discount category sizes description color name parentProductId"
       )
-      .populate({
-        path: "category",
-        select: "name image parent",
-        populate: { path: "parent", select: "name" },
-      });
-
+    );
     if (!product) return res.status(404).json({ message: "Ürün bulunamadı." });
-    res.json(product);
-  } catch (err) {
-    console.error(err);
+    res.json(applyProductMedia(product, "detail"));
+  } catch (error) {
+    console.error(error);
     res.status(500).json({ message: "Ürün getirilirken hata oluştu." });
   }
 };
 
-/* ------------------------------------------------------------------ */
-/*  UPDATE (Admin)                                                    */
-/* ------------------------------------------------------------------ */
 exports.updateProduct = async (req, res) => {
   try {
     const existing = await Product.findById(req.params.id);
-    if (!existing) {
-      return res.status(404).json({ message: "Ürün bulunamadı." });
-    }
-
-    const {
-      name,
-      price,
-      originalPrice,
-      discount,
-      category,
-      sizes,
-      description,
-      color,
-    } = req.body;
-
-    if (!name) {
-      return res.status(400).json({ message: "Ürün adı zorunludur." });
-    }
-
-    /* Kategori doğrulaması (opsiyonel) */
-    if (category && !(await Category.exists({ _id: category }))) {
+    if (!existing) return res.status(404).json({ message: "Ürün bulunamadı." });
+    const name = requiredText(req.body.name, "Ürün adı");
+    const pricing = parseProductPricing({
+      price: req.body.price ?? existing.price,
+      originalPrice: req.body.originalPrice ?? existing.originalPrice,
+    });
+    const sizes =
+      req.body.sizes !== undefined
+        ? parseProductSizes(req.body.sizes)
+        : parseProductSizes(existing.sizes);
+    if (req.body.category && !(await Category.exists({ _id: req.body.category }))) {
       return res.status(400).json({ message: "Geçersiz kategori." });
     }
 
-    /* ---- Medya kontrol parametreleri (frontend'den gelir) ---- */
-    const keepImages = req.body.keepImages
-      ? JSON.parse(req.body.keepImages)
-      : null; // string[] | null
-    const removeVideo = req.body.removeVideo === "1"; // "1" → true
-
-    /* ---- Yeni yüklenen dosyalar ---- */
-    const newVideo = req.files?.video?.[0]?.path || null;
-    const newImages = req.files?.images?.map((f) => f.path) || [];
-
-    /* ---- Mevcut/yeninin birleştirilmesi ---- */
-    // Video
-    let nextVideo = existing.video || "";
-    if (removeVideo) nextVideo = "";
-    if (newVideo) nextVideo = newVideo; // yeni video varsa override
-
-    // Görseller
-    let nextImages = Array.isArray(existing.images) ? existing.images : [];
-    if (Array.isArray(keepImages)) {
-      // Frontend hangi mevcutları tutacağını net gönderiyorsa bunu baz al
-      nextImages = keepImages;
-    }
-    if (newImages.length) {
-      nextImages = [...nextImages, ...newImages];
+    let imageAssets;
+    if (req.body.imageAssetIds !== undefined) {
+      imageAssets = await requireReadyAssets(req.body.imageAssetIds, {
+        purpose: "product_image",
+        kind: "image",
+        min: 1,
+        max: 6,
+      });
+    } else {
+      imageAssets = await requireReadyAssets(existing.imageAssets, {
+        purpose: "product_image",
+        kind: "image",
+        min: 1,
+        max: 6,
+      });
     }
 
-    // En az bir medya koruması (görsel veya video)
-    if (nextImages.length === 0 && !nextVideo) {
-      return res
-        .status(400)
-        .json({ message: "En az bir görsel veya video bırakmalısınız." });
+    let videoAsset = null;
+    if (req.body.videoAssetId === undefined) {
+      if (existing.videoAsset) {
+        [videoAsset] = await requireReadyAssets([existing.videoAsset], {
+          purpose: "product_video",
+          kind: "video",
+          max: 1,
+        });
+      }
+    } else {
+      const videoIds = parseAssetIds(req.body.videoAssetId);
+      const videos = await requireReadyAssets(videoIds, {
+        purpose: "product_video",
+        kind: "video",
+        max: 1,
+      });
+      videoAsset = videos[0] || null;
     }
 
-    /* ---- Güncellenecek alanlar ---- */
-    const updates = {
-      name,
-      price: price !== undefined ? Number(price) : existing.price,
-      originalPrice:
-        originalPrice !== undefined
-          ? Number(originalPrice)
-          : existing.originalPrice,
-      discount: discount !== undefined ? Number(discount) : existing.discount,
-      category: category || existing.category,
-      description:
-        description !== undefined ? description : existing.description,
-      color: color !== undefined ? color : existing.color,
-
-      video: nextVideo,
-      images: nextImages,
-
-      sizes: sizes ? parseSizes(sizes) : existing.sizes,
-    };
-
-    const updated = await Product.findByIdAndUpdate(req.params.id, updates, {
-      new: true,
-    });
-
+    existing.name = name;
+    existing.price = pricing.price;
+    existing.originalPrice = pricing.originalPrice;
+    existing.discount = pricing.discount;
+    existing.category = req.body.category || existing.category;
+    existing.description =
+      req.body.description !== undefined ? req.body.description : existing.description;
+    existing.color = req.body.color !== undefined ? req.body.color : existing.color;
+    existing.sizes = sizes;
+    existing.imageAssets = imageAssets.map((asset) => asset._id);
+    existing.videoAsset = videoAsset?._id || null;
+    existing.images = imageAssets.map((asset) => legacyAssetUrl(asset, "detail"));
+    existing.video = videoAsset ? legacyAssetUrl(videoAsset, "detail") : "";
+    await existing.save();
+    await syncProductReferences(existing);
     invalidateProductsCache();
-    res.json(updated);
-  } catch (err) {
-    console.error(err);
+    const populated = await populateProductMedia(Product.findById(existing._id));
+    res.json(applyProductMedia(populated));
+  } catch (error) {
+    if (error instanceof MediaError) throw error;
+    if (error instanceof CatalogValidationError) {
+      return res.status(400).json({ message: error.message, details: error.details });
+    }
+    console.error(error);
     res.status(500).json({ message: "Ürün güncellenirken hata oluştu." });
   }
 };
 
-/* ------------------------------------------------------------------ */
-/*  DELETE (Admin)                                                    */
-/* ------------------------------------------------------------------ */
 exports.deleteProduct = async (req, res) => {
   try {
     const result = await Product.findByIdAndDelete(req.params.id);
-    if (!result) {
-      return res.status(404).json({ message: "Ürün bulunamadı." });
-    }
+    if (!result) return res.status(404).json({ message: "Ürün bulunamadı." });
+    await removeOwnerMediaReferences("Product", result._id);
     invalidateProductsCache();
-    res.json({ message: "Ürün silindi." });
-  } catch (err) {
-    console.error(err);
+    res.json({ message: "Ürün silindi. Kullanılmayan medyalar bakım alanından temizlenebilir." });
+  } catch (error) {
+    console.error(error);
     res.status(500).json({ message: "Ürün silinirken hata oluştu." });
   }
 };
 
-/* ------------------------------------------------------------------ */
-/*  POST /api/products/new-color/:baseProductId                       */
-/* ------------------------------------------------------------------ */
 exports.createProductWithNewColor = async (req, res) => {
   try {
-    /* ──────────────────────────────────
-       1) Parametre & temel kontroller
-       ────────────────────────────────── */
     const baseId = req.params.baseProductId;
-    const { color, sizes, price, originalPrice, discount, description, name } =
-      req.body;
-
-    if (!color || !color.trim())
-      return res.status(400).json({ message: "Renk zorunludur." });
-
+    const color = String(req.body.color || "").trim();
+    if (!color) return res.status(400).json({ message: "Renk zorunludur." });
     const base = await Product.findById(baseId);
     if (!base) return res.status(404).json({ message: "Ana ürün bulunamadı." });
-
-    /* Aynı renkten zaten var mı?
-+     • base ürünün kendisinde bu renk olabilir
-+     • ya da daha önce eklenmiş bir child varyantta            */
+    const name = requiredText(req.body.name ?? base.name, "Ürün adı");
+    const pricing = parseProductPricing({
+      price: req.body.price ?? base.price,
+      originalPrice: req.body.originalPrice ?? base.originalPrice,
+    });
+    const sizes =
+      req.body.sizes !== undefined
+        ? parseProductSizes(req.body.sizes)
+        : parseProductSizes(base.sizes);
     const duplicate = await Product.findOne({
       $or: [{ _id: baseId }, { parentProductId: baseId }],
-      color: { $regex: new RegExp("^" + color.trim() + "$", "i") },
+      color: { $regex: new RegExp(`^${escapeRegex(color)}$`, "i") },
     });
-    if (duplicate)
-      return res.status(409).json({ message: "Bu renkte varyant zaten var." });
+    if (duplicate) return res.status(409).json({ message: "Bu renkte varyant zaten var." });
 
-    /* ──────────────────────────────────
-       2) Medya (yeni yüklendiyse kullan; yoksa base’ten miras al)
-       ────────────────────────────────── */
-    const video =
-      req.files?.video?.[0]?.path ?? // yeni video geldiyse kullan
-      (typeof base.video === "string" ? base.video : ""); // yoksa base ya da boş string
+    let imageAssets;
+    const requestedImages = parseAssetIds(req.body.imageAssetIds);
+    if (requestedImages.length) {
+      imageAssets = await requireReadyAssets(requestedImages, {
+        purpose: "product_image",
+        kind: "image",
+        min: 1,
+        max: 6,
+      });
+    } else {
+      imageAssets = await requireReadyAssets(base.imageAssets, {
+        purpose: "product_image",
+        kind: "image",
+        min: 1,
+        max: 6,
+      });
+    }
+    let videoAsset = null;
+    const requestedVideo = parseAssetIds(req.body.videoAssetId);
+    if (requestedVideo.length) {
+      [videoAsset] = await requireReadyAssets(requestedVideo, {
+        purpose: "product_video",
+        kind: "video",
+        max: 1,
+      });
+    } else if (base.videoAsset) {
+      [videoAsset] = await requireReadyAssets([base.videoAsset], {
+        purpose: "product_video",
+        kind: "video",
+        max: 1,
+      });
+    }
 
-    const uploadedImages = req.files?.images?.map((f) => f.path) || [];
-    const images = uploadedImages.length
-      ? uploadedImages
-      : Array.isArray(base.images)
-      ? base.images
-      : [];
-
-    if (images.length === 0)
-      return res
-        .status(400)
-        .json({ message: "En az bir ürün görseli yüklenmelidir." });
-
-    /* ──────────────────────────────────
-       3) Yeni ürün kaydı
-       ────────────────────────────────── */
-    const newProduct = await Product.create({
-      /* base’ten miras aldıklarımız */
-      name: name ?? base.name,
-      price: price ?? base.price,
-      originalPrice: originalPrice ?? base.originalPrice,
-      discount: discount ?? base.discount,
-      description: description ?? base.description,
-      category: base.category, // 💡 kategori & alt kategori sabit
+    const product = await Product.create({
+      name,
+      price: pricing.price,
+      originalPrice: pricing.originalPrice,
+      discount: pricing.discount,
+      description: req.body.description ?? base.description,
+      category: base.category,
       parentProductId: base._id,
-
-      /* yeni / override alanlar */
-      video,
-      images,
-      color: color.trim(),
-      sizes: parseSizes(sizes) || base.sizes,
+      color,
+      sizes,
+      imageAssets: imageAssets.map((asset) => asset._id),
+      videoAsset: videoAsset?._id || null,
+      images: imageAssets.map((asset) => legacyAssetUrl(asset, "detail")),
+      video: videoAsset ? legacyAssetUrl(videoAsset, "detail") : "",
     });
-
+    await syncProductReferences(product);
     invalidateProductsCache();
-    res.status(201).json(newProduct);
-  } catch (err) {
-    console.error("Yeni renk ekleme hatası:", err);
-    res
-      .status(500)
-      .json({ message: "Yeni renk eklenirken beklenmeyen bir hata oluştu." });
+    const populated = await populateProductMedia(Product.findById(product._id));
+    res.status(201).json(applyProductMedia(populated));
+  } catch (error) {
+    if (error instanceof MediaError) throw error;
+    if (error instanceof CatalogValidationError) {
+      return res.status(400).json({ message: error.message, details: error.details });
+    }
+    console.error("Yeni renk ekleme hatası:", error);
+    res.status(500).json({ message: "Yeni renk eklenirken beklenmeyen bir hata oluştu." });
   }
 };

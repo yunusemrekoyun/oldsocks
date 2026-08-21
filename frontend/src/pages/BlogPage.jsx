@@ -10,6 +10,7 @@ import RecentBlog from "../components/blog/RecentBlog";
 import Tags from "../components/blog/Tags";
 import SocialMedia from "../components/blog/SocialMedia";
 import NewsLetter from "../components/blog/NewsLetter";
+import { formatTurkishDate } from "../utils/date";
 import BlogPagination from "../components/blog/BlogPagination";
 
 export default function BlogPage() {
@@ -74,16 +75,18 @@ export default function BlogPage() {
                 key={post._id}
                 to={`/blog/${post.slug}`}
                 image={post.coverImageUrl}
-                date={new Date(post.publishedAt || post.createdAt)
-                  .toLocaleDateString("en-US", {
-                    day: "numeric",
-                    month: "short",
-                  })
-                  .replace(",", "")}
+                date={formatTurkishDate(post.publishedAt || post.createdAt)}
                 title={post.title}
                 excerpt={post.excerpt}
-                author={`${post.author.firstName} ${post.author.lastName}`}
-                category={post.categories.map((c) => c.name).join(", ")}
+                author={
+                  [post.author?.firstName, post.author?.lastName]
+                    .filter(Boolean)
+                    .join(" ") || "Oldscks"
+                }
+                category={(post.categories || [])
+                  .map((c) => c?.name)
+                  .filter(Boolean)
+                  .join(", ")}
                 comments={post.commentsCount}
               />
             ))

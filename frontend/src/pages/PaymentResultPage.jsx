@@ -4,7 +4,14 @@ import React, { useEffect, useState, useRef } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import { useCart } from "../context/useCart";
 import api from "../../api";
-import { CheckCircleIcon, XCircleIcon } from "@heroicons/react/24/solid";
+import {
+  CheckCircleIcon,
+  ExclamationTriangleIcon,
+  XCircleIcon,
+} from "@heroicons/react/24/solid";
+
+const PAYMENT_REVIEW_MESSAGE =
+  "Ödemeniz alındı; siparişiniz stok veya tutar kontrolü için incelemeye alındı. Ekibimiz sizinle iletişime geçecek.";
 
 export default function PaymentResultPage() {
   const [searchParams] = useSearchParams();
@@ -19,15 +26,22 @@ export default function PaymentResultPage() {
     searchParams.get("conversation_id");
 
   const paymentId = searchParams.get("paymentId");
+  const failureMessage = searchParams.get("message");
 
   const [loaded, setLoaded] = useState(false);
   const [message, setMessage] = useState("");
   const [orderNumber, setOrderNumber] = useState("");
+  const [reviewing, setReviewing] = useState(false);
 
   // guard & timers
   const timers = useRef([]);
   const doneRef = useRef(false);
   const attemptsRef = useRef(0);
+  const clearCartRef = useRef(clearCart);
+
+  useEffect(() => {
+    clearCartRef.current = clearCart;
+  }, [clearCart]);
 
   const clearAllTimers = () => {
     timers.current.forEach(clearTimeout);
@@ -51,7 +65,7 @@ export default function PaymentResultPage() {
     };
 
     if (status === "failure") {
-      const rawMsg = searchParams.get("message") || "Ödeme başarısız.";
+      const rawMsg = failureMessage || "Ödeme başarısız.";
       setMessage(decode(rawMsg));
       setLoaded(true);
       return;
@@ -66,9 +80,15 @@ export default function PaymentResultPage() {
         setLoaded(true);
         return;
       }
+      if (state === "review") {
+        setReviewing(true);
+        setMessage(PAYMENT_REVIEW_MESSAGE);
+        setLoaded(true);
+        return;
+      }
 
       if (window[lockKey]) {
-        if (!loaded) setLoaded(false);
+        setLoaded(false);
         return;
       }
       window[lockKey] = true;
@@ -83,7 +103,7 @@ export default function PaymentResultPage() {
         if (maybeOrderNo) setOrderNumber(maybeOrderNo);
         setMessage("Siparişiniz başarıyla kaydedildi.");
         try {
-          clearCart();
+          clearCartRef.current();
         } catch {}
         sessionStorage.setItem(onceKey, "done");
         clearAllTimers();
@@ -98,6 +118,20 @@ export default function PaymentResultPage() {
         setLoaded(true);
       };
 
+      const finishAsReview = (maybeOrderNo, msg) => {
+        if (doneRef.current) return;
+        doneRef.current = true;
+        if (maybeOrderNo) setOrderNumber(maybeOrderNo);
+        setReviewing(true);
+        setMessage(msg || PAYMENT_REVIEW_MESSAGE);
+        try {
+          clearCartRef.current();
+        } catch {}
+        sessionStorage.setItem(onceKey, "review");
+        clearAllTimers();
+        setLoaded(true);
+      };
+
       const tryConfirm = async () => {
         if (doneRef.current) return;
         try {
@@ -107,6 +141,16 @@ export default function PaymentResultPage() {
         } catch (err) {
           if (doneRef.current) return;
           const code = err?.response?.status;
+          if (
+            code === 409 &&
+            err?.response?.data?.code === "PAYMENT_REVIEW"
+          ) {
+            finishAsReview(
+              err?.response?.data?.orderNumber,
+              err?.response?.data?.message
+            );
+            return;
+          }
           const attempt = attemptsRef.current;
           const maxAttempts = 7;
           if (code === 409 && attempt < maxAttempts) {
@@ -144,7 +188,7 @@ export default function PaymentResultPage() {
 
     setMessage("Geçersiz geri dönüş parametreleri.");
     setLoaded(true);
-  }, [status, conversationId, paymentId, loaded]);
+  }, [conversationId, failureMessage, paymentId, status]);
 
   if (!loaded) {
     return (
@@ -161,7 +205,9 @@ export default function PaymentResultPage() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-50 to-gray-200 px-4 py-10">
       <div className="w-full max-w-lg bg-white shadow-2xl rounded-2xl p-8 text-center">
-        {isSuccess ? (
+        {reviewing ? (
+          <ExclamationTriangleIcon className="w-20 h-20 text-orange-500 mx-auto mb-6 drop-shadow" />
+        ) : isSuccess ? (
           <CheckCircleIcon className="w-20 h-20 text-green-500 mx-auto mb-6 drop-shadow" />
         ) : (
           <XCircleIcon className="w-20 h-20 text-red-500 mx-auto mb-6 drop-shadow" />
@@ -169,10 +215,18 @@ export default function PaymentResultPage() {
 
         <h2
           className={`text-3xl font-bold mb-3 ${
-            isSuccess ? "text-green-600" : "text-red-600"
+            reviewing
+              ? "text-orange-600"
+              : isSuccess
+                ? "text-green-600"
+                : "text-red-600"
           }`}
         >
-          {isSuccess ? "Ödeme Başarılı" : "Ödeme Başarısız"}
+          {reviewing
+            ? "Ödeme Alındı"
+            : isSuccess
+              ? "Ödeme Başarılı"
+              : "Ödeme Başarısız"}
         </h2>
 
         {paymentId && (

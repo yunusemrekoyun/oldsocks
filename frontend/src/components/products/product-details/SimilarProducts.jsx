@@ -15,7 +15,10 @@ export default function SimilarProducts({ categoryId, currentProductId }) {
   const [items, setItems] = useState([]);
   const { data: allProducts, loading } = useProductsCache();
   const [error, setError] = useState("");
-  const all = Array.isArray(allProducts) ? allProducts : [];
+  const all = useMemo(
+    () => (Array.isArray(allProducts) ? allProducts : []),
+    [allProducts]
+  );
   const variantColorMap = useMemo(() => buildVariantColorMap(all), [all]);
 
   useEffect(() => {
@@ -89,14 +92,16 @@ export default function SimilarProducts({ categoryId, currentProductId }) {
         spaceBetween={16}
         slidesPerView={2}
         autoplay={{ delay: 3000 }}
-        loop
+        rewind
         grabCursor
         freeMode
         className="!px-2"
       >
         {items.map((p) => {
           const poster =
-            p.poster || (Array.isArray(p.images) ? p.images[0] : null);
+            p.media?.images?.[0] ||
+            p.poster ||
+            (Array.isArray(p.images) ? p.images[0] : null);
 
           const { price, discountedPrice } = toCardPricing(p);
 

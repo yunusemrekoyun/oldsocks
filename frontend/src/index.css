@@ -41,6 +41,29 @@
   }
 }
 
+/* Telefonda tek duyuruyu hareket ettirmek metni uzun süre kısmen görünür
+   bırakıyordu. Küçük ekranlarda mesajı sabit ve gerektiğinde iki satır göster. */
+@media (max-width: 640px) {
+  .announcement-bar {
+    white-space: normal;
+  }
+
+  .marquee__track {
+    display: block;
+    width: 100%;
+    animation: none;
+    transform: none;
+  }
+
+  .marquee__msg {
+    display: block;
+    padding: 0 0.75rem;
+    text-align: center;
+    font-size: 0.75rem;
+    line-height: 1.25rem;
+  }
+}
+
 /* --- Range slider thumb/track --- */
 .range-thumb::-webkit-slider-runnable-track {
   height: 8px;

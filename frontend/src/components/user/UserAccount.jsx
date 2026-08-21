@@ -1,9 +1,15 @@
 import React, { useContext, useEffect, useState } from "react";
 import api from "../../../api"; // axios instance, otomatik multipart desteği var
 import { AuthContext } from "../../context/AuthContext";
-import defaultAvatar from "../../assets/user/fallback-avatar.png";
+import defaultAvatar from "../../assets/user/fallback-avatar.webp";
 import { FaTrashAlt, FaCamera, FaUpload } from "react-icons/fa";
 import UserPasswordForm from "./UserPasswordForm";
+import {
+  mediaErrorMessage,
+  startMediaPreparation,
+  uploadMediaFile,
+  validateMediaFile,
+} from "../../services/mediaUpload";
 
 export default function UserAccount() {
   const { isLoggedIn } = useContext(AuthContext);
@@ -35,53 +41,20 @@ export default function UserAccount() {
       .catch(() => setProfilePic(null));
   }, [isLoggedIn]);
 
-  // Resmi sıkıştırma fonksiyonu
-  const compressImage = (file, maxSizeMB = 2, maxWidth = 1024) => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.readAsDataURL(file);
-      reader.onload = (event) => {
-        const img = new Image();
-        img.src = event.target.result;
-        img.onload = () => {
-          let { width, height } = img;
-          if (width > maxWidth) {
-            height = height * (maxWidth / width);
-            width = maxWidth;
-          }
-          const canvas = document.createElement("canvas");
-          canvas.width = width;
-          canvas.height = height;
-          const ctx = canvas.getContext("2d");
-          ctx.drawImage(img, 0, 0, width, height);
-          let quality = 0.9;
-          const step = 0.05;
-          const compress = () => {
-            canvas.toBlob(
-              (blob) => {
-                if (blob.size <= maxSizeMB * 1024 * 1024 || quality <= step) {
-                  resolve(new File([blob], file.name, { type: file.type }));
-                } else {
-                  quality -= step;
-                  compress();
-                }
-              },
-              file.type,
-              quality
-            );
-          };
-          compress();
-        };
-        img.onerror = (err) => reject(err);
-      };
-      reader.onerror = (err) => reject(err);
-    });
-  };
-
   const handleFileChange = (e) => {
     setError("");
     const selected = e.target.files[0];
-    if (selected) setFile(selected);
+    try {
+      if (selected) {
+        validateMediaFile(selected, "profile_image");
+        startMediaPreparation(selected, "profile_image");
+      }
+      if (selected) setFile(selected);
+    } catch (uploadError) {
+      setFile(null);
+      setError(mediaErrorMessage(uploadError));
+      e.target.value = "";
+    }
   };
 
   const handleUpload = async () => {
@@ -94,29 +67,22 @@ export default function UserAccount() {
     setError("");
     setSuccess(false);
 
-    let uploadFile = file;
     try {
-      if (file.size > 2 * 1024 * 1024) {
-        // 2 MB'den büyükse sıkıştır
-        uploadFile = await compressImage(file, 2, 1024);
-      }
-    } catch {
-      setError("Resim sıkıştırılamadı.");
-      setLoading(false);
-      return;
-    }
-
-    const fd = new FormData();
-    fd.append("picture", uploadFile);
-
-    try {
-      const res = await api.post("/profile-pictures", fd);
+      const asset = await uploadMediaFile(file, "profile_image");
+      const res = await api.post("/profile-pictures", {
+        mediaAssetId: asset.id,
+      });
       setProfilePic(res.data);
       setFile(null);
       setSuccess(true);
       setTimeout(() => setSuccess(false), 3000);
     } catch (err) {
-      setError(err.response?.data?.message || "Yükleme hatası");
+      setError(
+        mediaErrorMessage(
+          err,
+          err.response?.data?.message || "Yükleme hatası"
+        )
+      );
     } finally {
       setLoading(false);
     }
@@ -133,7 +99,7 @@ export default function UserAccount() {
     }
   };
 
-  if (error)
+  if (error && !user)
     return <div className="text-red-500 text-center mt-10">{error}</div>;
   if (!user) return <div className="text-center mt-10">Yükleniyor…</div>;
 
@@ -144,6 +110,15 @@ export default function UserAccount() {
       <h2 className="text-2xl sm:text-3xl font-semibold text-dark1 text-center mb-6">
         Merhaba, <span className="text-blue-700">{user.firstName}</span>!
       </h2>
+
+      {error && (
+        <div
+          role="alert"
+          className="mb-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"
+        >
+          {error}
+        </div>
+      )}
 
       {/* Bilgiler */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6 text-dark2 text-sm sm:text-base">
@@ -247,7 +222,7 @@ export default function UserAccount() {
               </div>
             ) : (
               <p className="mt-1 text-xs text-gray-500">
-                Maks. 2MB. Büyük görseller otomatik sıkıştırılır.
+                Maks. 5 MB. Büyük görseller otomatik optimize edilir.
               </p>
             )}
           </div>

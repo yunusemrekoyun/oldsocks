@@ -1,13 +1,12 @@
 import React from "react";
 import PropTypes from "prop-types";
 import { Link } from "react-router-dom";
+import { formatTurkishDate } from "../../utils/date";
 
 export default function RecentBlogItem({ post }) {
-  const { slug, coverImageUrl, title, createdAt } = post;
-  const formattedDate = new Date(createdAt).toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
+  const { slug, coverImageUrl, title, createdAt, publishedAt } = post;
+  const formattedDate = formatTurkishDate(publishedAt || createdAt, {
+    includeYear: true,
   });
 
   return (
@@ -36,5 +35,6 @@ RecentBlogItem.propTypes = {
     coverImageUrl: PropTypes.string.isRequired,
     title: PropTypes.string.isRequired,
     createdAt: PropTypes.string.isRequired,
+    publishedAt: PropTypes.string,
   }).isRequired,
 };

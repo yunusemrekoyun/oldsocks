@@ -5,7 +5,7 @@ import api from "../../../api";
 // eslint-disable-next-line no-unused-vars
 import { motion } from "framer-motion";
 
-const Login = ({ onSwitch, onForgotPassword }) => {
+const Login = ({ onSwitch, onForgotPassword, redirectTo }) => {
   const [form, setForm] = useState({ email: "", password: "" });
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
@@ -33,7 +33,13 @@ const Login = ({ onSwitch, onForgotPassword }) => {
       setIsLoggedIn(true);
       setSuccess(true);
       setForm({ email: "", password: "" });
-      setTimeout(() => navigate("/profile"), 800);
+      const destination =
+        typeof redirectTo === "string" &&
+        redirectTo.startsWith("/") &&
+        !redirectTo.startsWith("//")
+          ? redirectTo
+          : "/profile";
+      setTimeout(() => navigate(destination, { replace: true }), 800);
     } catch (err) {
       const status = err?.response?.status;
       const rawMsg = String(err?.response?.data?.message || "").toLowerCase();
@@ -126,7 +132,7 @@ const Login = ({ onSwitch, onForgotPassword }) => {
           onClick={onForgotPassword}
           className="text-sm font-medium text-dark2 hover:text-dark1 hover:underline"
         >
-          Sifremi Unuttum
+          Şifremi Unuttum
         </button>
       </div>
 

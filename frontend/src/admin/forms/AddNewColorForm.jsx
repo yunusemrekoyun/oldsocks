@@ -5,9 +5,12 @@ import ToastAlert from "../../components/ui/ToastAlert";
 import { v4 as uuid } from "uuid";
 import { useUploadQueue } from "../../context/UploadQueueContext";
 import {
-  compressImageFileList,
-  MAX_IMAGE_BYTES,
-} from "../../utils/imageCompression";
+  mediaErrorMessage,
+  startMediaPreparation,
+  uploadMediaFile,
+  uploadMediaFiles,
+  validateMediaFile,
+} from "../../services/mediaUpload";
 import { normalizePricing, resolvePricingForSubmit } from "../../utils/pricing";
 
 const Badge = ({ children }) => (
@@ -44,6 +47,8 @@ export default function AddNewColorForm({ product, onClose, onSaved }) {
   // Mevcut (base üründen gelen) medya
   const [existingVideo, setExistV] = useState("");
   const [existingImages, setExistI] = useState([]);
+  const [existingVideoAssetId, setExistingVideoAssetId] = useState(null);
+  const [existingImageAssetIds, setExistingImageAssetIds] = useState([]);
   const [existingCoverIndex, setExistingCoverIndex] = useState(
     -1 /* base'ten gelir gelmez set edilecek */
   );
@@ -81,11 +86,20 @@ export default function AddNewColorForm({ product, onClose, onSaved }) {
           price: pricing.values.price,
           description: data.description ?? "",
           color: "",
-          sizes: data.sizes?.length ? data.sizes : [],
+          sizes: data.sizes?.length
+            ? data.sizes.map((row) => ({ ...row, id: uuid() }))
+            : [],
         });
         setExistV(data.video || "");
         const exImgs = data.images || [];
         setExistI(exImgs);
+        setExistingVideoAssetId(data.videoAssetId || null);
+        setExistingImageAssetIds(data.imageAssetIds || []);
+        setIsSizeLess(
+          Array.isArray(data.sizes) &&
+            data.sizes.length === 1 &&
+            !String(data.sizes[0]?.size || "").trim()
+        );
         setExistingCoverIndex(exImgs.length ? 0 : -1); // varsa ilki kapak
         setNewCoverIndex(-1);
       } catch (err) {
@@ -103,6 +117,11 @@ export default function AddNewColorForm({ product, onClose, onSaved }) {
   const originalNumber = toNumber(formData.originalPrice);
   const priceNumber = toNumber(formData.price);
   const pricingReady = originalNumber !== null && priceNumber !== null;
+  const pricingValid =
+    pricingReady &&
+    originalNumber >= 0 &&
+    priceNumber >= 0 &&
+    priceNumber <= originalNumber;
   const hasDiscount =
     pricingReady && priceNumber !== null && originalNumber !== null
       ? priceNumber < originalNumber - 0.005
@@ -191,6 +210,7 @@ export default function AddNewColorForm({ product, onClose, onSaved }) {
   const clearVideo = () => setVideo(null);
 
   const removeExistingImageAt = (idx) => {
+    setExistingImageAssetIds((prev) => prev.filter((_, i) => i !== idx));
     setExistI((prev) => {
       const next = prev.filter((_, i) => i !== idx);
       if (existingCoverIndex === idx) {
@@ -201,14 +221,27 @@ export default function AddNewColorForm({ product, onClose, onSaved }) {
       return next;
     });
   };
-  const clearExistingVideo = () => setExistV("");
+  const clearExistingVideo = () => {
+    setExistV("");
+    setExistingVideoAssetId(null);
+  };
 
-  // En az bir medya var mı? (mevcut + yeni birleşik)
-  const hasAnyMedia =
-    (images && images.length > 0) ||
-    !!video ||
-    (existingImages && existingImages.length > 0) ||
-    !!existingVideo;
+  const hasProductImage =
+    images.length > 0 || existingImageAssetIds.length > 0;
+  const stockRowsValid =
+    formData.sizes.length > 0 &&
+    formData.sizes.every((row) => {
+      const stock = Number(row.stock);
+      const sizeValid = isSizeLess || String(row.size || "").trim().length > 0;
+      return sizeValid && Number.isSafeInteger(stock) && stock >= 0;
+    });
+  const formValid = Boolean(
+    formData.name.trim() &&
+      formData.color.trim() &&
+      pricingValid &&
+      hasProductImage &&
+      stockRowsValid
+  );
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -216,16 +249,16 @@ export default function AddNewColorForm({ product, onClose, onSaved }) {
     if (!formData.color.trim())
       return setToast({ msg: "Renk alanı zorunludur.", type: "error" });
 
-    if (!hasAnyMedia) {
+    if (!hasProductImage) {
       return setToast({
-        msg: "En az bir görsel veya video eklemelisiniz.",
+        msg: "Ürün renginde en az bir görsel bulunmalıdır.",
         type: "error",
       });
     }
 
-    if (!isSizeLess && formData.sizes.length === 0)
+    if (!stockRowsValid)
       return setToast({
-        msg: "En az bir beden satırı ekleyin.",
+        msg: "Bedenleri ve sıfır veya daha büyük tam sayı stokları tamamlayın.",
         type: "error",
       });
 
@@ -248,34 +281,7 @@ export default function AddNewColorForm({ product, onClose, onSaved }) {
     let orderedNew = [...images];
     if (orderedNew.length > 0 && newCoverIndex >= 0) {
       orderedNew = moveIndexToFront(orderedNew, newCoverIndex);
-    } else if (orderedNew.length === 0 && existingCoverIndex >= 0) {
-      // sadece bilgi amaçlı — submission'ı engellemiyoruz
-      // (İstersen bu uyarıyı kaldırabilirsin.)
-      setToast({
-        msg: "Kapak mevcut görsellerden seçildi. Mevcut sıralama base üründen miras alınır; kapak sıraya yansımayabilir. En az bir yeni görsel yükleyerek kapağı garanti edebilirsin.",
-        type: "error",
-      });
     }
-
-    const fd = new FormData();
-    fd.append("name", formData.name || "");
-    fd.append("price", pricingResult.values.price);
-    fd.append("originalPrice", pricingResult.values.originalPrice);
-    fd.append("discount", pricingResult.values.discount || "0.00");
-    fd.append("description", formData.description || "");
-    fd.append("color", formData.color.trim());
-    fd.append(
-      "sizes",
-      JSON.stringify(
-        isSizeLess
-          ? [{ size: "", stock: formData.sizes[0]?.stock || 0 }]
-          : formData.sizes
-      )
-    );
-
-    // Yeni medya ekle (yeni görseller varsa backend sadece onları kullanır)
-    if (video) fd.append("video", video);
-    orderedNew.forEach((img) => fd.append("images", img));
 
     const taskId = uuid();
     addTask({
@@ -286,12 +292,47 @@ export default function AddNewColorForm({ product, onClose, onSaved }) {
 
     try {
       setSubmitting(true);
-      await api.post(`/products/new-color/${product._id}`, fd, {
-        headers: { "Content-Type": "multipart/form-data" },
-        onUploadProgress: (ev) =>
-          updateTask(taskId, {
-            progress: Math.round((ev.loaded * 100) / ev.total),
-          }),
+      const progressHandler = (progress) =>
+        updateTask(taskId, {
+          progress:
+            progress.phase === "processing"
+              ? 95
+              : progress.phase === "ready"
+              ? 100
+              : Math.round(progress.percent * 0.9),
+          phase: progress.phase,
+          status: progress.phase,
+        });
+      const [newImageAssets, newVideoAsset] = await Promise.all([
+        uploadMediaFiles(orderedNew, "product_image", {
+          concurrency: 2,
+          onProgress: progressHandler,
+        }),
+        video
+          ? uploadMediaFile(video, "product_video", {
+              onProgress: progressHandler,
+            })
+          : Promise.resolve(null),
+      ]);
+      let keptIds = [...existingImageAssetIds];
+      if (orderedNew.length === 0 && existingCoverIndex >= 0) {
+        keptIds = moveIndexToFront(keptIds, existingCoverIndex);
+      }
+      await api.post(`/products/new-color/${product._id}`, {
+        name: formData.name || "",
+        price: pricingResult.values.price,
+        originalPrice: pricingResult.values.originalPrice,
+        discount: pricingResult.values.discount || "0.00",
+        description: formData.description || "",
+        color: formData.color.trim(),
+        sizes: isSizeLess
+          ? [{ size: "", stock: formData.sizes[0]?.stock || 0 }]
+          : formData.sizes,
+        imageAssetIds: [
+          ...newImageAssets.map((asset) => asset.id),
+          ...keptIds,
+        ].slice(0, 6),
+        videoAssetId: newVideoAsset?.id || existingVideoAssetId || null,
       });
 
       updateTask(taskId, { progress: 100, status: "success" });
@@ -300,16 +341,18 @@ export default function AddNewColorForm({ product, onClose, onSaved }) {
       setToast({ msg: "Yeni renk eklendi.", type: "success" });
       onSaved();
     } catch (err) {
+      const message = mediaErrorMessage(
+        err,
+        err?.response?.data?.message || "Yeni renk eklenirken hata oluştu."
+      );
       updateTask(taskId, {
         progress: 100,
         status: "error",
-        errorMsg:
-          err?.response?.data?.message || "Yeni renk eklenirken hata oluştu.",
+        errorMsg: message,
       });
       setTimeout(() => removeTask(taskId), 4000);
       setToast({
-        msg:
-          err?.response?.data?.message || "Yeni renk eklenirken hata oluştu.",
+        msg: message,
         type: "error",
       });
     } finally {
@@ -409,11 +452,18 @@ export default function AddNewColorForm({ product, onClose, onSaved }) {
               type="checkbox"
               checked={isSizeLess}
               onChange={(e) => {
-                setIsSizeLess(e.target.checked);
+                const checked = e.target.checked;
+                setIsSizeLess(checked);
                 setFormData((p) => ({
                   ...p,
-                  sizes: e.target.checked
-                    ? [{ id: uuid(), size: "", stock: 0 }]
+                  sizes: checked
+                    ? [
+                        {
+                          id: uuid(),
+                          size: "",
+                          stock: p.sizes[0]?.stock || 0,
+                        },
+                      ]
                     : [],
                 }));
               }}
@@ -422,7 +472,31 @@ export default function AddNewColorForm({ product, onClose, onSaved }) {
           </label>
 
           {/* Beden & Stok */}
-          {!isSizeLess && (
+          {isSizeLess ? (
+            <div>
+              <label className="block text-sm font-medium">Toplam Stok *</label>
+              <input
+                type="number"
+                min="0"
+                step="1"
+                inputMode="numeric"
+                value={formData.sizes[0]?.stock ?? 0}
+                onChange={(e) =>
+                  setFormData((current) => ({
+                    ...current,
+                    sizes: [
+                      {
+                        id: current.sizes[0]?.id || uuid(),
+                        size: "",
+                        stock: Number(e.target.value),
+                      },
+                    ],
+                  }))
+                }
+                className="w-full px-3 py-2 border rounded-lg"
+              />
+            </div>
+          ) : (
             <div className="space-y-3">
               <div className="flex justify-between items-center">
                 <label className="text-sm font-medium">
@@ -450,6 +524,9 @@ export default function AddNewColorForm({ product, onClose, onSaved }) {
                   <input
                     value={stock}
                     type="number"
+                    min="0"
+                    step="1"
+                    inputMode="numeric"
                     onChange={(e) =>
                       handleSizeChange(i, "stock", e.target.value)
                     }
@@ -638,7 +715,19 @@ export default function AddNewColorForm({ product, onClose, onSaved }) {
               <input
                 type="file"
                 accept="video/*"
-                onChange={(e) => setVideo(e.target.files?.[0] || null)}
+                onChange={(e) => {
+                  const selected = e.target.files?.[0] || null;
+                  try {
+                    if (selected) {
+                      validateMediaFile(selected, "product_video");
+                      startMediaPreparation(selected, "product_video");
+                    }
+                    setVideo(selected);
+                  } catch (error) {
+                    setToast({ msg: mediaErrorMessage(error), type: "error" });
+                    e.target.value = "";
+                  }
+                }}
                 className="text-sm"
               />
             </div>
@@ -657,35 +746,33 @@ export default function AddNewColorForm({ product, onClose, onSaved }) {
                     setNewCoverIndex(-1);
                     return;
                   }
-                  const { processed, failed } = await compressImageFileList(
-                    files,
-                    { maxBytes: MAX_IMAGE_BYTES }
-                  );
+                  const selected = Array.from(files);
                   e.target.value = "";
-                  if (failed.length) {
-                    const maxMb =
-                      Math.round((MAX_IMAGE_BYTES / (1024 * 1024)) * 10) / 10;
+                  if (selected.length + existingImageAssetIds.length > 6) {
                     setToast({
-                      msg: `${failed
-                        .map((f) => f.name)
-                        .join(
-                          ", "
-                        )} görseli sıkıştırılamadı. Lütfen ${maxMb}MB altında dosyalar seçin.`,
+                      msg: "Bir üründe en fazla 6 görsel olabilir.",
                       type: "error",
                     });
+                    return;
                   }
-                  if (processed.length) {
-                    setImages(processed);
+                  try {
+                    selected.forEach((file) => {
+                      validateMediaFile(file, "product_image");
+                      startMediaPreparation(file, "product_image");
+                    });
+                    setImages(selected);
                     setNewCoverIndex(-1);
+                  } catch (error) {
+                    setToast({ msg: mediaErrorMessage(error), type: "error" });
                   }
                 }}
                 className="text-sm"
               />
             </div>
 
-            {!hasAnyMedia && (
+            {!hasProductImage && (
               <p className="text-xs text-red-600">
-                En az bir görsel veya video eklemelisiniz.
+                Ürün renginde en az bir görsel bulunmalıdır.
               </p>
             )}
           </div>
@@ -701,9 +788,9 @@ export default function AddNewColorForm({ product, onClose, onSaved }) {
             </button>
             <button
               type="submit"
-              disabled={submitting || !pricingReady || !hasAnyMedia}
+              disabled={submitting || !formValid}
               className={`px-4 py-2 rounded-lg text-white ${
-                submitting || !pricingReady || !hasAnyMedia
+                submitting || !formValid
                   ? "bg-gray-300 cursor-not-allowed"
                   : "bg-green-600 hover:bg-green-700"
               }`}

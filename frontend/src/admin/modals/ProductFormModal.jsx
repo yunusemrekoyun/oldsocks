@@ -4,9 +4,12 @@ import api from "../../../api";
 import { useUploadQueue } from "../../context/UploadQueueContext";
 import { v4 as uuidv4 } from "uuid";
 import {
-  compressImageFileList,
-  MAX_IMAGE_BYTES,
-} from "../../utils/imageCompression";
+  mediaErrorMessage,
+  startMediaPreparation,
+  uploadMediaFile,
+  uploadMediaFiles,
+  validateMediaFile,
+} from "../../services/mediaUpload";
 import { normalizePricing, resolvePricingForSubmit } from "../../utils/pricing";
 
 const Badge = ({ children }) => (
@@ -31,6 +34,7 @@ export default function ProductFormModal({ product, onClose, onSaved }) {
   const [loading, setLoading] = useState(false);
   const { addTask, updateTask, removeTask } = useUploadQueue();
   const [isNewColor, setIsNewColor] = useState(false);
+  const [isSizeLess, setIsSizeLess] = useState(false);
   const [feedback, setFeedback] = useState(null);
 
   // Yeni görseller için önizleme URL’leri ve kapak index’i
@@ -90,6 +94,11 @@ export default function ProductFormModal({ product, onClose, onSaved }) {
           color: "",
           parentProductId: p._id,
         });
+        setIsSizeLess(
+          Array.isArray(p.sizes) &&
+            p.sizes.length === 1 &&
+            !String(p.sizes[0]?.size || "").trim()
+        );
         setImageUrls([]);
         setCoverIndex(-1);
         setVideoUrl(null);
@@ -133,6 +142,11 @@ export default function ProductFormModal({ product, onClose, onSaved }) {
           color: p.color ?? "",
           parentProductId: p.parentProductId ?? "",
         });
+        setIsSizeLess(
+          Array.isArray(p.sizes) &&
+            p.sizes.length === 1 &&
+            !String(p.sizes[0]?.size || "").trim()
+        );
         setImageUrls([]);
         setCoverIndex(-1);
         setVideoUrl(null);
@@ -154,6 +168,7 @@ export default function ProductFormModal({ product, onClose, onSaved }) {
         color: "",
         parentProductId: "",
       });
+      setIsSizeLess(false);
       setImageUrls([]);
       setCoverIndex(-1);
       setVideoUrl(null);
@@ -168,7 +183,6 @@ export default function ProductFormModal({ product, onClose, onSaved }) {
     // varsayılan kapak ilk görsel
     setCoverIndex(urls.length ? 0 : -1);
     return () => urls.forEach((u) => URL.revokeObjectURL(u));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [form?.images]);
 
   /* --------- Video için preview URL ----- */
@@ -180,7 +194,6 @@ export default function ProductFormModal({ product, onClose, onSaved }) {
     const url = URL.createObjectURL(form.video);
     setVideoUrl(url);
     return () => URL.revokeObjectURL(url);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [form?.video]);
 
   /* --------- Parent/Child kategori seçimi --------- */
@@ -205,6 +218,11 @@ export default function ProductFormModal({ product, onClose, onSaved }) {
   const priceNumber = toNumber(form?.price);
 
   const pricingReady = originalNumber !== null && priceNumber !== null;
+  const pricingValid =
+    pricingReady &&
+    originalNumber >= 0 &&
+    priceNumber >= 0 &&
+    priceNumber <= originalNumber;
   const hasDiscount =
     pricingReady && priceNumber !== null && originalNumber !== null
       ? priceNumber < originalNumber - 0.005
@@ -251,7 +269,17 @@ export default function ProductFormModal({ product, onClose, onSaved }) {
     const { name, value, files } = e.target;
     if (files) {
       if (name === "video") {
-        setForm((f) => ({ ...f, video: files[0] }));
+        try {
+          if (files[0]) {
+            validateMediaFile(files[0], "product_video");
+            startMediaPreparation(files[0], "product_video");
+          }
+          setForm((f) => ({ ...f, video: files[0] }));
+          setFeedback(null);
+        } catch (error) {
+          setFeedback({ type: "error", message: mediaErrorMessage(error) });
+          e.target.value = "";
+        }
         return;
       }
       const selectedFiles = Array.from(files);
@@ -260,24 +288,23 @@ export default function ProductFormModal({ product, onClose, onSaved }) {
         setFeedback(null);
         return;
       }
-      setFeedback(null);
-      const { processed, failed } = await compressImageFileList(selectedFiles, {
-        maxBytes: MAX_IMAGE_BYTES,
-      });
       e.target.value = "";
-      if (failed.length) {
-        const maxMb = Math.round((MAX_IMAGE_BYTES / (1024 * 1024)) * 10) / 10;
+      if (selectedFiles.length > 6) {
         setFeedback({
           type: "error",
-          message: `${failed
-            .map((f) => f.name)
-            .join(
-              ", "
-            )} görseli sıkıştırılamadı. Lütfen ${maxMb}MB altında dosyalar seçin.`,
+          message: "Bir ürüne en fazla 6 görsel ekleyebilirsiniz.",
         });
+        return;
       }
-      if (processed.length) {
-        setForm((f) => ({ ...f, images: processed }));
+      try {
+        selectedFiles.forEach((file) => {
+          validateMediaFile(file, "product_image");
+          startMediaPreparation(file, "product_image");
+        });
+        setForm((f) => ({ ...f, images: selectedFiles }));
+        setFeedback(null);
+      } catch (error) {
+        setFeedback({ type: "error", message: mediaErrorMessage(error) });
       }
       return;
     }
@@ -319,17 +346,28 @@ export default function ProductFormModal({ product, onClose, onSaved }) {
   };
 
   /* --------- Validasyon --------- */
-  const isValid =
-    form && form.name.trim() && (form.category || form.parent) && pricingReady;
+  const stockRowsValid =
+    form &&
+    form.sizes.length > 0 &&
+    form.sizes.every((row) => {
+      const stock = Number(row.stock);
+      const sizeValid = isSizeLess || String(row.size || "").trim().length > 0;
+      return sizeValid && Number.isSafeInteger(stock) && stock >= 0;
+    });
+  const hasImages = Boolean(form?.images?.length);
+  const isValid = Boolean(
+    form &&
+      form.name.trim() &&
+      (form.category || form.parent) &&
+      pricingValid &&
+      stockRowsValid &&
+      hasImages
+  );
 
   /* --------- Submit --------- */
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!isValid) return;
-
-    setLoading(true);
-    const id = uuidv4();
-    addTask({ id, name: form.name || "Yeni Ürün", progress: 0 });
 
     const pricingResult = resolvePricingForSubmit({
       originalPrice: form.originalPrice,
@@ -343,9 +381,12 @@ export default function ProductFormModal({ product, onClose, onSaved }) {
         message:
           "Fiyatı tamamlamak için en az iki alanı doldurun ve 'Fiyatı Hesapla' butonuna basın.",
       });
-      setLoading(false);
       return;
     }
+
+    setLoading(true);
+    const id = uuidv4();
+    addTask({ id, name: form.name || "Yeni Ürün", progress: 0 });
 
     const { values } = pricingResult;
 
@@ -355,35 +396,59 @@ export default function ProductFormModal({ product, onClose, onSaved }) {
         ? moveIndexToFront(form.images, coverIndex)
         : form.images || [];
 
-    const fd = new FormData();
-    fd.append("name", form.name);
-    if (form.video) fd.append("video", form.video);
-    orderedImages.forEach((img) => fd.append("images", img));
-
-    // 🎯 Backend'e giden alanlar:
-    fd.append("price", values.price);
-    fd.append("originalPrice", values.originalPrice);
-    fd.append("discount", values.discount || "0.00");
-    fd.append("description", form.description || "");
-    fd.append("color", form.color || "");
-    fd.append("parentProductId", form.parentProductId || "");
-    fd.append("category", form.category || form.parent);
-    fd.append("sizes", JSON.stringify(form.sizes));
-
     try {
-      const config = {
-        headers: { "Content-Type": "multipart/form-data" },
-        onUploadProgress: (e) => {
-          if (!e.total) return;
-          const pct = Math.round((e.loaded * 100) / e.total);
-          updateTask(id, { progress: pct });
-        },
+      const itemCount = orderedImages.length + (form.video ? 1 : 0);
+      const itemProgress = new Array(Math.max(1, itemCount)).fill(0);
+      const reportProgress = (index, progress) => {
+        itemProgress[index] =
+          progress.phase === "processing"
+            ? 95
+            : progress.phase === "ready"
+            ? 100
+            : Math.round(progress.percent * 0.9);
+        const total = Math.round(
+          itemProgress.reduce((sum, value) => sum + value, 0) /
+            itemProgress.length
+        );
+        updateTask(id, {
+          progress: total,
+          phase: progress.phase,
+          status: progress.phase === "ready" ? "uploading" : progress.phase,
+        });
+      };
+
+      const imagePromise = uploadMediaFiles(orderedImages, "product_image", {
+        concurrency: 2,
+        onProgress: (progress, index) => reportProgress(index, progress),
+      });
+      const videoPromise = form.video
+        ? uploadMediaFile(form.video, "product_video", {
+            onProgress: (progress) =>
+              reportProgress(orderedImages.length, progress),
+          })
+        : Promise.resolve(null);
+      const [imageAssets, videoAsset] = await Promise.all([
+        imagePromise,
+        videoPromise,
+      ]);
+      const payload = {
+        name: form.name,
+        imageAssetIds: imageAssets.map((asset) => asset.id),
+        videoAssetId: videoAsset?.id || null,
+        price: values.price,
+        originalPrice: values.originalPrice,
+        discount: values.discount || "0.00",
+        description: form.description || "",
+        color: form.color || "",
+        parentProductId: form.parentProductId || "",
+        category: form.category || form.parent,
+        sizes: form.sizes,
       };
 
       if (isEdit && !isNewColor) {
-        await api.put(`/products/${product._id}`, fd, config);
+        await api.put(`/products/${product._id}`, payload);
       } else {
-        await api.post("/products", fd, config);
+        await api.post("/products", payload);
       }
 
       updateTask(id, { progress: 100, status: "success" });
@@ -391,11 +456,16 @@ export default function ProductFormModal({ product, onClose, onSaved }) {
       onSaved();
     } catch (err) {
       console.error("Ürün kaydı hatası:", err);
+      const message = mediaErrorMessage(
+        err,
+        err.response?.data?.message || "Ürün kaydedilemedi."
+      );
       updateTask(id, {
         progress: 100,
         status: "error",
-        errorMsg: err.response?.data?.message || "Ürün kaydedilemedi.",
+        errorMsg: message,
       });
+      setFeedback({ type: "error", message });
       setTimeout(() => removeTask(id), 4000);
     } finally {
       setLoading(false);
@@ -558,6 +628,45 @@ export default function ProductFormModal({ product, onClose, onSaved }) {
 
           {/* Beden & Stok */}
           <div>
+            <label className="mb-3 flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={isSizeLess}
+                onChange={(e) => {
+                  const checked = e.target.checked;
+                  setIsSizeLess(checked);
+                  setForm((current) => ({
+                    ...current,
+                    sizes: checked
+                      ? [{ size: "", stock: current.sizes[0]?.stock || 0 }]
+                      : [],
+                  }));
+                }}
+              />
+              Bedensiz ürün (tek stok)
+            </label>
+
+            {isSizeLess ? (
+              <div>
+                <label className="block text-sm font-medium">Toplam Stok *</label>
+                <input
+                  type="number"
+                  inputMode="numeric"
+                  min="0"
+                  step="1"
+                  value={form.sizes[0]?.stock ?? 0}
+                  onChange={(e) =>
+                    setForm((current) => ({
+                      ...current,
+                      sizes: [{ size: "", stock: Number(e.target.value) }],
+                    }))
+                  }
+                  className="w-full border px-3 py-2 rounded-lg"
+                  required
+                />
+              </div>
+            ) : (
+              <>
             <div className="flex items-center justify-between">
               <label className="block text-sm font-medium">Bedenler</label>
               <button
@@ -586,6 +695,8 @@ export default function ProductFormModal({ product, onClose, onSaved }) {
                   />
                   <input
                     type="number"
+                    min="0"
+                    step="1"
                     value={s.stock}
                     onChange={(e) => {
                       const copy = [...form.sizes];
@@ -607,6 +718,8 @@ export default function ProductFormModal({ product, onClose, onSaved }) {
                 </div>
               ))}
             </div>
+              </>
+            )}
           </div>
 
           {/* Açıklama */}
@@ -724,6 +837,11 @@ export default function ProductFormModal({ product, onClose, onSaved }) {
                     );
                   })}
                 </div>
+              )}
+              {!hasImages && (
+                <p className="mt-2 text-xs text-red-600">
+                  Ürünü kaydetmek için en az bir görsel seçin.
+                </p>
               )}
             </div>
           </div>

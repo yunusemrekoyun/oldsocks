@@ -4,6 +4,7 @@
 # === Build ve Output ===
 **/dist
 **/build
+/storage/media/
 *.local
 
 # === Log dosyaları ===

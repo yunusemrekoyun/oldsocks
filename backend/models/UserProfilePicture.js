@@ -12,11 +12,17 @@ const UserProfilePictureSchema = new Schema(
     },
     url: {
       type: String,
-      required: true,
+      default: "",
     },
     publicId: {
       type: String,
-      required: true,
+      default: "",
+    },
+    mediaAsset: {
+      type: Schema.Types.ObjectId,
+      ref: "MediaAsset",
+      default: null,
+      index: true,
     },
   },
   { timestamps: true }

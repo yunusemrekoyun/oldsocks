@@ -13,12 +13,12 @@ const OrderItemSchema = new mongoose.Schema({
 
 const GuestSchema = new mongoose.Schema(
   {
-    firstName: { type: String, trim: true },
-    lastName: { type: String, trim: true },
-    email: { type: String, trim: true },
-    phone: { type: String, trim: true },
+    firstName: { type: String, trim: true, maxlength: 80 },
+    lastName: { type: String, trim: true, maxlength: 80 },
+    email: { type: String, trim: true, maxlength: 100 },
+    phone: { type: String, trim: true, maxlength: 20 },
     identityNumber: { type: String, trim: true },
-    registrationAddress: { type: String, trim: true },
+    registrationAddress: { type: String, trim: true, maxlength: 500 },
     identityFallbackUsed: { type: Boolean, default: false },
   },
   { _id: false }
@@ -40,12 +40,12 @@ const OrderSchema = new mongoose.Schema(
     customerMailSentAt: { type: Date, default: null },
     adminMailSentAt: { type: Date, default: null },
     address: {
-      title: { type: String, required: true },
-      mainaddress: { type: String, required: true },
-      street: { type: String, required: true },
-      district: { type: String },
-      city: { type: String, required: true },
-      postalCode: { type: String },
+      title: { type: String, required: true, trim: true, maxlength: 80 },
+      mainaddress: { type: String, required: true, trim: true, maxlength: 500 },
+      street: { type: String, required: true, trim: true, maxlength: 180 },
+      district: { type: String, trim: true, maxlength: 120 },
+      city: { type: String, required: true, trim: true, maxlength: 100 },
+      postalCode: { type: String, trim: true, maxlength: 20 },
     },
 
     shipping: {
@@ -84,12 +84,20 @@ const OrderSchema = new mongoose.Schema(
 
     cancelReason: { type: String, default: null },
     cancelledAt: { type: Date, default: null },
+    paymentReceivedAt: { type: Date, default: null },
 
     paymentId: { type: String },
     conversationId: { type: String, required: true, unique: true },
     status: {
       type: String,
-      enum: ["pending", "paid", "shipped", "completed", "cancelled"],
+      enum: [
+        "pending",
+        "payment_review",
+        "paid",
+        "shipped",
+        "completed",
+        "cancelled",
+      ],
       default: "pending",
     },
     stockUpdated: { type: Boolean, default: false },

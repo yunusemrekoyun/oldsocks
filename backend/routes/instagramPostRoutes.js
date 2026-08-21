@@ -6,8 +6,8 @@ const controller = require("../controllers/instagramPostController");
 const { verifyToken } = require("../middleware/auth");
 const { allowRoles } = require("../middleware/roles");
 
-// Yalnızca admin erişebilir
-router.get("/", controller.getAllInstagramPosts);
+router.get("/admin", verifyToken, allowRoles("admin"), controller.getAllInstagramPosts);
+router.get("/", controller.getPublicInstagramPosts);
 router.post(
   "/",
   verifyToken,

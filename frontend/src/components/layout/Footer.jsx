@@ -53,6 +53,7 @@ const Footer = () => (
             href="https://www.facebook.com/Oldsockscollection/"
             target="_blank"
             rel="noopener noreferrer"
+            aria-label="Oldsocks Facebook hesabı"
           >
             <FaFacebookF className="hover:text-purple-500 cursor-pointer" />
           </a>
@@ -60,6 +61,7 @@ const Footer = () => (
             href="https://www.instagram.com/oldscks/"
             target="_blank"
             rel="noopener noreferrer"
+            aria-label="Oldsocks Instagram hesabı"
           >
             <FaInstagram className="hover:text-purple-500 cursor-pointer" />
           </a>

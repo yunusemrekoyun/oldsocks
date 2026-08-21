@@ -4,11 +4,22 @@ const router = express.Router();
 const blogCtrl = require("../controllers/blogController");
 const { verifyToken } = require("../middleware/auth");
 const { allowRoles } = require("../middleware/roles");
-const { uploadBlogCover } = require("../middleware/upload");
 
 // — Public —
 // Tüm bloglar (isteğe bağlı ?tag=tagName ile filtrelenebilir)
 router.get("/tags", blogCtrl.getTags);
+router.get(
+  "/admin",
+  verifyToken,
+  allowRoles("admin"),
+  blogCtrl.getAdminBlogs
+);
+router.get(
+  "/admin/:id",
+  verifyToken,
+  allowRoles("admin"),
+  blogCtrl.getAdminBlog
+);
 router.get("/", blogCtrl.getBlogs);
 // Tek bir blog (slug veya ID ile)
 router.get("/:slugOrId", blogCtrl.getBlog);
@@ -19,7 +30,6 @@ router.post(
   "/",
   verifyToken,
   allowRoles("admin"),
-  uploadBlogCover.single("coverImage"),
   blogCtrl.createBlog
 );
 
@@ -28,7 +38,6 @@ router.put(
   "/:id",
   verifyToken,
   allowRoles("admin"),
-  uploadBlogCover.single("coverImage"),
   blogCtrl.updateBlog
 );
 

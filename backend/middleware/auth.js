@@ -6,7 +6,7 @@ async function resolveTokenUser(token) {
   const payload = jwt.verify(token, process.env.JWT_SECRET);
   const user = await User.findById(payload.userId).select("role tokenVersion");
   if (!user) {
-    const err = new Error("Kullanici bulunamadi");
+    const err = new Error("Kullanıcı bulunamadı");
     err.status = 401;
     throw err;
   }
@@ -15,7 +15,7 @@ async function resolveTokenUser(token) {
   const currentTokenVersion = Number(user?.tokenVersion || 0);
 
   if (payloadTokenVersion !== currentTokenVersion) {
-    const err = new Error("Oturum gecerliligini yitirdi");
+    const err = new Error("Oturum geçerliliğini yitirdi");
     err.status = 401;
     throw err;
   }

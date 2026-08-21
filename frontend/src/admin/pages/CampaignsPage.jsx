@@ -25,7 +25,12 @@ import ToastAlert from "../../components/ui/ToastAlert";
 import ConfirmDialog from "../../components/ui/ConfirmDialog";
 import { v4 as uuidv4 } from "uuid";
 import { useUploadQueue } from "../../context/UploadQueueContext";
-import { prepareBannerImageUpload } from "../../utils/bannerImageUpload";
+import {
+  mediaErrorMessage,
+  startMediaPreparation,
+  uploadMediaFile,
+  validateMediaFile,
+} from "../../services/mediaUpload";
 
 /* ───── Silme Onayı ───── */
 const ConfirmModal = ({ open, onClose, onConfirm, message }) => {
@@ -296,69 +301,38 @@ export default function CampaignsPage() {
 
     setSaving(true);
 
-    // 2) Görseli gerekiyorsa dönüştür/sıkıştır
-    let uploadFile = form.imageFile;
-    try {
-      if (uploadFile) {
-        const prepared = await prepareBannerImageUpload(uploadFile);
-        uploadFile = prepared.file;
-        setForm((f) => ({
-          ...f,
-          imageFile: prepared.file,
-          imageUrl: prepared.previewUrl,
-        }));
-
-        if (prepared.convertedFromApple) {
-          setToast({
-            msg: "Apple fotoğrafı JPEG'e çevrilip optimize edildi.",
-            type: "info",
-          });
-        } else if (prepared.optimized) {
-          setToast({
-            msg: "Görsel optimize edildi ve upload için hazırlandı.",
-            type: "info",
-          });
-        }
-      }
-    } catch (err) {
-      console.error("Image process error:", err);
-      setSaving(false);
-      setToast({
-        msg:
-          err?.message ||
-          "Görsel işlenirken sorun oluştu. Lütfen JPG/PNG yüklemeyi deneyin.",
-        type: "error",
-      });
-      return;
-    }
-
-    // 3) FormData hazırla
-    const fd = new FormData();
-    fd.append("title", form.title);
-    fd.append("subtitle", form.subtitle || ""); // opsiyonel
-    fd.append("buttonText", form.buttonText);
-    if (uploadFile) fd.append("image", uploadFile);
-    fd.append("products", JSON.stringify(form.products));
-    fd.append("categories", JSON.stringify(form.categories));
-
-    // 4) UploadQueue'ya ekle → DİREKT FORMU KAPAT
+    // UploadQueue'ya ekle
     const taskId = uuidv4();
     addTask({ id: taskId, name: form.title || "Kampanya", progress: 0 });
 
-    const cfg = {
-      headers: { "Content-Type": "multipart/form-data" },
-      onUploadProgress: (ev) => {
-        if (!ev.total) return;
-        const pct = Math.round((ev.loaded * 100) / ev.total);
-        updateTask(taskId, { progress: pct });
-      },
-    };
-
     try {
+      const asset = form.imageFile
+        ? await uploadMediaFile(form.imageFile, "campaign_image", {
+            onProgress: (progress) =>
+              updateTask(taskId, {
+                progress:
+                  progress.phase === "processing"
+                    ? 95
+                    : progress.phase === "ready"
+                    ? 100
+                    : Math.round(progress.percent * 0.9),
+                phase: progress.phase,
+                status: progress.phase,
+              }),
+          })
+        : null;
+      const payload = {
+        title: form.title,
+        subtitle: form.subtitle || "",
+        buttonText: form.buttonText,
+        products: form.products,
+        categories: form.categories,
+        ...(asset ? { imageAssetId: asset.id } : {}),
+      };
       if (form._id) {
-        await api.put(`/campaigns/${form._id}`, fd, cfg);
+        await api.put(`/campaigns/${form._id}`, payload);
       } else {
-        await api.post("/campaigns", fd, cfg);
+        await api.post("/campaigns", payload);
       }
 
       updateTask(taskId, { progress: 100, status: "success" });
@@ -372,14 +346,18 @@ export default function CampaignsPage() {
       setSaving(false);
     } catch (e) {
       console.error(e);
+      const message = mediaErrorMessage(
+        e,
+        e.response?.data?.message || "Kampanya kaydedilemedi"
+      );
       updateTask(taskId, {
         progress: 100,
         status: "error",
-        errorMsg: e.response?.data?.message || "Kampanya kaydedilemedi",
+        errorMsg: message,
       });
       setTimeout(() => removeTask(taskId), 4000);
       setToast({
-        msg: e.response?.data?.message || "Kampanya kaydedilemedi.",
+        msg: message,
         type: "error",
       });
       setSaving(false);
@@ -437,35 +415,27 @@ export default function CampaignsPage() {
     if (!file) return;
 
     try {
-      const prepared = await prepareBannerImageUpload(file);
+      validateMediaFile(file, "campaign_image");
+      startMediaPreparation(file, "campaign_image");
       setForm((f) => ({
         ...f,
-        imageFile: prepared.file,
-        imageUrl: prepared.previewUrl,
+        imageFile: file,
+        imageUrl: URL.createObjectURL(file),
       }));
       setDirty(true);
       setFieldErrors((e) => ({ ...e, image: "" }));
-
-      if (prepared.convertedFromApple) {
-        setToast({
-          msg: "Apple fotoğrafı otomatik çevrildi ve optimize edildi.",
-          type: "info",
-        });
-      } else if (prepared.optimized) {
-        setToast({
-          msg: "Görsel optimize edildi (yaklaşık 1920x600).",
-          type: "info",
-        });
-      }
+      setToast({
+        msg: "Görsel sunucuda banner boyutları için optimize edilecek.",
+        type: "info",
+      });
     } catch (err) {
       console.error(err);
       setFieldErrors((e) => ({
         ...e,
-        image: err?.message || "Görsel işlenemedi. Lütfen farklı bir dosya deneyin.",
+        image: mediaErrorMessage(err),
       }));
       setToast({
-        msg:
-          err?.message || "Görsel işlenemedi. Lütfen farklı bir dosya deneyin.",
+        msg: mediaErrorMessage(err),
         type: "error",
       });
     }

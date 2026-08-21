@@ -1,6 +1,10 @@
 // backend/controllers/orderController.js
 const Order = require("../models/Order");
-const { applyStockChanges } = require("../utils/updateStock");
+const {
+  finalizeOrderPayment,
+  StockUnavailableError,
+  OrderPaymentStateError,
+} = require("../utils/updateStock");
 const { dispatchOrderPlacedMail } = require("../utils/orderMailDispatch");
 const { recordCouponUsageForOrder } = require("../utils/couponUsageService");
 
@@ -29,7 +33,7 @@ exports.getAllOrders = async (req, res) => {
 exports.getUnseenPaidCount = async (req, res) => {
   try {
     const count = await Order.countDocuments({
-      status: "paid",
+      status: { $in: ["paid", "payment_review"] },
       adminSeenAt: null,
     });
     res.json({ count });
@@ -43,7 +47,7 @@ exports.markPaidOrdersSeen = async (req, res) => {
   try {
     const now = new Date();
     const result = await Order.updateMany(
-      { status: "paid", adminSeenAt: null },
+      { status: { $in: ["paid", "payment_review"] }, adminSeenAt: null },
       { $set: { adminSeenAt: now } }
     );
 
@@ -59,38 +63,69 @@ exports.markPaidOrdersSeen = async (req, res) => {
 exports.updateOrderStatus = async (req, res) => {
   try {
     const { status } = req.body;
-    const allowed = ["pending", "paid", "shipped", "completed", "cancelled"];
+    const allowed = [
+      "pending",
+      "payment_review",
+      "paid",
+      "shipped",
+      "completed",
+      "cancelled",
+    ];
     if (!allowed.includes(status)) {
       return res.status(400).json({ message: "Geçersiz status değeri." });
     }
 
-    const order = await Order.findById(req.params.id);
+    let order = await Order.findById(req.params.id);
     if (!order) {
       return res.status(404).json({ message: "Sipariş bulunamadı." });
     }
 
-    const previousStatus = order.status;
-    const wasPaidWithStockApplied = order.status === "paid" && order.stockUpdated;
+    if (status === "payment_review" && order.status !== "payment_review") {
+      return res.status(409).json({
+        message:
+          "Ödeme inceleme durumu yalnızca ödeme sistemi tarafından atanabilir.",
+      });
+    }
+    if (order.status === "payment_review" && status === "pending") {
+      return res.status(409).json({
+        message:
+          "Ödemesi alınmış inceleme kaydı tekrar bekleyen siparişe çevrilemez.",
+      });
+    }
 
-    // status değiştir
-    order.status = status;
+    if (
+      order.stockUpdated &&
+      ["pending", "cancelled"].includes(status)
+    ) {
+      return res.status(409).json({
+        message:
+          "Stoğu düşülmüş bir sipariş doğrudan bekleyen veya iptal durumuna alınamaz.",
+      });
+    }
+    if (
+      ["shipped", "completed"].includes(status) &&
+      !order.stockUpdated
+    ) {
+      return res.status(409).json({
+        message: "Ödemesi ve stok işlemi tamamlanmamış sipariş gönderilemez.",
+      });
+    }
+
     if (status === "paid") {
-      order.adminSeenAt = null;
-
-      if (!wasPaidWithStockApplied) {
-        try {
-          await applyStockChanges(order);
-          order.stockUpdated = true;
-          console.log("[OrderController] Admin manuel paid → stok güncellendi.");
-        } catch (e) {
-          order.status = previousStatus;
-          order.stockUpdated = false;
-          console.error("[OrderController] Stok düşürme hatası:", e);
+      try {
+        order = await finalizeOrderPayment(order._id);
+        console.log("[OrderController] Admin manuel paid → stok güncellendi.");
+      } catch (error) {
+        if (
+          error instanceof StockUnavailableError ||
+          error instanceof OrderPaymentStateError
+        ) {
           return res.status(409).json({
             message:
-              "Stok yetersizligi nedeniyle siparis paid durumuna alinamadi.",
+              "Sipariş mevcut durumu veya stok yetersizliği nedeniyle ödenmiş durumuna alınamadı.",
           });
         }
+        throw error;
       }
 
       await persistCouponUsage(order);
@@ -102,6 +137,8 @@ exports.updateOrderStatus = async (req, res) => {
           console.error("[OrderController] Mail gönderilemedi:", e);
         }
       }
+    } else {
+      order.status = status;
     }
 
     await order.save();
@@ -118,7 +155,7 @@ exports.getMyOrders = async (req, res) => {
   const userId = req.user.userId;
   const orders = await Order.find({
     user: userId,
-    status: { $in: ["paid", "shipped", "completed"] },
+    status: { $in: ["payment_review", "paid", "shipped", "completed"] },
   }).sort("-createdAt");
 
   res.json(orders);
@@ -159,6 +196,14 @@ exports.confirmOrderPayment = async (req, res) => {
   if (!order) return res.status(404).json({ message: "Sipariş bulunamadı." });
 
   if (order.status !== "paid") {
+    if (order.status === "payment_review") {
+      return res.status(409).json({
+        code: "PAYMENT_REVIEW",
+        orderNumber: order.orderNumber,
+        message:
+          "Ödemeniz alındı; siparişiniz stok veya tutar kontrolü için incelemeye alındı. Ekibimiz sizinle iletişime geçecek.",
+      });
+    }
     return res.status(409).json({ message: "Ödeme henüz onaylanmadı." });
   }
 

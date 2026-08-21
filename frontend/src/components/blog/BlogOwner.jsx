@@ -1,6 +1,6 @@
 // src/components/blog/BlogOwner.jsx
 import React from "react";
-import placeholderAvatar from "../../assets/blog/blog-owner/author.png";
+import placeholderAvatar from "../../assets/blog/blog-owner/author.webp";
 
 const BlogOwner = ({ avatar, name, bio }) => {
   // avatar props boşsa placeholder kullan

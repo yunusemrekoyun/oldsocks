@@ -7,6 +7,8 @@ import CartItem from "./CartItem";
 import { FaShoppingCart } from "react-icons/fa";
 import AuthRequiredModal from "../auth/AuthRequireModal";
 import api from "../../../api";
+import { formatTry } from "../../utils/currency";
+import ConfirmDialog from "../ui/ConfirmDialog";
 
 export default function Cart() {
   const {
@@ -20,6 +22,7 @@ export default function Cart() {
   const { isLoggedIn } = useAuth();
   const navigate = useNavigate();
   const [showLoginModal, setShowLoginModal] = useState(false);
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
 
   // Tek onay (KVKK + sözleşme)
   const [consentChecked, setConsentChecked] = useState(false);
@@ -247,14 +250,14 @@ export default function Cart() {
             <div className="space-y-2 text-sm">
               <div className="flex items-center justify-between">
                 <span className="text-dark2">Ara Toplam</span>
-                <span className="font-medium">₺{subTotal.toFixed(2)}</span>
+                <span className="font-medium">{formatTry(subTotal)}</span>
               </div>
 
               {campaignDiscount > 0 && (
                 <div className="flex items-center justify-between">
                   <span className="text-dark2">Kampanya İndirimi</span>
                   <span className="font-medium text-emerald-700">
-                    -₺{campaignDiscount.toFixed(2)}
+                    -{formatTry(campaignDiscount)}
                   </span>
                 </div>
               )}
@@ -266,7 +269,7 @@ export default function Cart() {
                     {appliedCoupon?.code ? ` (${appliedCoupon.code})` : ""}
                   </span>
                   <span className="font-medium text-blue-700">
-                    -₺{couponDiscount.toFixed(2)}
+                    -{formatTry(couponDiscount)}
                   </span>
                 </div>
               )}
@@ -275,7 +278,7 @@ export default function Cart() {
                 <div className="flex items-center justify-between text-[13px] text-gray-600">
                   <span>İndirimli Ara Toplam</span>
                   <span className="font-medium">
-                    ₺{discountedSubTotal.toFixed(2)}
+                    {formatTry(discountedSubTotal)}
                   </span>
                 </div>
               )}
@@ -297,29 +300,28 @@ export default function Cart() {
                   isFree ? (
                     <div className="flex items-center gap-2">
                       <s className="text-gray-400">
-                        ₺
-                        {Number(
+                        {formatTry(
                           shipping?.fee ?? pricingSummary?.shippingFee ?? 0
-                        ).toFixed(2)}
+                        )}
                       </s>
-                      <span className="font-medium">₺0.00</span>
+                      <span className="font-medium">{formatTry(0)}</span>
                       <span className="text-[11px] px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700">
                         Kargo ücretsiz
                       </span>
                     </div>
                   ) : (
                     <span className="font-medium">
-                      ₺{shippingFee.toFixed(2)}
+                      {formatTry(shippingFee)}
                     </span>
                   )
                 ) : (
-                  <span className="font-medium">₺0.00</span>
+                  <span className="font-medium">{formatTry(0)}</span>
                 )}
               </div>
 
               {freeShippingThreshold != null && !isFree && (
                 <div className="text-xs text-gray-500 text-right">
-                  ₺{Number(freeShippingThreshold).toFixed(0)} ve üzeri
+                  {formatTry(freeShippingThreshold, { fractionDigits: 0 })} ve üzeri
                   alışverişlerde kargo ücretsiz.
                 </div>
               )}
@@ -435,7 +437,7 @@ export default function Cart() {
                           <span>{c.name}</span>
                         </span>
                         <span className="text-emerald-700 font-medium">
-                          -₺{Number(c.savings || 0).toFixed(2)}
+                          -{formatTry(c.savings || 0)}
                         </span>
                       </label>
                     );
@@ -454,7 +456,7 @@ export default function Cart() {
 
             <div className="flex items-center justify-between text-base sm:text-lg font-semibold">
               <span>Genel Toplam</span>
-              <span>₺{grandTotal.toFixed(2)}</span>
+              <span>{formatTry(grandTotal)}</span>
             </div>
 
             {/* Tek onay kutusu (KVKK + Sözleşme) */}
@@ -469,6 +471,7 @@ export default function Cart() {
                   <a
                     href="/kvkk"
                     target="_blank"
+                    rel="noopener noreferrer"
                     className="text-primary underline"
                   >
                     KVKK Aydınlatma Metni
@@ -477,6 +480,7 @@ export default function Cart() {
                   <a
                     href="/agreement"
                     target="_blank"
+                    rel="noopener noreferrer"
                     className="text-primary underline"
                   >
                     Mesafeli Satış Sözleşmesi
@@ -489,7 +493,7 @@ export default function Cart() {
             {/* Butonlar */}
             <div className="mt-5 flex flex-col sm:flex-row gap-3">
               <button
-                onClick={clearCart}
+                onClick={() => setShowClearConfirm(true)}
                 className="flex-1 sm:flex-none sm:min-w-[160px] bg-light2 text-dark2 px-5 py-3 rounded-full hover:bg-light1 transition font-medium"
               >
                 Sepeti Temizle
@@ -514,7 +518,7 @@ export default function Cart() {
         <AuthRequiredModal
           open
           onClose={() => setShowLoginModal(false)}
-          onLogin={() => navigate("/profile")}
+          onLogin={() => navigate("/auth", { state: { from: "/cart" } })}
           onGuest={() => {
             setShowLoginModal(false);
             navigate("/checkout-guest");
@@ -523,6 +527,20 @@ export default function Cart() {
           message="Dilerseniz üye olmadan da devam edebilirsiniz."
         />
       )}
+
+      <ConfirmDialog
+        open={showClearConfirm}
+        title="Sepeti temizle"
+        message="Sepetinizdeki tüm ürünler kaldırılacak. Devam etmek istiyor musunuz?"
+        confirmLabel="Sepeti Temizle"
+        cancelLabel="Vazgeç"
+        tone="danger"
+        onCancel={() => setShowClearConfirm(false)}
+        onConfirm={() => {
+          clearCart();
+          setShowClearConfirm(false);
+        }}
+      />
     </div>
   );
 }

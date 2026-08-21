@@ -15,6 +15,19 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(isLoggedIn);
 
   useEffect(() => {
+    const handleExpiredSession = () => {
+      setRole(null);
+      setIsLoggedIn(false);
+      setLoading(false);
+    };
+
+    window.addEventListener("auth:session-expired", handleExpiredSession);
+    return () => {
+      window.removeEventListener("auth:session-expired", handleExpiredSession);
+    };
+  }, []);
+
+  useEffect(() => {
     if (!isLoggedIn) {
       setRole(null);
       setLoading(false);

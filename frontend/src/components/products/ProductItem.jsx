@@ -4,18 +4,11 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import PropTypes from "prop-types";
 import { Link } from "react-router-dom";
 import { FaVolumeMute, FaVolumeUp, FaPlay } from "react-icons/fa";
-import { getResponsiveImageProps } from "../../utils/cloudinaryMedia";
+import { getResponsiveImageProps } from "../../utils/media";
 import { toCssColor } from "../../utils/productVariants";
+import { formatTry } from "../../utils/currency";
 
 const MOBILE_VIDEO_EVENT = "product-mobile-play";
-
-// TL formatlayıcı
-const fmtTL = (n) =>
-  new Intl.NumberFormat("tr-TR", {
-    style: "currency",
-    currency: "TRY",
-    minimumFractionDigits: 2,
-  }).format(n);
 
 const ProductItem = ({
   id,
@@ -133,9 +126,10 @@ const ProductItem = ({
   }, [id]);
 
   useEffect(() => {
+    const currentVideoRef = videoRef;
     return () => {
       try {
-        videoRef.current?.pause();
+        currentVideoRef.current?.pause();
       } catch {}
     };
   }, []);
@@ -282,16 +276,16 @@ const ProductItem = ({
         {showDiscount ? (
           <div>
             <p className="text-sm text-gray-500 line-through">
-              {fmtTL(cleanPrice)}
+              {formatTry(cleanPrice)}
             </p>
             {/* İndirimde: final fiyat KIRMIZI */}
             <p className="text-lg font-bold text-red-600">
-              {fmtTL(finalPrice)}
+              {formatTry(finalPrice)}
             </p>
           </div>
         ) : (
           <p className="text-lg font-semibold text-dark2">
-            {fmtTL(finalPrice)}
+            {formatTry(finalPrice)}
           </p>
         )}
       </div>

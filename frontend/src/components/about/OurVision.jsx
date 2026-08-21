@@ -1,6 +1,6 @@
 // src/components/about/OurVision.jsx
 import React from "react";
-import storyImg from "../../assets/about/vision.png";
+import storyImg from "../../assets/about/vision.webp";
 
 const OurVision = () => (
   <section className="bg-light1 py-20 px-4">
@@ -19,6 +19,10 @@ const OurVision = () => (
         <img
           src={storyImg}
           alt="Oldsocks Vizyon"
+          loading="lazy"
+          decoding="async"
+          width="1200"
+          height="1600"
           className="w-full h-[600px] object-cover object-center"
         />
       </div>

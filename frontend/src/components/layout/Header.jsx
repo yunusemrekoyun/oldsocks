@@ -16,7 +16,7 @@ import { AuthContext } from "../../context/AuthContext";
 import { useCart } from "../../context/useCart";
 import SearchModal from "../search/SearchModal";
 import useCategoriesCache from "../../hooks/useCategoriesCache";
-import logo from "../../assets/logo/logo.png";
+import logo from "../../assets/logo/logo.webp";
 import api from "../../../api";
 
 const DISCOUNT_HOVER_KEY = "__discount_campaigns__";
@@ -168,6 +168,9 @@ const Header = () => {
               <img
                 src={logo}
                 alt="Oldsocks Logo"
+                width="256"
+                height="256"
+                decoding="async"
                 className="h-16 w-auto object-contain"
               />
             </Link>
@@ -350,6 +353,7 @@ const Header = () => {
                 href="https://www.instagram.com/oldscks/"
                 target="_blank"
                 rel="noopener noreferrer"
+                aria-label="Oldsocks Instagram hesabı"
                 className="w-10 h-10 flex items-center justify-center border border-light3 rounded-full hover:border-brand transition"
               >
                 <FaInstagram className="text-dark2 hover:text-brand text-sm" />
@@ -358,6 +362,7 @@ const Header = () => {
                 href="https://www.facebook.com/Oldsockscollection/"
                 target="_blank"
                 rel="noopener noreferrer"
+                aria-label="Oldsocks Facebook hesabı"
                 className="w-10 h-10 flex items-center justify-center border border-light3 rounded-full hover:border-brand transition"
               >
                 <FaFacebookF className="text-dark2 hover:text-brand text-sm" />
@@ -365,17 +370,20 @@ const Header = () => {
             </div>
 
             {/* Arama */}
-            <div
+            <button
+              type="button"
               className="flex w-10 h-10 items-center justify-center border border-light3 rounded-full hover:border-brand transition cursor-pointer"
               onClick={() => setShowSearch(true)}
+              aria-label="Ürün ara"
             >
               <FaSearch className="text-dark2 hover:text-brand text-sm" />
-            </div>
+            </button>
 
             {/* Sepet */}
             <Link
               to="/cart"
               id="cart-icon"
+              aria-label={`Sepet${items.length ? `, ${items.length} ürün` : ""}`}
               className="relative w-12 h-12 flex items-center justify-center bg-dark2 rounded-full hover:bg-brand transition"
             >
               <FaShoppingCart className="text-white text-base" />
@@ -389,6 +397,7 @@ const Header = () => {
             {/* Profil */}
             <Link
               to="/profile"
+              aria-label="Profil ve giriş"
               className="w-12 h-12 flex items-center justify-center border border-light3 rounded-full hover:border-brand transition"
             >
               <FaUser className="text-dark2 hover:text-brand text-base" />
@@ -425,6 +434,9 @@ const Header = () => {
                 <img
                   src={logo}
                   alt="Oldsocks Logo"
+                  width="256"
+                  height="256"
+                  decoding="async"
                   className="h-10 w-auto object-contain"
                 />
               </Link>

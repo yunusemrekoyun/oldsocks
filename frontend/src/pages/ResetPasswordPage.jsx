@@ -33,17 +33,17 @@ export default function ResetPasswordPage() {
     setSuccess("");
 
     if (!token) {
-      setError("Sifre sifirlama linki gecersiz veya eksik.");
+      setError("Şifre sıfırlama bağlantısı geçersiz veya eksik.");
       return;
     }
 
     if (form.password !== form.confirmPassword) {
-      setError("Sifreler eslesmiyor.");
+      setError("Şifreler eşleşmiyor.");
       return;
     }
 
     if (!passwordValidation.allOk) {
-      setError("Sifre guvenlik kurallarini saglamiyor.");
+      setError("Şifre güvenlik kurallarını sağlamıyor.");
       return;
     }
 
@@ -58,13 +58,13 @@ export default function ResetPasswordPage() {
         { skipAuthRefresh: true }
       );
 
-      setSuccess(data?.message || "Sifreniz guncellendi. Giris yapabilirsiniz.");
+      setSuccess(data?.message || "Şifreniz güncellendi. Giriş yapabilirsiniz.");
       setForm({ password: "", confirmPassword: "" });
       setTimeout(() => navigate("/auth"), 1200);
     } catch (err) {
       setError(
         err?.response?.data?.message ||
-          "Sifre guncellenemedi. Lutfen yeniden deneyin."
+          "Şifre güncellenemedi. Lütfen yeniden deneyin."
       );
     } finally {
       setLoading(false);
@@ -75,10 +75,10 @@ export default function ResetPasswordPage() {
     <div className="min-h-screen px-6 py-12">
       <div className="mx-auto max-w-md rounded-2xl border border-light2 bg-white p-8 shadow-lg">
         <h1 className="mb-3 text-center text-3xl font-bold text-dark1">
-          Yeni Sifre Belirleyin
+          Yeni Şifre Belirleyin
         </h1>
         <p className="mb-6 text-center text-sm leading-6 text-dark2">
-          Kayit olurken kullandiginiz guvenlik kurallari burada da gecerli.
+          Kayıt olurken kullandığınız güvenlik kuralları burada da geçerli.
         </p>
 
         {success && (
@@ -94,7 +94,7 @@ export default function ResetPasswordPage() {
         <form onSubmit={handleSubmit} className="space-y-5">
           <div>
             <label htmlFor="password" className="mb-1 block text-sm text-dark2">
-              Yeni sifre
+              Yeni şifre
             </label>
             <div className="relative">
               <input
@@ -111,7 +111,7 @@ export default function ResetPasswordPage() {
                 onClick={() => setShowPassword((prev) => !prev)}
                 className="absolute inset-y-0 right-3 text-sm text-gray-600"
               >
-                {showPassword ? "Gizle" : "Goster"}
+                {showPassword ? "Gizle" : "Göster"}
               </button>
             </div>
             <ul className="mt-2 space-y-1 text-xs">
@@ -131,7 +131,7 @@ export default function ResetPasswordPage() {
               htmlFor="confirmPassword"
               className="mb-1 block text-sm text-dark2"
             >
-              Yeni sifre (tekrar)
+              Yeni şifre (tekrar)
             </label>
             <input
               id="confirmPassword"
@@ -149,13 +149,13 @@ export default function ResetPasswordPage() {
             disabled={loading}
             className="w-full rounded-lg bg-dark1 py-3 font-semibold text-white transition hover:bg-dark2 disabled:opacity-50"
           >
-            {loading ? "Guncelleniyor..." : "Sifreyi Guncelle"}
+            {loading ? "Güncelleniyor..." : "Şifreyi Güncelle"}
           </button>
         </form>
 
         <div className="mt-6 text-center text-sm text-dark2">
           <Link to="/auth" className="font-semibold text-dark1 hover:underline">
-            Giris ekranina don
+            Giriş ekranına dön
           </Link>
         </div>
       </div>

@@ -1,6 +1,6 @@
 /* Updated src/components/blog/BlogCommentItem.jsx */
-import React, { useState, useEffect } from "react";
-import placeholderAvatar from "../../assets/blog/blog-owner/author.png";
+import React, { useCallback, useState, useEffect } from "react";
+import placeholderAvatar from "../../assets/blog/blog-owner/author.webp";
 import CommentReplyForm from "./CommentReplyForm";
 import CommentReplies from "./CommentReplies";
 import api from "../../../api";
@@ -8,7 +8,7 @@ import ToastAlert from "../ui/ToastAlert";
 
 export default function BlogCommentItem({ comment }) {
   const { author, createdAt, text, _id: commentId } = comment;
-  const date = new Date(createdAt).toLocaleString("en-US", {
+  const date = new Date(createdAt).toLocaleString("tr-TR", {
     month: "long",
     day: "numeric",
     year: "numeric",
@@ -25,7 +25,7 @@ export default function BlogCommentItem({ comment }) {
   // toast’ı parent’ta tut
   const [toast, setToast] = useState(null);
 
-  const fetchReplies = async () => {
+  const fetchReplies = useCallback(async () => {
     setLoadingReplies(true);
     try {
       const { data } = await api.get(`/comments/${commentId}/replies`);
@@ -35,11 +35,11 @@ export default function BlogCommentItem({ comment }) {
     } finally {
       setLoadingReplies(false);
     }
-  };
+  }, [commentId]);
 
   useEffect(() => {
     if (showReplies) fetchReplies();
-  }, [showReplies]);
+  }, [fetchReplies, showReplies]);
 
   // reply formundan gelen sonucu al
   const handleReplyPosted = (result) => {
@@ -60,13 +60,13 @@ export default function BlogCommentItem({ comment }) {
       <div className="flex space-x-4">
         <img
           src={avatarUrl}
-          alt={`${author.firstName} ${author.lastName}`}
+          alt={`${author?.firstName || "Oldscks"} ${author?.lastName || ""}`.trim()}
           className="w-12 h-12 rounded-full object-cover"
         />
         <div className="flex-1">
           <div className="flex justify-between items-center">
             <h5 className="font-medium text-[#0b0b0d]">
-              {author.firstName} {author.lastName}
+              {author?.firstName || "Oldscks"} {author?.lastName || ""}
             </h5>
             <span className="text-sm text-[#888]">{date}</span>
           </div>

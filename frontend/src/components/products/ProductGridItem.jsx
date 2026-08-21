@@ -3,16 +3,11 @@ import React, { useEffect, useRef, useState, useMemo } from "react";
 import PropTypes from "prop-types";
 import { Link } from "react-router-dom";
 import { FaVolumeMute, FaVolumeUp, FaPlay } from "react-icons/fa";
-import { getResponsiveImageProps } from "../../utils/cloudinaryMedia";
+import { getResponsiveImageProps } from "../../utils/media";
 import { toCssColor } from "../../utils/productVariants";
+import { formatTry } from "../../utils/currency";
 
 const MOBILE_VIDEO_EVENT = "product-mobile-play";
-
-const fmt = (n) =>
-  Number(n || 0).toLocaleString("tr-TR", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
 
 const ProductGridItem = ({
   id,
@@ -114,9 +109,10 @@ const ProductGridItem = ({
   }, [id]);
 
   useEffect(() => {
+    const currentVideoRef = videoRef;
     return () => {
       try {
-        videoRef.current?.pause();
+        currentVideoRef.current?.pause();
       } catch {}
     };
   }, []);
@@ -267,16 +263,16 @@ const ProductGridItem = ({
         {hasDiscount ? (
           <div className="flex flex-col items-center gap-0.5">
             <div className="text-sm text-dark2 line-through opacity-70">
-              {fmt(price)}₺
+              {formatTry(price)}
             </div>
             {/* İndirimliyse kırmızı */}
             <div className="text-center text-base font-semibold text-red-600">
-              {fmt(discountedPrice)}₺
+              {formatTry(discountedPrice)}
             </div>
           </div>
         ) : (
           <p className="text-center text-base font-semibold text-dark2">
-            {fmt(price)}₺
+            {formatTry(price)}
           </p>
         )}
       </div>

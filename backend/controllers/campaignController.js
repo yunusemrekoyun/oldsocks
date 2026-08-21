@@ -1,8 +1,16 @@
 const Campaign = require("../models/Campaign");
 const Product = require("../models/Product");
 const Category = require("../models/Category");
+const { MediaError } = require("../services/media/errors");
+const {
+  applyProductMedia,
+  legacyAssetUrl,
+  publicAsset,
+  removeOwnerMediaReferences,
+  requireReadyAssets,
+  syncOwnerMediaReferences,
+} = require("../services/media/assets");
 
-// Helper to parse JSON-array fields
 function parseArrayField(raw) {
   if (!raw) return [];
   if (Array.isArray(raw)) return raw;
@@ -14,202 +22,196 @@ function parseArrayField(raw) {
   }
 }
 
-// Create
+async function validateTargets(products, categories) {
+  const [productCount, categoryCount] = await Promise.all([
+    Product.countDocuments({ _id: { $in: products } }),
+    Category.countDocuments({ _id: { $in: categories } }),
+  ]);
+  if (productCount !== new Set(products.map(String)).size) {
+    const error = new Error("Geçersiz ürün seçimi.");
+    error.statusCode = 400;
+    throw error;
+  }
+  if (categoryCount !== new Set(categories.map(String)).size) {
+    const error = new Error("Geçersiz kategori seçimi.");
+    error.statusCode = 400;
+    throw error;
+  }
+}
+
+function campaignQuery(query) {
+  return query
+    .populate("imageAsset")
+    .populate({
+      path: "products",
+      select: "name images imageAssets video videoAsset price",
+      populate: [{ path: "imageAssets" }, { path: "videoAsset" }],
+    })
+    .populate("categories", "name image imageAsset");
+}
+
+function serializeCampaign(campaign, context = "list") {
+  const value = typeof campaign?.toObject === "function" ? campaign.toObject() : { ...campaign };
+  if (value.imageAsset && typeof value.imageAsset === "object") {
+    value.imageUrl = legacyAssetUrl(value.imageAsset, context);
+    value.media = publicAsset(value.imageAsset, context);
+    value.imageAssetId = String(value.imageAsset._id);
+  }
+  if (Array.isArray(value.products)) {
+    value.products = value.products.map((product) => applyProductMedia(product, "list"));
+  }
+  return value;
+}
+
+async function syncCampaign(campaign) {
+  await syncOwnerMediaReferences({
+    ownerType: "Campaign",
+    ownerId: campaign._id,
+    fields: { image: campaign.imageAsset ? [campaign.imageAsset] : [] },
+  });
+}
+
 exports.createCampaign = async (req, res) => {
   try {
     const { title, subtitle, buttonText } = req.body;
+    if (!title || !buttonText) {
+      return res.status(400).json({ message: "Başlık ve buton metni zorunludur." });
+    }
     const products = parseArrayField(req.body.products);
     const categories = parseArrayField(req.body.categories);
-
-    // subtitle zorunlu değil
-    if (!title || !buttonText || !req.file) {
-      return res.status(400).json({
-        message: "title, buttonText ve image zorunludur.",
-      });
-    }
-
-    // Validate IDs
-    for (let pid of products) {
-      if (!(await Product.exists({ _id: pid }))) {
-        return res.status(400).json({ message: `Invalid product ID: ${pid}` });
-      }
-    }
-    for (let cid of categories) {
-      if (!(await Category.exists({ _id: cid }))) {
-        return res.status(400).json({ message: `Invalid category ID: ${cid}` });
-      }
-    }
-
+    await validateTargets(products, categories);
+    const [asset] = await requireReadyAssets(req.body.imageAssetId, {
+      purpose: "campaign_image",
+      kind: "image",
+      min: 1,
+      max: 1,
+    });
     const campaign = await Campaign.create({
       title,
-      subtitle, // gönderilmezse şema default "" kullanır
+      subtitle,
       buttonText,
-      imageUrl: req.file.path,
+      imageAsset: asset._id,
+      imageUrl: legacyAssetUrl(asset, "detail"),
       products,
       categories,
     });
-
-    res.status(201).json(campaign);
-  } catch (err) {
-    console.error(err);
-    res
-      .status(500)
-      .json({ message: "Error creating campaign.", error: err.message });
+    await syncCampaign(campaign);
+    const populated = await campaignQuery(Campaign.findById(campaign._id));
+    res.status(201).json(serializeCampaign(populated));
+  } catch (error) {
+    if (error instanceof MediaError || error.statusCode) throw error;
+    console.error(error);
+    res.status(500).json({ message: "Kampanya oluşturulamadı." });
   }
 };
 
-// Read all
-exports.getCampaigns = async (req, res) => {
+exports.getCampaigns = async (_req, res) => {
   try {
-    const campaigns = await Campaign.find()
-      .populate("products", "name images price")
-      .populate("categories", "name image");
-    res.json(campaigns);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Error fetching campaigns." });
+    const campaigns = await campaignQuery(Campaign.find());
+    res.json(campaigns.map((campaign) => serializeCampaign(campaign)));
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Kampanyalar getirilemedi." });
   }
 };
 
-// Read single
 exports.getCampaign = async (req, res) => {
   try {
-    const c = await Campaign.findById(req.params.id)
-      .populate("products", "name images price")
-      .populate("categories", "name image");
-    if (!c) return res.status(404).json({ message: "Campaign not found." });
-    res.json(c);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Error fetching campaign." });
+    const campaign = await campaignQuery(Campaign.findById(req.params.id));
+    if (!campaign) return res.status(404).json({ message: "Kampanya bulunamadı." });
+    res.json(serializeCampaign(campaign, "detail"));
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Kampanya getirilemedi." });
   }
 };
 
-// Update
 exports.updateCampaign = async (req, res) => {
   try {
-    const { title, subtitle, buttonText } = req.body;
+    const campaign = await Campaign.findById(req.params.id);
+    if (!campaign) return res.status(404).json({ message: "Kampanya bulunamadı." });
+    if (!req.body.title || !req.body.buttonText) {
+      return res.status(400).json({ message: "Başlık ve buton metni zorunludur." });
+    }
     const products = parseArrayField(req.body.products);
     const categories = parseArrayField(req.body.categories);
-
-    // subtitle artık zorunlu değil
-    if (!title || !buttonText) {
-      return res.status(400).json({
-        message: "title ve buttonText zorunludur.",
+    await validateTargets(products, categories);
+    campaign.title = req.body.title;
+    campaign.buttonText = req.body.buttonText;
+    campaign.subtitle = req.body.subtitle ?? campaign.subtitle;
+    campaign.products = products;
+    campaign.categories = categories;
+    if (req.body.imageAssetId !== undefined) {
+      const [asset] = await requireReadyAssets(req.body.imageAssetId, {
+        purpose: "campaign_image",
+        kind: "image",
+        min: 1,
+        max: 1,
       });
+      campaign.imageAsset = asset._id;
+      campaign.imageUrl = legacyAssetUrl(asset, "detail");
     }
-
-    // Validate IDs
-    for (let pid of products) {
-      if (!(await Product.exists({ _id: pid }))) {
-        return res.status(400).json({ message: `Invalid product ID: ${pid}` });
-      }
-    }
-    for (let cid of categories) {
-      if (!(await Category.exists({ _id: cid }))) {
-        return res.status(400).json({ message: `Invalid category ID: ${cid}` });
-      }
-    }
-
-    const updates = {
-      title,
-      buttonText,
-      products,
-      categories,
-    };
-
-    // subtitle gönderildiyse güncelle (undefined ise elleme)
-    if (typeof subtitle !== "undefined") {
-      updates.subtitle = subtitle;
-    }
-
-    if (req.file) {
-      updates.imageUrl = req.file.path;
-    }
-
-    const updated = await Campaign.findByIdAndUpdate(req.params.id, updates, {
-      new: true,
-    });
-    if (!updated) {
-      return res.status(404).json({ message: "Campaign not found." });
-    }
-    res.json(updated);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Error updating campaign." });
+    await campaign.save();
+    await syncCampaign(campaign);
+    const populated = await campaignQuery(Campaign.findById(campaign._id));
+    res.json(serializeCampaign(populated));
+  } catch (error) {
+    if (error instanceof MediaError || error.statusCode) throw error;
+    console.error(error);
+    res.status(500).json({ message: "Kampanya güncellenemedi." });
   }
 };
 
-// Delete
 exports.deleteCampaign = async (req, res) => {
   try {
-    const d = await Campaign.findByIdAndDelete(req.params.id);
-    if (!d) return res.status(404).json({ message: "Campaign not found." });
-    res.json({ message: "Campaign deleted." });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Error deleting campaign." });
+    const campaign = await Campaign.findByIdAndDelete(req.params.id);
+    if (!campaign) return res.status(404).json({ message: "Kampanya bulunamadı." });
+    await removeOwnerMediaReferences("Campaign", campaign._id);
+    res.json({ message: "Kampanya silindi." });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Kampanya silinemedi." });
   }
 };
 
-// Activate
 exports.setActiveCampaign = async (req, res) => {
   try {
-    const c = await Campaign.findById(req.params.id);
-    if (!c) return res.status(404).json({ message: "Campaign not found." });
-
-    await Campaign.updateMany({}, { isActive: false });
-    c.isActive = true;
-    await c.save();
-    res.json({ message: `Campaign ${c._id} is now active.` });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Error setting active campaign." });
+    const campaign = await Campaign.findById(req.params.id);
+    if (!campaign) return res.status(404).json({ message: "Kampanya bulunamadı." });
+    await Campaign.updateMany({ _id: { $ne: campaign._id } }, { $set: { isActive: false } });
+    campaign.isActive = true;
+    await campaign.save();
+    res.json({ message: "Kampanya aktif edildi." });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Kampanya aktifleştirilemedi." });
   }
 };
 
-// Public: aktif kampanya + dinamik ürünler
-exports.getActiveCampaign = async (req, res) => {
+exports.getActiveCampaign = async (_req, res) => {
   try {
-    const campaign = await Campaign.findOne({ isActive: true });
-    if (!campaign)
-      return res.status(404).json({ message: "No active campaign." });
-
+    const campaign = await campaignQuery(Campaign.findOne({ isActive: true }));
+    if (!campaign) return res.status(404).json({ message: "Aktif kampanya bulunamadı." });
     let items = [];
-
-    if (campaign.products?.length > 0) {
-      // Sadece belirtilen ürünler
-      items = await Product.find({
-        _id: { $in: campaign.products },
-      })
-        .select("name images price originalPrice discount video")
-        .lean();
-    } else if (campaign.categories?.length > 0) {
-      // Kategori + alt kategori
-      const subs = await Category.find({
-        parent: { $in: campaign.categories },
-      }).select("_id");
-      const catIds = [
-        ...campaign.categories.map((c) => c.toString()),
-        ...subs.map((c) => c._id.toString()),
+    if (campaign.products?.length) {
+      items = campaign.products.map((product) => applyProductMedia(product, "list"));
+    } else if (campaign.categories?.length) {
+      const subs = await Category.find({ parent: { $in: campaign.categories } }).select("_id");
+      const categoryIds = [
+        ...campaign.categories.map((category) => category._id || category),
+        ...subs.map((category) => category._id),
       ];
-      items = await Product.find({
-        category: { $in: catIds },
-      })
-        .select("name images price originalPrice discount video")
+      const products = await Product.find({ category: { $in: categoryIds } })
+        .select("name images imageAssets video videoAsset price originalPrice discount")
+        .populate("imageAssets")
+        .populate("videoAsset")
         .lean();
+      items = products.map((product) => applyProductMedia(product, "list"));
     }
-
-    return res.json({
-      _id: campaign._id,
-      title: campaign.title,
-      subtitle: campaign.subtitle, // boş string olabilir
-      buttonText: campaign.buttonText,
-      imageUrl: campaign.imageUrl,
-      items,
-    });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Error fetching active campaign." });
+    const serialized = serializeCampaign(campaign, "detail");
+    res.json({ ...serialized, items });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Aktif kampanya getirilemedi." });
   }
 };

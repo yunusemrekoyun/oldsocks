@@ -1,5 +1,6 @@
 ///Applications/Works/oldsocks main/oldsocks/backend/models/Blog.js
 const mongoose = require("mongoose");
+const { slugify } = require("../utils/slugify");
 const { Schema } = mongoose;
 
 const BlogSchema = new Schema(
@@ -8,7 +9,13 @@ const BlogSchema = new Schema(
     subtitle: { type: String, trim: true },
     excerpt: { type: String, trim: true },
     content: { type: String, required: true }, // Markdown veya HTML
-    coverImageUrl: { type: String, required: true },
+    coverImageUrl: { type: String, default: "" },
+    coverImageAsset: {
+      type: Schema.Types.ObjectId,
+      ref: "MediaAsset",
+      default: null,
+      index: true,
+    },
     author: {
       type: Schema.Types.ObjectId,
       ref: "User",
@@ -41,10 +48,7 @@ const BlogSchema = new Schema(
 // İsteğe bağlı: otomatik slug üretme
 BlogSchema.pre("validate", function (next) {
   if (this.isModified("title") && this.title) {
-    this.slug = this.title
-      .toLowerCase()
-      .trim()
-      .replace(/[\s\W-]+/g, "-");
+    this.slug = slugify(this.title);
   }
   next();
 });

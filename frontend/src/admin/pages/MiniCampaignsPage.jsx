@@ -24,7 +24,12 @@ import api from "../../../api";
 import ToastAlert from "../../components/ui/ToastAlert";
 import { v4 as uuidv4 } from "uuid";
 import { useUploadQueue } from "../../context/UploadQueueContext";
-import { prepareBannerImageUpload } from "../../utils/bannerImageUpload";
+import {
+  mediaErrorMessage,
+  startMediaPreparation,
+  uploadMediaFile,
+  validateMediaFile,
+} from "../../services/mediaUpload";
 
 /* ───── Silme Onayı ───── */
 const ConfirmModal = ({ open, onClose, onConfirm, message }) => {
@@ -295,34 +300,26 @@ export default function MiniCampaignsPage() {
     if (!file) return;
 
     try {
-      const prepared = await prepareBannerImageUpload(file);
+      validateMediaFile(file, "mini_campaign_image");
+      startMediaPreparation(file, "mini_campaign_image");
       setForm((f) => ({
         ...f,
-        imageFile: prepared.file,
-        imageUrl: prepared.previewUrl,
+        imageFile: file,
+        imageUrl: URL.createObjectURL(file),
       }));
       setFieldErrors((e) => ({ ...e, image: "" }));
-
-      if (prepared.convertedFromApple) {
-        setToast({
-          msg: "Apple fotoğrafı otomatik çevrildi ve optimize edildi.",
-          type: "info",
-        });
-      } else if (prepared.optimized) {
-        setToast({
-          msg: "Görsel optimize edildi (yaklaşık 1920x600).",
-          type: "info",
-        });
-      }
+      setToast({
+        msg: "Görsel sunucuda banner boyutları için optimize edilecek.",
+        type: "info",
+      });
     } catch (err) {
       console.error(err);
       setFieldErrors((e) => ({
         ...e,
-        image: err?.message || "Görsel işlenemedi. Lütfen farklı bir dosya deneyin.",
+        image: mediaErrorMessage(err),
       }));
       setToast({
-        msg:
-          err?.message || "Görsel işlenemedi. Lütfen farklı bir dosya deneyin.",
+        msg: mediaErrorMessage(err),
         type: "error",
       });
     }
@@ -343,68 +340,37 @@ export default function MiniCampaignsPage() {
 
     setSaving(true);
 
-    // Görseli gerekiyorsa dönüştür/sıkıştır (ikinci güvenlik katmanı)
-    let uploadFile = form.imageFile;
-    try {
-      if (uploadFile) {
-        const prepared = await prepareBannerImageUpload(uploadFile);
-        uploadFile = prepared.file;
-        setForm((f) => ({
-          ...f,
-          imageFile: prepared.file,
-          imageUrl: prepared.previewUrl,
-        }));
-
-        if (prepared.convertedFromApple) {
-          setToast({
-            msg: "Apple fotoğrafı JPEG'e çevrilip optimize edildi.",
-            type: "info",
-          });
-        } else if (prepared.optimized) {
-          setToast({
-            msg: "Görsel optimize edildi ve upload için hazırlandı.",
-            type: "info",
-          });
-        }
-      }
-    } catch (err) {
-      console.error("Image process error:", err);
-      setToast({
-        msg:
-          err?.message ||
-          "Görsel işlenirken sorun oluştu. Lütfen JPG/PNG deneyin.",
-        type: "error",
-      });
-      setSaving(false);
-      return;
-    }
-
-    // FormData
-    const fd = new FormData();
-    fd.append("title", form.title);
-    fd.append("slot", form.slot);
-    if (uploadFile) fd.append("image", uploadFile);
-    fd.append("products", JSON.stringify(form.products));
-    fd.append("categories", JSON.stringify(form.categories));
-
-    // UploadQueue → formu hemen kapat ve dirty'yi sıfırla
+    // UploadQueue
     const id = uuidv4();
     addTask({ id, name: form.title || "Mini Kampanya", progress: 0 });
 
-    const cfg = {
-      headers: { "Content-Type": "multipart/form-data" },
-      onUploadProgress: (ev) => {
-        if (!ev.total) return;
-        const pct = Math.round((ev.loaded * 100) / ev.total);
-        updateTask(id, { progress: pct });
-      },
-    };
-
     try {
+      const asset = form.imageFile
+        ? await uploadMediaFile(form.imageFile, "mini_campaign_image", {
+            onProgress: (progress) =>
+              updateTask(id, {
+                progress:
+                  progress.phase === "processing"
+                    ? 95
+                    : progress.phase === "ready"
+                    ? 100
+                    : Math.round(progress.percent * 0.9),
+                phase: progress.phase,
+                status: progress.phase,
+              }),
+          })
+        : null;
+      const payload = {
+        title: form.title,
+        slot: form.slot,
+        products: form.products,
+        categories: form.categories,
+        ...(asset ? { imageAssetId: asset.id } : {}),
+      };
       if (form._id) {
-        await api.put(`/mini-campaigns/${form._id}`, fd, cfg);
+        await api.put(`/mini-campaigns/${form._id}`, payload);
       } else {
-        await api.post("/mini-campaigns", fd, cfg);
+        await api.post("/mini-campaigns", payload);
       }
 
       updateTask(id, { progress: 100, status: "success" });
@@ -417,14 +383,18 @@ export default function MiniCampaignsPage() {
       setSaving(false);
     } catch (err) {
       console.error("Kampanya kaydetme hatası:", err);
+      const message = mediaErrorMessage(
+        err,
+        err.response?.data?.message || "Mini kampanya kaydedilemedi"
+      );
       updateTask(id, {
         progress: 100,
         status: "error",
-        errorMsg: err.response?.data?.message || "Mini kampanya kaydedilemedi",
+        errorMsg: message,
       });
       setTimeout(() => removeTask(id), 4000);
       setToast({
-        msg: err.response?.data?.message || "Mini kampanya kaydedilemedi.",
+        msg: message,
         type: "error",
       });
       setSaving(false);

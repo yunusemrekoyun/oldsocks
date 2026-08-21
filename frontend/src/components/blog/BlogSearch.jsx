@@ -82,6 +82,8 @@ export default function BlogSearch() {
           className="w-full border border-[#ddd] rounded-l-lg px-4 py-2 focus:outline-none text-[#444] placeholder-[#888]"
         />
         <button
+          type="button"
+          aria-label="Bloglarda ara"
           onClick={() => {
             if (suggestions.length > 0) goToBlog(suggestions[0].slug);
             else {

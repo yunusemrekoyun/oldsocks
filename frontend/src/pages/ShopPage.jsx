@@ -97,8 +97,14 @@ export default function ShopPage() {
   }, [state?.preset]);
 
   /* 4) Hangi liste? */
-  const allProducts = Array.isArray(cachedProducts) ? cachedProducts : [];
-  const categories = Array.isArray(cachedCategories) ? cachedCategories : [];
+  const allProducts = useMemo(
+    () => (Array.isArray(cachedProducts) ? cachedProducts : []),
+    [cachedProducts]
+  );
+  const categories = useMemo(
+    () => (Array.isArray(cachedCategories) ? cachedCategories : []),
+    [cachedCategories]
+  );
   const baseList = miniItems || campaignItems || allProducts;
   const pageLoading =
     campaignItems || miniItems ? false : productsLoading || categoriesLoading;

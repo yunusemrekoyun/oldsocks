@@ -4,14 +4,19 @@ const mongoose = require("mongoose");
 const MiniCampaignSchema = new mongoose.Schema(
   {
     title: { type: String, required: true, trim: true },
-    imageUrl: { type: String, required: true },
+    imageUrl: { type: String, default: "" },
+    imageAsset: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "MediaAsset",
+      default: null,
+      index: true,
+    },
     products: [{ type: mongoose.Schema.Types.ObjectId, ref: "Product" }],
     categories: [{ type: mongoose.Schema.Types.ObjectId, ref: "Category" }],
     slot: {
       type: Number,
-      required: true,
       enum: [1, 2],
-      unique: true, // her slot yalnızca 1 kere atanabilir
+      default: null,
     },
   },
   { timestamps: true }
@@ -24,5 +29,10 @@ MiniCampaignSchema.virtual("isActiveSlot1").get(function () {
 MiniCampaignSchema.virtual("isActiveSlot2").get(function () {
   return this.slot === 2;
 });
+
+MiniCampaignSchema.index(
+  { slot: 1 },
+  { unique: true, partialFilterExpression: { slot: { $type: "number" } } }
+);
 
 module.exports = mongoose.model("MiniCampaign", MiniCampaignSchema);

@@ -1,11 +1,15 @@
 // backend/controllers/paymentController.js
 const crypto = require("crypto");
+const net = require("node:net");
 const { v4: uuidv4 } = require("uuid");
 const User = require("../models/User");
 const Order = require("../models/Order");
-const fallbackData = require("../config/fallback.json");
 const { dispatchOrderPlacedMail } = require("../utils/orderMailDispatch");
-const { applyStockChanges } = require("../utils/updateStock");
+const {
+  finalizeOrderPayment,
+  StockUnavailableError,
+  OrderPaymentStateError,
+} = require("../utils/updateStock");
 const { calculateCartPricing } = require("../services/cartPricingService");
 const { recordCouponUsageForOrder } = require("../utils/couponUsageService");
 
@@ -29,16 +33,27 @@ function asTL(n) {
   const v = Number(n || 0);
   return "₺" + v.toFixed(2);
 }
+function escapeHtml(value) {
+  return String(value || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
 function round2(n) {
   return Math.round(Number(n || 0) * 100) / 100;
 }
 function getClientIp(req) {
   const xff = (req.headers["x-forwarded-for"] || "").split(",")[0].trim();
   let ip = xff || req.ip || req.connection?.remoteAddress || "127.0.0.1";
-  if (ip === "::1") ip = "127.0.0.1"; // IPv6 loopback -> IPv4
-  if (ip.startsWith("::ffff:")) ip = ip.replace("::ffff:", ""); // IPv4-mapped
-  ip = ip.split(":").slice(-1)[0]; // son parçayı al (port vs)
-  return ip;
+  if (ip === "::1") return "127.0.0.1";
+  if (ip.startsWith("::ffff:")) ip = ip.slice(7);
+
+  // IPv6 adresini iki noktadan bölmek geçersiz bir PayTR user_ip üretir.
+  // Zone kimliği sağlayıcıya gönderilmez.
+  ip = ip.split("%")[0];
+  return net.isIP(ip) ? ip : "127.0.0.1";
 }
 
 function normalizeEmail(value) {
@@ -57,12 +72,6 @@ function normalizeTrPhone(value) {
   }
 
   return "";
-}
-
-function normalizeIdentityNumber(value) {
-  return String(value || "")
-    .replace(/\D/g, "")
-    .slice(0, 11);
 }
 
 async function persistCouponUsage(order, tag) {
@@ -172,7 +181,6 @@ exports.startGuestPaymentSession = async (req, res) => {
       lastName: String(guest?.lastName || "").trim(),
       email: normalizeEmail(guest?.email),
       phone: normalizeTrPhone(guest?.phone),
-      identityNumber: normalizeIdentityNumber(guest?.identityNumber),
       registrationAddress: String(guest?.registrationAddress || "").trim(),
     };
     const normalizedAddress = {
@@ -211,13 +219,21 @@ exports.startGuestPaymentSession = async (req, res) => {
     const invalid = [];
     if (!EMAIL_REGEX.test(normalizedGuest.email)) invalid.push("guest.email");
     if (!normalizedGuest.phone) invalid.push("guest.phone");
-    if (
-      String(guest?.identityNumber || "").trim() &&
-      normalizedGuest.identityNumber.length !== 11
-    ) {
-      invalid.push("guest.identityNumber");
+    const lengthLimits = {
+      "guest.firstName": [normalizedGuest.firstName, 80],
+      "guest.lastName": [normalizedGuest.lastName, 80],
+      "guest.email": [normalizedGuest.email, 100],
+      "guest.registrationAddress": [normalizedGuest.registrationAddress, 500],
+      "address.title": [normalizedAddress.title, 80],
+      "address.mainaddress": [normalizedAddress.mainaddress, 500],
+      "address.street": [normalizedAddress.street, 180],
+      "address.district": [normalizedAddress.district, 120],
+      "address.city": [normalizedAddress.city, 100],
+      "address.postalCode": [normalizedAddress.postalCode, 20],
+    };
+    for (const [field, [value, limit]] of Object.entries(lengthLimits)) {
+      if (value.length > limit) invalid.push(field);
     }
-
     if (invalid.length) {
       return res.status(422).json({
         message: "Lütfen alıcı bilgilerinizi kontrol edin.",
@@ -247,9 +263,6 @@ exports.startGuestPaymentSession = async (req, res) => {
     const orderNumber = Math.floor(1e9 + Math.random() * 9e9).toString();
 
     // 3) Order yarat (user YOK, guest DOLU)
-    const identityNumber = normalizedGuest.identityNumber;
-    const identityFallbackUsed = identityNumber === "";
-
     await Order.create({
       orderNumber,
       user: undefined,
@@ -258,10 +271,7 @@ exports.startGuestPaymentSession = async (req, res) => {
         lastName: normalizedGuest.lastName,
         email: normalizedGuest.email,
         phone: normalizedGuest.phone,
-        identityNumber:
-          identityNumber || fallbackData.identityNumber,
         registrationAddress: normalizedGuest.registrationAddress,
-        identityFallbackUsed,
       },
       items: pricing.items,
       totalPrice: pricing.summary.grandTotal,
@@ -308,7 +318,6 @@ exports.startGuestPaymentSession = async (req, res) => {
         name: pricing.summary.shippingName,
         fee: pricing.summary.shippingFee,
       },
-      identityFallbackUsed,
     });
 
     return res.json({
@@ -327,7 +336,7 @@ exports.startGuestPaymentSession = async (req, res) => {
 /** 1) Ödeme oturumunu başlat (pending Order) */
 exports.startPaymentSession = async (req, res) => {
   try {
-    const { cartItems, addressId, useFallback, selectedCampaignId, couponCode } =
+    const { cartItems, addressId, selectedCampaignId, couponCode } =
       req.body;
     const userId = req.user.userId;
     const userDoc = await User.findById(userId).lean();
@@ -343,10 +352,12 @@ exports.startPaymentSession = async (req, res) => {
     if (!firstName) requiredMissing.push("firstName");
     const lastName = String(userDoc?.lastName || "").trim();
     if (!lastName) requiredMissing.push("lastName");
-    const phone = String(userDoc?.phone || "").trim();
+    const phone = normalizeTrPhone(userDoc?.phone);
     if (!phone) requiredMissing.push("phone");
-    const email = String(userDoc?.email || "").trim();
-    if (!email) requiredMissing.push("email");
+    const email = normalizeEmail(userDoc?.email);
+    if (!EMAIL_REGEX.test(email) || email.length > 100) requiredMissing.push("email");
+    if (firstName.length > 80) requiredMissing.push("firstName");
+    if (lastName.length > 80) requiredMissing.push("lastName");
 
     if (!addr) {
       return res.status(422).json({
@@ -370,21 +381,6 @@ exports.startPaymentSession = async (req, res) => {
         message: "Lütfen profilinizdeki eksik bilgileri tamamlayın.",
         missing: requiredMissing,
       });
-    }
-
-    let identityNumber = String(userDoc?.identityNumber || "").trim();
-    const identityMissing = !identityNumber;
-
-    if (identityMissing && !useFallback) {
-      return res.status(206).json({
-        message: "Kimlik numaranız eksik. Devam etmek için onay verin.",
-        missing: ["identityNumber"],
-        fallbackData: { identityNumber: fallbackData.identityNumber },
-      });
-    }
-
-    if (identityMissing) {
-      identityNumber = fallbackData.identityNumber;
     }
 
     let pricing;
@@ -458,7 +454,6 @@ exports.startPaymentSession = async (req, res) => {
         name: pricing.summary.shippingName,
         fee: pricing.summary.shippingFee,
       },
-      identityFallbackUsed: identityMissing,
     });
 
     return res.json({
@@ -478,12 +473,9 @@ exports.startPaymentSession = async (req, res) => {
 /** 2) INLINE: PayTR token ya da MOCK HTML döner (JSON) */
 exports.inlineCheckoutHtml = async (req, res) => {
   try {
-    console.log(
-      "[PAYTR][inline] çağrıldı convId:",
-      req.params.conversationId,
-      "ip:",
-      getClientIp(req)
-    );
+    if (process.env.NODE_ENV !== "production") {
+      console.log("[PAYTR][inline] ödeme formu hazırlanıyor.");
+    }
 
     // cache kesin kapalı — tekrar kullanım/yeniden yükleme olmasın
     res.set(
@@ -501,10 +493,17 @@ exports.inlineCheckoutHtml = async (req, res) => {
     }
 
     const useMock =
-      String(process.env.PAY_PROVIDER || "").toLowerCase() === "mock" ||
+      String(process.env.PAY_PROVIDER || "").toLowerCase() === "mock";
+    const paytrMissing =
       !process.env.PAYTR_MERCHANT_ID ||
       !process.env.PAYTR_MERCHANT_KEY ||
       !process.env.PAYTR_MERCHANT_SALT;
+
+    if (!useMock && paytrMissing) {
+      return res.status(503).json({
+        message: "Ödeme sistemi şu anda kullanılamıyor. Lütfen daha sonra tekrar deneyin.",
+      });
+    }
 
     if (useMock) {
       // ---- MOCK ÖDEME SAYFASI ----
@@ -517,8 +516,10 @@ exports.inlineCheckoutHtml = async (req, res) => {
         .map(
           (it) => `
             <li style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #eee">
-              <span>${it.name} ${it.size ? "• " + it.size : ""} ${
-            it.color ? "• " + it.color : ""
+              <span>${escapeHtml(it.name)} ${
+            it.size ? "• " + escapeHtml(it.size) : ""
+          } ${
+            it.color ? "• " + escapeHtml(it.color) : ""
           }</span>
               <b>${it.qty} × ${asTL(it.price)}</b>
             </li>`
@@ -581,13 +582,13 @@ exports.inlineCheckoutHtml = async (req, res) => {
       .slice(0, 64);
 
     // ←←← GÜNCEL KISIM: email / isim / telefon / adres seçimleri
-    const email = user?.email || order.guest?.email || "fallback@example.com";
+    const email = normalizeEmail(user?.email || order.guest?.email);
     const user_name = user
       ? `${user.firstName || "Müşteri"} ${user.lastName || ""}`.trim()
       : `${order.guest?.firstName || "Müşteri"} ${
           order.guest?.lastName || ""
         }`.trim();
-    const user_phone = user?.phone || order.guest?.phone || "0000000000";
+    const user_phone = normalizeTrPhone(user?.phone || order.guest?.phone);
     const user_address = user
       ? `${order.address?.mainaddress || ""} ${
           order.address?.city || ""
@@ -595,6 +596,12 @@ exports.inlineCheckoutHtml = async (req, res) => {
       : `${
           order.guest?.registrationAddress || order.address?.mainaddress || ""
         } ${order.address?.city || ""}`.trim();
+
+    if (!EMAIL_REGEX.test(email) || email.length > 100 || !user_phone || !user_address) {
+      return res.status(422).json({
+        message: "Ödeme için gerekli müşteri bilgileri eksik.",
+      });
+    }
 
     const payment_amount = tlToKurus(order.totalPrice);
 
@@ -631,9 +638,6 @@ exports.inlineCheckoutHtml = async (req, res) => {
     // Form body
     const body = new URLSearchParams({
       merchant_id: MERCHANT_ID,
-      merchant_key: MERCHANT_KEY, // opsiyonel ama sorun çıkarmaz
-      merchant_salt: MERCHANT_SALT, // opsiyonel ama sorun çıkarmaz
-
       user_ip,
       merchant_oid,
       email,
@@ -654,15 +658,6 @@ exports.inlineCheckoutHtml = async (req, res) => {
       lang: "tr",
       paytr_token,
     });
-    console.log(
-      "[PAYTR][get-token] convId:",
-      conversationId,
-      "merchant_oid:",
-      merchant_oid,
-      "amount:",
-      payment_amount
-    );
-
     const resp = await fetch("https://www.paytr.com/odeme/api/get-token", {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -670,7 +665,9 @@ exports.inlineCheckoutHtml = async (req, res) => {
     });
 
     const rawText = await resp.text();
-    console.log("[PAYTR][get-token][resp]", rawText.slice(0, 200));
+    if (process.env.NODE_ENV !== "production") {
+      console.log("[PAYTR][get-token] response status:", resp.status);
+    }
 
     let data = null;
     try {
@@ -678,16 +675,12 @@ exports.inlineCheckoutHtml = async (req, res) => {
     } catch {
       data = null;
     }
-    if (!resp.ok || !data) {
-      console.error(
-        "[PAYTR][raw-response]",
-        resp.status,
-        rawText.slice(0, 600)
-      );
-    }
-
     if (!data || data.status !== "success" || !data.token) {
-      console.error("[PAYTR][get-token] Hata:", data || rawText);
+      console.error("[PAYTR][get-token] Hata", {
+        httpStatus: resp.status,
+        providerStatus: data?.status || "invalid_response",
+        reason: String(data?.reason || "PayTR yanıtı doğrulanamadı.").slice(0, 240),
+      });
       return res.status(500).json({
         message: (data && data.reason) || "Ödeme başlatılamadı (PayTR).",
       });
@@ -715,22 +708,20 @@ exports.mockComplete = async (req, res) => {
       return res.status(400).json({ message: "Eksik parametre." });
     }
 
-    const order = await Order.findOne({ conversationId });
+    let order = await Order.findOne({ conversationId });
 
     if (!order) {
       return res.status(404).json({ message: "Sipariş bulunamadı." });
     }
 
     if (!(order.status === "paid" && order.stockUpdated)) {
-      order.status = "paid";
-      order.paymentId = `mock_${conversationId}`;
-      order.adminSeenAt = null;
-
       try {
-        await applyStockChanges(order);
-        order.stockUpdated = true;
+        order = await finalizeOrderPayment(order._id);
+        order.paymentId = `mock_${conversationId}`;
+        order.paymentReceivedAt ||= new Date();
       } catch (e) {
-        console.error("[PAYMENT][mock-complete] stock error:", e);
+        if (!(e instanceof StockUnavailableError)) throw e;
+        console.error("[PAYMENT][mock-complete] stock error:", e.message);
         order.status = "cancelled";
         order.cancelReason = "stock_unavailable";
         order.cancelledAt = new Date();
@@ -738,7 +729,7 @@ exports.mockComplete = async (req, res) => {
         await order.save();
         return res
           .status(409)
-          .json({ message: "Stok yetersizligi nedeniyle sipariş iptal edildi." });
+          .json({ message: "Stok yetersizliği nedeniyle sipariş iptal edildi." });
       }
     }
 
@@ -748,12 +739,12 @@ exports.mockComplete = async (req, res) => {
     if (!order.customerMailSentAt || !order.adminMailSentAt) {
       try {
         await dispatchOrderPlacedMail(order);
-        await order.save();
       } catch (e) {
         console.warn("[PAYMENT][mock-complete] mail error:", e?.message || e);
       }
     }
 
+    await order.save();
     return res.json({ ok: true });
   } catch (e) {
     console.error("[PAYMENT][mock-complete] Hata:", e);
@@ -768,52 +759,73 @@ exports.paytrCallback = async (req, res) => {
     const KEY = (process.env.PAYTR_MERCHANT_KEY || "").trim();
     const SALT = (process.env.PAYTR_MERCHANT_SALT || "").trim();
 
-    if (!merchant_oid) return res.status(400).send("BAD REQUEST");
-    if (!KEY || !SALT) return res.send("OK"); // mock ortam
+    if (!merchant_oid || !status || !total_amount || !hash) {
+      return res.status(400).send("BAD REQUEST");
+    }
+    if (!KEY || !SALT) {
+      const isMockProvider =
+        String(process.env.PAY_PROVIDER || "").toLowerCase() === "mock";
+      if (isMockProvider) return res.send("OK");
+      console.error("[PAYTR][callback] Canlı ödeme anahtarları eksik.");
+      return res.status(503).send("RETRY");
+    }
 
     const check = crypto
       .createHmac("sha256", KEY)
       .update(merchant_oid + SALT + status + total_amount)
       .digest("base64");
 
-    if (check !== hash) return res.status(400).send("BAD REQUEST");
+    const expectedHash = Buffer.from(check);
+    const receivedHash = Buffer.from(String(hash));
+    if (
+      expectedHash.length !== receivedHash.length ||
+      !crypto.timingSafeEqual(expectedHash, receivedHash)
+    ) {
+      return res.status(400).send("BAD REQUEST");
+    }
 
     if (status === "success") {
-      const order = await Order.findOne({ conversationId: merchant_oid });
+      let order = await Order.findOne({ conversationId: merchant_oid });
       if (!order) return res.send("OK");
+      if (
+        ["payment_review", "cancelled", "shipped", "completed"].includes(
+          order.status
+        )
+      ) {
+        return res.send("OK");
+      }
 
-      // ➊ tutar doğrulaması (kuruş bazında)
+      // total_amount taksit/alternatif yöntem ücretleri nedeniyle gönderdiğimiz
+      // payment_amount değerinden yüksek olabilir; düşük olması kabul edilmez.
       const expected = Math.round(Number(order.totalPrice || 0) * 100);
-      if (Number(total_amount) !== expected) {
+      if (!Number.isSafeInteger(Number(total_amount)) || Number(total_amount) < expected) {
         console.warn("[PAYTR][callback] Amount mismatch", {
           merchant_oid,
           fromPaytr: total_amount,
           expected,
         });
-        // İstersen burada 'cancelled' yap veya alarm üret:
+        order.status = "payment_review";
+        order.paymentId = merchant_oid;
+        order.paymentReceivedAt = new Date();
+        order.cancelReason = "amount_mismatch_after_payment";
+        order.cancelledAt = null;
+        await order.save();
         return res.send("OK");
       }
 
-      // ➋ idempotency: zaten paid ise / stok düşmüşse tekrar dokunma
-      if (order.status === "paid" && order.stockUpdated) {
-        await persistCouponUsage(order, "callback-idempotent");
-        return res.send("OK");
-      }
-
-      // State güncelle
-      order.status = "paid";
-      order.paymentId = merchant_oid;
-      order.adminSeenAt = null;
-
-      // Stok düş
       try {
-        await applyStockChanges(order);
-        order.stockUpdated = true;
+        order = await finalizeOrderPayment(order._id);
+        order.paymentId = merchant_oid;
+        order.paymentReceivedAt ||= new Date();
       } catch (e) {
-        console.error("[PAYTR][callback] stock error:", e);
-        order.status = "cancelled";
-        order.cancelReason = "stock_unavailable";
-        order.cancelledAt = new Date();
+        if (e instanceof OrderPaymentStateError) return res.send("OK");
+        if (!(e instanceof StockUnavailableError)) throw e;
+        console.error("[PAYTR][callback] stock error:", e.message);
+        order.status = "payment_review";
+        order.paymentId = merchant_oid;
+        order.paymentReceivedAt = new Date();
+        order.cancelReason = "stock_unavailable_after_payment";
+        order.cancelledAt = null;
         order.stockUpdated = false;
         await order.save();
         return res.send("OK");
@@ -836,11 +848,22 @@ exports.paytrCallback = async (req, res) => {
       // Tek sefer kayıt
       await order.save();
     } else {
-      await Order.deleteOne({ conversationId: merchant_oid }).catch(() => {});
+      await Order.updateOne(
+        { conversationId: merchant_oid, status: "pending" },
+        {
+          $set: {
+            status: "cancelled",
+            cancelReason: "payment_failed",
+            cancelledAt: new Date(),
+          },
+        }
+      );
     }
     return res.send("OK");
   } catch (e) {
     console.error("[PAYTR][callback] Hata:", e);
-    return res.status(200).send("OK");
+    // PayTR yalnızca düz "OK" aldığında bildirimi tamamlanmış sayar. Geçici
+    // sunucu/veritabanı hatasında farklı yanıt vererek resmi retry mekanizmasını koru.
+    return res.status(503).send("RETRY");
   }
 };

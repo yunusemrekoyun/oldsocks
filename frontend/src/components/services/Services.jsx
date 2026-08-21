@@ -2,6 +2,7 @@
 import React, { useEffect, useState } from "react";
 import { FaShippingFast, FaShieldAlt, FaHeadset } from "react-icons/fa";
 import api from "../../../api";
+import { formatTry } from "../../utils/currency";
 
 const baseServices = [
   {
@@ -43,9 +44,9 @@ const Services = () => {
               id: "free-shipping",
               icon: <FaShippingFast className="h-9 w-9 text-primary" />,
               title: `${method.name}`,
-              subtitle: `₺${Number(method.freeShippingThreshold).toFixed(
-                0
-              )} üzeri alışverişlerde kargo ücretsiz`,
+              subtitle: `${formatTry(method.freeShippingThreshold, {
+                fractionDigits: 0,
+              })} üzeri alışverişlerde kargo ücretsiz`,
             },
             ...baseServices.filter((s) => s.id !== 1), // mevcut "Hızlı Kargo" yerine bunu koy
           ]);

@@ -5,9 +5,12 @@ import ToastAlert from "../../components/ui/ToastAlert";
 import { v4 as uuid } from "uuid";
 import { useUploadQueue } from "../../context/UploadQueueContext";
 import {
-  compressImageFileList,
-  MAX_IMAGE_BYTES,
-} from "../../utils/imageCompression";
+  mediaErrorMessage,
+  startMediaPreparation,
+  uploadMediaFile,
+  uploadMediaFiles,
+  validateMediaFile,
+} from "../../services/mediaUpload";
 import { normalizePricing, resolvePricingForSubmit } from "../../utils/pricing";
 
 const Badge = ({ children }) => (
@@ -44,6 +47,8 @@ export default function EditProductForm({ product, onClose, onSaved }) {
   // eslint-disable-next-line no-unused-vars
   const [imagePreviews, setImagePreviews] = useState([]); // string[]
   const [keepExistingImages, setKeepExistingImages] = useState([]); // string[] (server'a gidecek)
+  const [keepExistingImageAssetIds, setKeepExistingImageAssetIds] = useState([]);
+  const [existingVideoAssetId, setExistingVideoAssetId] = useState(null);
   const [removeExistingVideo, setRemoveExistingVideo] = useState(false);
 
   // Kapak seçim durumları
@@ -57,6 +62,7 @@ export default function EditProductForm({ product, onClose, onSaved }) {
   const [newImageUrls, setNewImageUrls] = useState([]); // string[]
 
   const [hasChanged, setHasChanged] = useState(false);
+  const [isSizeLess, setIsSizeLess] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [toast, setToast] = useState(null);
 
@@ -93,10 +99,17 @@ export default function EditProductForm({ product, onClose, onSaved }) {
         color: p.color || "",
         sizes: (p.sizes || []).map((s) => ({ ...s, id: uuid() })),
       });
+      setIsSizeLess(
+        Array.isArray(p.sizes) &&
+          p.sizes.length === 1 &&
+          !String(p.sizes[0]?.size || "").trim()
+      );
 
       const imgs = p.images || [];
       setImagePreviews(imgs);
       setKeepExistingImages(imgs); // varsayılan: hepsini tut
+      setKeepExistingImageAssetIds(p.imageAssetIds || []);
+      setExistingVideoAssetId(p.videoAssetId || null);
       setVideoPreview(p.video || null);
       setRemoveExistingVideo(false);
 
@@ -146,6 +159,11 @@ export default function EditProductForm({ product, onClose, onSaved }) {
   const priceNumber = toNumber(formData.price);
 
   const pricingReady = originalNumber !== null && priceNumber !== null;
+  const pricingValid =
+    pricingReady &&
+    originalNumber >= 0 &&
+    priceNumber >= 0 &&
+    priceNumber <= originalNumber;
   const hasDiscount =
     pricingReady && priceNumber !== null && originalNumber !== null
       ? priceNumber < originalNumber - 0.005
@@ -243,6 +261,9 @@ export default function EditProductForm({ product, onClose, onSaved }) {
 
   // ── Mevcut görseli kaldır
   const removeExistingImageAt = (idx) => {
+    setKeepExistingImageAssetIds((prev) =>
+      prev.filter((_, index) => index !== idx)
+    );
     setKeepExistingImages((prev) => {
       const next = prev.filter((_, i) => i !== idx);
       setImagePreviews(next);
@@ -263,6 +284,7 @@ export default function EditProductForm({ product, onClose, onSaved }) {
   // ── Mevcut videoyu kaldır
   const removeCurrentVideo = () => {
     setRemoveExistingVideo(true);
+    setExistingVideoAssetId(null);
     setVideoPreview(null);
     setHasChanged(true);
   };
@@ -289,18 +311,35 @@ export default function EditProductForm({ product, onClose, onSaved }) {
     setHasChanged(true);
   };
 
-  // En az bir medya var mı? (mevcut tutulacak + yeni)
-  const hasAnyMedia =
-    (keepExistingImages && keepExistingImages.length > 0) ||
-    (!!videoPreview && !removeExistingVideo) ||
-    (newImages && newImages.length > 0) ||
-    !!newVideo;
+  const hasProductImage =
+    keepExistingImageAssetIds.length > 0 || newImages.length > 0;
+  const stockRowsValid =
+    formData.sizes.length > 0 &&
+    formData.sizes.every((row) => {
+      const stock = Number(row.stock);
+      const sizeValid = isSizeLess || String(row.size || "").trim().length > 0;
+      return sizeValid && Number.isSafeInteger(stock) && stock >= 0;
+    });
+  const formValid = Boolean(
+    formData.name.trim() &&
+      mainCat &&
+      pricingValid &&
+      hasProductImage &&
+      stockRowsValid
+  );
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!hasAnyMedia) {
+    if (!hasProductImage) {
       setToast({
-        msg: "En az bir görsel veya video bırakmalısınız.",
+        msg: "Üründe en az bir görsel bırakmalısınız.",
+        type: "error",
+      });
+      return;
+    }
+    if (!formValid) {
+      setToast({
+        msg: "Ürün adı, kategori, fiyat, görsel ve geçerli stok bilgilerini tamamlayın.",
         type: "error",
       });
       return;
@@ -326,35 +365,13 @@ export default function EditProductForm({ product, onClose, onSaved }) {
     const { values } = pricingResult;
 
     // Kapak seçimine göre sıralamaları ayarla
-    let orderedKeep = [...keepExistingImages];
     let orderedNew = [...newImages];
 
-    if (existingCoverIndex >= 0 && newCoverIndex === -1) {
-      orderedKeep = moveIndexToFront(orderedKeep, existingCoverIndex);
-    } else if (newCoverIndex >= 0 && existingCoverIndex === -1) {
+    if (newCoverIndex >= 0 && existingCoverIndex === -1) {
       orderedNew = moveIndexToFront(orderedNew, newCoverIndex);
     }
     // Not: Kapak ikisinden de seçili değilse (ikisi de -1) ya da ikisi birden seçiliyse,
     // hiçbirini zorla öne çekmiyoruz. (UI ikisini aynı anda seçtirmiyor zaten.)
-
-    const fd = new FormData();
-    fd.append("name", formData.name || "");
-    fd.append("price", values.price);
-    fd.append("originalPrice", values.originalPrice);
-    fd.append("discount", values.discount || "0.00");
-    fd.append("description", formData.description || "");
-    fd.append("color", formData.color || "");
-    fd.append("sizes", JSON.stringify(formData.sizes || []));
-    fd.append("category", subCat || mainCat);
-
-    // 🔸 Medya değişiklikleri:
-    // - mevcut görsellerden tutulacak liste (kapak varsa başa çekilmiş haliyle)
-    fd.append("keepImages", JSON.stringify(orderedKeep || []));
-    // - mevcut videoyu kaldır?
-    fd.append("removeVideo", removeExistingVideo ? "1" : "0");
-
-    if (newVideo) fd.append("video", newVideo);
-    orderedNew.forEach((img) => fd.append("images", img));
 
     const taskId = uuid();
     addTask({
@@ -364,12 +381,48 @@ export default function EditProductForm({ product, onClose, onSaved }) {
     });
 
     try {
-      await api.put(`/products/${product._id}`, fd, {
-        headers: { "Content-Type": "multipart/form-data" },
-        onUploadProgress: (ev) =>
-          updateTask(taskId, {
-            progress: Math.round((ev.loaded * 100) / ev.total),
-          }),
+      const reportProgress = (progress) =>
+        updateTask(taskId, {
+          progress:
+            progress.phase === "processing"
+              ? 95
+              : progress.phase === "ready"
+              ? 100
+              : Math.round(progress.percent * 0.9),
+          phase: progress.phase,
+          status: progress.phase,
+        });
+      const [newImageAssets, newVideoAsset] = await Promise.all([
+        uploadMediaFiles(orderedNew, "product_image", {
+          concurrency: 2,
+          onProgress: reportProgress,
+        }),
+        newVideo
+          ? uploadMediaFile(newVideo, "product_video", {
+              onProgress: reportProgress,
+            })
+          : Promise.resolve(null),
+      ]);
+      let orderedKeepIds = [...keepExistingImageAssetIds];
+      if (existingCoverIndex >= 0 && newCoverIndex === -1) {
+        orderedKeepIds = moveIndexToFront(orderedKeepIds, existingCoverIndex);
+      }
+      const newIds = newImageAssets.map((asset) => asset.id);
+      const finalImageIds =
+        newCoverIndex >= 0 && existingCoverIndex === -1
+          ? [...newIds, ...orderedKeepIds]
+          : [...orderedKeepIds, ...newIds];
+      await api.put(`/products/${product._id}`, {
+        name: formData.name || "",
+        price: values.price,
+        originalPrice: values.originalPrice,
+        discount: values.discount || "0.00",
+        description: formData.description || "",
+        color: formData.color || "",
+        sizes: formData.sizes || [],
+        category: subCat || mainCat,
+        imageAssetIds: finalImageIds,
+        videoAssetId: newVideoAsset?.id || existingVideoAssetId || null,
       });
 
       updateTask(taskId, { progress: 100, status: "success" });
@@ -379,14 +432,18 @@ export default function EditProductForm({ product, onClose, onSaved }) {
       onSaved();
     } catch (err) {
       console.error("Ürün güncelleme hatası:", err);
+      const message = mediaErrorMessage(
+        err,
+        err?.response?.data?.message || "Güncelleme hatası"
+      );
       updateTask(taskId, {
         progress: 100,
         status: "error",
-        errorMsg: "Güncelleme hatası",
+        errorMsg: message,
       });
       setTimeout(() => removeTask(taskId), 4000);
 
-      setToast({ msg: "Güncelleme hatası", type: "error" });
+      setToast({ msg: message, type: "error" });
     } finally {
       setSubmitting(false);
     }
@@ -541,6 +598,58 @@ export default function EditProductForm({ product, onClose, onSaved }) {
 
           {/* Beden & Stok — mobile-first */}
           <div className="space-y-3">
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={isSizeLess}
+                onChange={(e) => {
+                  const checked = e.target.checked;
+                  setIsSizeLess(checked);
+                  setFormData((current) => ({
+                    ...current,
+                    sizes: checked
+                      ? [
+                          {
+                            id: uuid(),
+                            size: "",
+                            stock: current.sizes[0]?.stock || 0,
+                          },
+                        ]
+                      : [],
+                  }));
+                  setHasChanged(true);
+                }}
+              />
+              Bedensiz ürün (tek stok)
+            </label>
+
+            {isSizeLess ? (
+              <div>
+                <label className="block text-sm font-medium">Toplam Stok *</label>
+                <input
+                  type="number"
+                  inputMode="numeric"
+                  min="0"
+                  step="1"
+                  value={formData.sizes[0]?.stock ?? 0}
+                  onChange={(e) => {
+                    setFormData((current) => ({
+                      ...current,
+                      sizes: [
+                        {
+                          id: current.sizes[0]?.id || uuid(),
+                          size: "",
+                          stock: Number(e.target.value),
+                        },
+                      ],
+                    }));
+                    setHasChanged(true);
+                  }}
+                  className="w-full px-3 py-2 border rounded-lg"
+                />
+              </div>
+            ) : (
+              <>
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
               <label className="font-medium">Beden & Stok Satırları</label>
               <button
@@ -569,6 +678,8 @@ export default function EditProductForm({ product, onClose, onSaved }) {
                   <input
                     value={stock}
                     type="number"
+                    min="0"
+                    step="1"
                     inputMode="numeric"
                     placeholder="Stok"
                     onChange={(e) =>
@@ -588,6 +699,8 @@ export default function EditProductForm({ product, onClose, onSaved }) {
                 </div>
               ))}
             </div>
+              </>
+            )}
           </div>
 
           {/* Yeni Medya Yükleyiciler */}
@@ -600,8 +713,18 @@ export default function EditProductForm({ product, onClose, onSaved }) {
                 type="file"
                 accept="video/*"
                 onChange={(e) => {
-                  setNewVideo(e.target.files[0] || null);
-                  setHasChanged(true);
+                  const selected = e.target.files[0] || null;
+                  try {
+                    if (selected) {
+                      validateMediaFile(selected, "product_video");
+                      startMediaPreparation(selected, "product_video");
+                    }
+                    setNewVideo(selected);
+                    setHasChanged(true);
+                  } catch (error) {
+                    setToast({ msg: mediaErrorMessage(error), type: "error" });
+                    e.target.value = "";
+                  }
                 }}
                 className="block w-full text-sm"
               />
@@ -622,28 +745,29 @@ export default function EditProductForm({ product, onClose, onSaved }) {
                     setHasChanged(true);
                     return;
                   }
-                  const { processed, failed } = await compressImageFileList(
-                    files,
-                    { maxBytes: MAX_IMAGE_BYTES }
-                  );
+                  const selected = Array.from(files);
                   e.target.value = "";
-                  if (failed.length) {
-                    const maxMb =
-                      Math.round((MAX_IMAGE_BYTES / (1024 * 1024)) * 10) / 10;
+                  if (
+                    selected.length + keepExistingImageAssetIds.length >
+                    6
+                  ) {
                     setToast({
-                      msg: `Aşağıdaki görseller sıkıştırılamadı: ${failed
-                        .map((f) => f.name)
-                        .join(
-                          ", "
-                        )}. Lütfen ${maxMb}MB altında dosyalar seçin.`,
+                      msg: "Bir üründe en fazla 6 görsel olabilir.",
                       type: "error",
                     });
+                    return;
                   }
-                  if (processed.length) {
-                    setNewImages(processed);
+                  try {
+                    selected.forEach((file) => {
+                      validateMediaFile(file, "product_image");
+                      startMediaPreparation(file, "product_image");
+                    });
+                    setNewImages(selected);
                     // yeni görsel geldiğinde kapak yeni taraftan seçilecekse buna izin ver
                     setNewCoverIndex(-1);
                     setHasChanged(true);
+                  } catch (error) {
+                    setToast({ msg: mediaErrorMessage(error), type: "error" });
                   }
                 }}
                 className="block w-full text-sm"
@@ -663,10 +787,10 @@ export default function EditProductForm({ product, onClose, onSaved }) {
             <button
               type="submit"
               disabled={
-                !hasChanged || submitting || !pricingReady || !hasAnyMedia
+                !hasChanged || submitting || !formValid
               }
               className={`px-4 py-2 rounded-lg text-white w-full sm:w-auto ${
-                !hasChanged || submitting || !pricingReady || !hasAnyMedia
+                !hasChanged || submitting || !formValid
                   ? "bg-gray-300 cursor-not-allowed"
                   : "bg-blue-600 hover:bg-blue-700"
               }`}
@@ -675,9 +799,9 @@ export default function EditProductForm({ product, onClose, onSaved }) {
             </button>
           </div>
 
-          {!hasAnyMedia && (
+          {!hasProductImage && (
             <p className="text-xs text-red-600">
-              En az bir görsel veya video bırakmalısınız.
+              Üründe en az bir görsel bırakmalısınız.
             </p>
           )}
 

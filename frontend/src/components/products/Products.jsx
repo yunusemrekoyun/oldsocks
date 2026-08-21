@@ -44,7 +44,7 @@ export default function Products({
             key={p._id}
             id={p._id}
             video={p.video}
-            poster={p.poster || p.images?.[0] || null}
+            poster={p.media?.images?.[0] || p.poster || p.images?.[0] || null}
             name={p.name}
             price={price} // ← orijinal (yoksa final)
             discountedPrice={discountedPrice} // ← final

@@ -1,5 +1,5 @@
 // src/admin/pages/ShippingMethodsPage.jsx
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import api from "../../../api";
 import ToastAlert from "../../components/ui/ToastAlert";
 
@@ -54,19 +54,28 @@ export default function ShippingMethodsPage() {
 
   // toast
   const [toast, setToast] = useState(null);
-  const showToast = (type, title, message) =>
-    setToast({ type, title, message, id: Date.now() });
+  const showToast = useCallback(
+    (type, title, message) =>
+      setToast({ type, title, message, id: Date.now() }),
+    []
+  );
+  const thresholdTargetRef = useRef(thresholdTarget);
+
+  useEffect(() => {
+    thresholdTargetRef.current = thresholdTarget;
+  }, [thresholdTarget]);
 
   const totalCount = useMemo(() => methods.length, [methods]);
 
-  const fetchList = async () => {
+  const fetchList = useCallback(async () => {
     try {
       setLoading(true);
       const { data } = await api.get("/shipping");
       setMethods(Array.isArray(data) ? data : []);
-      if (thresholdTarget) {
+      const currentThresholdTarget = thresholdTargetRef.current;
+      if (currentThresholdTarget) {
         const updated = (Array.isArray(data) ? data : []).find(
-          (m) => m._id === thresholdTarget._id
+          (m) => m._id === currentThresholdTarget._id
         );
         if (updated) {
           setThresholdTarget(updated);
@@ -85,11 +94,11 @@ export default function ShippingMethodsPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [showToast]);
 
   useEffect(() => {
     fetchList();
-  }, []);
+  }, [fetchList]);
 
   const resetForm = () => {
     setForm({ name: "", fee: "" });

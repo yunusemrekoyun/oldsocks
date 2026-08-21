@@ -1,3 +1,4 @@
+const mongoose = require("mongoose");
 const Product = require("../models/Product");
 const ShippingMethod = require("../models/ShippingMethod");
 const CartCampaign = require("../models/CartCampaign");
@@ -36,19 +37,20 @@ function buildAggregatedItems(rawItems) {
   if (!Array.isArray(rawItems) || rawItems.length === 0) {
     throw new HttpError(400, "Sepet boş veya geçersiz.");
   }
+  if (rawItems.length > 100) {
+    throw new HttpError(400, "Sepette izin verilenden fazla ürün satırı var.");
+  }
 
   const aggregated = new Map();
 
   rawItems.forEach((item) => {
     const id = String(item?.id || item?.productId || "").trim();
-    if (!id) throw new HttpError(400, "Geçersiz ürün (id eksik).");
+    if (!mongoose.isObjectIdOrHexString(id)) {
+      throw new HttpError(400, "Geçersiz ürün kimliği.");
+    }
 
     const qty = Number(item?.qty);
-    if (!Number.isFinite(qty) || qty <= 0) {
-      throw new HttpError(400, "Geçersiz adet değeri.");
-    }
-    const normalizedQty = Math.floor(qty);
-    if (normalizedQty <= 0) {
+    if (!Number.isSafeInteger(qty) || qty <= 0 || qty > 1000) {
       throw new HttpError(400, "Geçersiz adet değeri.");
     }
 
@@ -58,11 +60,14 @@ function buildAggregatedItems(rawItems) {
       aggregated.set(key, {
         id,
         size: sizeKey,
-        qty: normalizedQty,
-        color: item?.color ?? null,
+        qty,
       });
     } else {
-      aggregated.get(key).qty += normalizedQty;
+      const nextQty = aggregated.get(key).qty + qty;
+      if (!Number.isSafeInteger(nextQty) || nextQty > 1000) {
+        throw new HttpError(400, "Geçersiz adet değeri.");
+      }
+      aggregated.get(key).qty = nextQty;
     }
   });
 
@@ -294,6 +299,11 @@ async function getEligibleCampaigns(lines, now = new Date()) {
 async function resolveCouponForLines(selectedCouponCode, lines, context = {}) {
   const code = normalizeCouponCode(selectedCouponCode);
   if (!code) return null;
+  if (!/^[A-Z0-9_-]{3,40}$/.test(code)) {
+    throw new HttpError(400, "Kupon kodunu kontrol edin.", {
+      source: "coupon",
+    });
+  }
 
   const coupon = await Coupon.findOne({
     code,
@@ -398,7 +408,9 @@ async function calculateCartPricing(rawItems, options = {}) {
       originalPrice: normalizedOriginalPrice,
       qty: entry.qty,
       size: sizeRecord.size || "",
-      color: entry.color ?? product.color ?? "",
+      // Renk ürün varyantının sunucudaki kaydından gelir; istemci sipariş
+      // içeriğini serbest bir renk metniyle değiştiremez.
+      color: product.color ?? "",
     });
   }
 
@@ -501,6 +513,7 @@ async function calculateCartPricing(rawItems, options = {}) {
 
 module.exports = {
   HttpError,
+  buildAggregatedItems,
   calculateCartPricing,
   nowInRange,
 };

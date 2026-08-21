@@ -7,6 +7,7 @@ const {
   COOKIE_OPTIONS,
   createAccessToken,
   createRefreshToken,
+  hashRefreshToken,
 } = require("../utils/authTokens");
 const { validatePasswordPolicy } = require("../utils/passwordPolicy");
 const {
@@ -21,7 +22,7 @@ const {
 
 const GENERIC_RESET_RESPONSE = {
   message:
-    "Eger bu e-posta ile kayitli bir hesap varsa, sifre sifirlama baglantisi gonderildi.",
+    "Eğer bu e-posta ile kayıtlı bir hesap varsa, şifre sıfırlama bağlantısı gönderildi.",
 };
 
 function getPrimaryFrontendOrigin() {
@@ -36,7 +37,7 @@ function getPrimaryFrontendOrigin() {
 function validatePasswordInput(password) {
   const result = validatePasswordPolicy(password);
   if (!result.ok) {
-    const err = new Error(result.message || "Sifre kurallari saglanmiyor.");
+    const err = new Error(result.message || "Şifre kuralları sağlanmıyor.");
     err.statusCode = 400;
     throw err;
   }
@@ -45,11 +46,32 @@ function validatePasswordInput(password) {
 function sanitizeEmailOrThrow(email) {
   const normalizedEmail = normalizeEmailAddress(email);
   if (!isValidEmailAddress(normalizedEmail)) {
-    const err = new Error("Gecerli bir e-posta girin.");
+    const err = new Error("Geçerli bir e-posta girin.");
     err.statusCode = 400;
     throw err;
   }
   return normalizedEmail;
+}
+
+function sanitizeNameOrThrow(value, label) {
+  const normalized = String(value || "").trim();
+  if (normalized.length < 2 || normalized.length > 80) {
+    const err = new Error(`${label} 2 ile 80 karakter arasında olmalıdır.`);
+    err.statusCode = 400;
+    throw err;
+  }
+  return normalized;
+}
+
+function sanitizePhoneOrThrow(value) {
+  const normalized = String(value || "").trim();
+  if (!normalized) return undefined;
+  if (!/^\+[1-9]\d{9,14}$/.test(normalized)) {
+    const err = new Error("Geçerli bir telefon numarası girin.");
+    err.statusCode = 400;
+    throw err;
+  }
+  return normalized;
 }
 
 async function invalidateSessions(user) {
@@ -66,47 +88,44 @@ exports.register = async (req, res) => {
       email,
       password,
       phone,
-      address,
-      avatar,
       role,
     } = req.body;
 
     const normalizedEmail = sanitizeEmailOrThrow(email);
+    const normalizedFirstName = sanitizeNameOrThrow(firstName, "Ad");
+    const normalizedLastName = sanitizeNameOrThrow(lastName, "Soyad");
+    const normalizedPhone = sanitizePhoneOrThrow(phone);
     validatePasswordInput(password);
 
     if (role && role !== "user") {
-      console.warn(
-        `[Auth][Register] Role override attempt blocked for email ${normalizedEmail}`
-      );
+      console.warn("[Auth][Register] Role override attempt blocked.");
     }
 
     if (await User.findOne({ email: normalizedEmail })) {
-      console.log(`[Auth][Register] E-posta zaten kullanımda: ${normalizedEmail}`);
       return res.status(400).json({ message: "E-posta zaten kullanımda." });
     }
 
     const hashed = await bcrypt.hash(password, 10);
 
     const user = await User.create({
-      firstName,
-      lastName,
+      firstName: normalizedFirstName,
+      lastName: normalizedLastName,
       email: normalizedEmail,
       password: hashed,
-      phone,
-      address,
-      avatar,
+      phone: normalizedPhone,
       role: "user",
     });
 
     const accessToken = createAccessToken(user);
     const refreshToken = createRefreshToken(user);
 
-    user.refreshTokens.push(refreshToken);
+    user.refreshTokens = [
+      ...user.refreshTokens,
+      hashRefreshToken(refreshToken),
+    ].slice(-10);
     await user.save();
 
-    console.log(
-      `[Auth][Register] Yeni kullanıcı: ${user._id}, email: ${normalizedEmail}`
-    );
+    console.log(`[Auth][Register] Yeni kullanıcı: ${user._id}`);
 
     res
       .cookie("refreshToken", refreshToken, COOKIE_OPTIONS)
@@ -125,26 +144,27 @@ exports.login = async (req, res) => {
     const normalizedEmail = sanitizeEmailOrThrow(req.body?.email);
     const { password } = req.body;
 
-    const user = await User.findOne({ email: normalizedEmail });
+    const user = await User.findOne({ email: normalizedEmail }).select(
+      "+refreshTokens"
+    );
     if (!user) {
-      console.log(`[Auth][Login] Geçersiz kimlik: ${normalizedEmail}`);
       return res.status(401).json({ message: "Geçersiz kimlik." });
     }
 
     const ok = await bcrypt.compare(String(password || ""), user.password);
     if (!ok) {
-      console.log(`[Auth][Login] Şifre yanlış: ${normalizedEmail}`);
       return res.status(401).json({ message: "Geçersiz kimlik." });
     }
 
     const accessToken = createAccessToken(user);
     const refreshToken = createRefreshToken(user);
-    user.refreshTokens.push(refreshToken);
+    user.refreshTokens = [
+      ...user.refreshTokens,
+      hashRefreshToken(refreshToken),
+    ].slice(-10);
     await user.save();
 
-    console.log(
-      `[Auth][Login] Başarılı giriş: ${user._id}, email: ${normalizedEmail}`
-    );
+    console.log(`[Auth][Login] Başarılı giriş: ${user._id}`);
 
     res
       .cookie("refreshToken", refreshToken, COOKIE_OPTIONS)
@@ -165,20 +185,24 @@ exports.refresh = async (req, res) => {
     }
 
     const payload = jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET);
-    const user = await User.findById(payload.userId);
+    const user = await User.findById(payload.userId).select("+refreshTokens");
     if (!user) {
       res.clearCookie("refreshToken", COOKIE_OPTIONS);
       return res.status(403).json({ message: "Geçersiz token." });
     }
 
+    const refreshTokenHash = hashRefreshToken(refreshToken);
     const stored = Array.isArray(user.refreshTokens)
-      ? user.refreshTokens.includes(refreshToken)
+      ? user.refreshTokens.includes(refreshToken) ||
+        user.refreshTokens.includes(refreshTokenHash)
       : false;
     const payloadTokenVersion = Number(payload?.tokenVersion || 0);
     const currentTokenVersion = Number(user?.tokenVersion || 0);
 
     if (!stored || payloadTokenVersion !== currentTokenVersion) {
-      user.refreshTokens = user.refreshTokens.filter((t) => t !== refreshToken);
+      user.refreshTokens = user.refreshTokens.filter(
+        (token) => token !== refreshToken && token !== refreshTokenHash
+      );
       await user.save();
       res.clearCookie("refreshToken", COOKIE_OPTIONS);
       return res.status(403).json({ message: "Geçersiz token." });
@@ -187,8 +211,10 @@ exports.refresh = async (req, res) => {
     const newAccessToken = createAccessToken(user);
     const newRefreshToken = createRefreshToken(user);
 
-    user.refreshTokens = user.refreshTokens.filter((t) => t !== refreshToken);
-    user.refreshTokens.push(newRefreshToken);
+    user.refreshTokens = user.refreshTokens
+      .filter((token) => token !== refreshToken && token !== refreshTokenHash)
+      .concat(hashRefreshToken(newRefreshToken))
+      .slice(-10);
     await user.save();
 
     res
@@ -208,9 +234,10 @@ exports.logout = async (req, res) => {
       return res.clearCookie("refreshToken", COOKIE_OPTIONS).sendStatus(204);
     }
 
+    const refreshTokenHash = hashRefreshToken(refreshToken);
     await User.updateOne(
-      { refreshTokens: refreshToken },
-      { $pull: { refreshTokens: refreshToken } }
+      { refreshTokens: { $in: [refreshToken, refreshTokenHash] } },
+      { $pull: { refreshTokens: { $in: [refreshToken, refreshTokenHash] } } }
     );
 
     res.clearCookie("refreshToken", COOKIE_OPTIONS).sendStatus(204);
@@ -224,7 +251,7 @@ exports.forgotPassword = async (req, res) => {
   try {
     const normalizedEmail = normalizeEmailAddress(req.body?.email);
     if (!isValidEmailAddress(normalizedEmail)) {
-      return res.status(400).json({ message: "Gecerli bir e-posta girin." });
+      return res.status(400).json({ message: "Geçerli bir e-posta girin." });
     }
 
     const user = await User.findOne({ email: normalizedEmail });
@@ -273,7 +300,9 @@ exports.resetPassword = async (req, res) => {
     const password = String(req.body?.password || "");
 
     if (!rawToken) {
-      return res.status(400).json({ message: "Gecersiz veya eksik sifre sifirlama linki." });
+      return res.status(400).json({
+        message: "Geçersiz veya eksik şifre sıfırlama bağlantısı.",
+      });
     }
 
     validatePasswordInput(password);
@@ -287,7 +316,9 @@ exports.resetPassword = async (req, res) => {
     if (!resetRecord) {
       return res
         .status(400)
-        .json({ message: "Sifre sifirlama linki gecersiz veya suresi dolmus." });
+        .json({
+          message: "Şifre sıfırlama bağlantısı geçersiz veya süresi dolmuş.",
+        });
     }
 
     const user = await User.findById(resetRecord.user);
@@ -295,14 +326,16 @@ exports.resetPassword = async (req, res) => {
       await PasswordResetToken.deleteOne({ _id: resetRecord._id });
       return res
         .status(400)
-        .json({ message: "Sifre sifirlama linki gecersiz veya suresi dolmus." });
+        .json({
+          message: "Şifre sıfırlama bağlantısı geçersiz veya süresi dolmuş.",
+        });
     }
 
     const sameAsCurrent = await bcrypt.compare(password, user.password);
     if (sameAsCurrent) {
       return res
         .status(400)
-        .json({ message: "Yeni sifre mevcut sifrenizle ayni olamaz." });
+        .json({ message: "Yeni şifre mevcut şifrenizle aynı olamaz." });
     }
 
     user.password = await bcrypt.hash(password, 10);
@@ -310,12 +343,12 @@ exports.resetPassword = async (req, res) => {
     await PasswordResetToken.deleteMany({ user: user._id });
 
     return res.json({
-      message: "Sifreniz guncellendi. Giris yapabilirsiniz.",
+      message: "Şifreniz güncellendi. Giriş yapabilirsiniz.",
     });
   } catch (err) {
     console.error("[Auth][ResetPassword] Hata:", err);
     return res
       .status(err.statusCode || 500)
-      .json({ message: err.message || "Sifre guncellenemedi." });
+      .json({ message: err.message || "Şifre güncellenemedi." });
   }
 };

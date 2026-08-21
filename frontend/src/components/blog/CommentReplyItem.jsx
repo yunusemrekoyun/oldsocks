@@ -1,6 +1,6 @@
 /* src/components/blog/CommentReplyItem.jsx */
 import React from "react";
-import placeholderAvatar from "../../assets/blog/blog-owner/author.png";
+import placeholderAvatar from "../../assets/blog/blog-owner/author.webp";
 
 export default function CommentReplyItem({ reply }) {
   const { author, createdAt, text } = reply;

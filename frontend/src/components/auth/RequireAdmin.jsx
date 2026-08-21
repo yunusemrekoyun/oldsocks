@@ -4,11 +4,10 @@ import { Navigate, Outlet } from "react-router-dom";
 import { AuthContext } from "../../context/AuthContext";
 
 export default function RequireAdmin() {
-  const { isLoggedIn, role } = useContext(AuthContext);
+  const { isLoggedIn, role, loading } = useContext(AuthContext);
 
-  // 1) Henüz token var ama rol gelmemişse, bekle:
-  if (isLoggedIn && role === null) {
-    return null; // veya burada bir <LoadingSpinner /> koyabilirsiniz
+  if (loading || (isLoggedIn && role === null)) {
+    return <div className="min-h-[40vh] p-8 text-center">Yükleniyor…</div>;
   }
 
   // 2) Giriş yoksa ya da rol admin değilse anasayfaya gönder:

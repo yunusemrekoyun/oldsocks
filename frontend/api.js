@@ -6,17 +6,12 @@ const api = axios.create({
   withCredentials: true,
 });
 
-let isRefreshing = false;
-let subscribers = [];
+let refreshPromise = null;
 
-function onRefreshed(token) {
-  console.log("[api] Kuyruktaki isteklere yeni token gönderiliyor");
-  subscribers.forEach((cb) => cb(token));
-  subscribers = [];
-}
-
-function addSubscriber(cb) {
-  subscribers.push(cb);
+function clearExpiredSession() {
+  localStorage.removeItem("accessToken");
+  delete api.defaults.headers.common.Authorization;
+  window.dispatchEvent(new Event("auth:session-expired"));
 }
 
 api.interceptors.request.use((config) => {
@@ -33,44 +28,36 @@ api.interceptors.response.use(
     const { config, response } = error;
 
     // Bu bayrak varsa refresh interceptor’ü atla
-    if (config.skipAuthRefresh) {
+    if (config?.skipAuthRefresh) {
       return Promise.reject(error);
     }
 
     const status = response?.status;
-    if ((status === 401 || status === 403) && !config._retry) {
+    if ((status === 401 || status === 403) && config && !config._retry) {
       config._retry = true;
 
-      if (!isRefreshing) {
-        console.log(
-          "[api] Access token invalid, başlatılıyor: refresh token flow"
-        );
-        isRefreshing = true;
-
-        return api
+      if (!refreshPromise) {
+        refreshPromise = api
           .post("/auth/refresh", null, { skipAuthRefresh: true })
           .then(({ data }) => {
             const newToken = data.accessToken;
-            console.log("[api] Yeni access token alındı:", newToken);
             localStorage.setItem("accessToken", newToken);
             api.defaults.headers.common["Authorization"] = `Bearer ${newToken}`;
-            onRefreshed(newToken);
-            isRefreshing = false;
-            return api(config);
+            return newToken;
           })
           .catch((err) => {
-            console.error("[api] Token yenileme başarısız:", err);
-            isRefreshing = false;
-            return Promise.reject(err);
+            clearExpiredSession();
+            throw err;
+          })
+          .finally(() => {
+            refreshPromise = null;
           });
       }
 
-      // Eğer zaten bir refresh akışı başlıyorsa bekle
-      return new Promise((resolve) => {
-        addSubscriber((token) => {
-          config.headers["Authorization"] = `Bearer ${token}`;
-          resolve(api(config));
-        });
+      return refreshPromise.then((token) => {
+        config.headers = config.headers || {};
+        config.headers["Authorization"] = `Bearer ${token}`;
+        return api(config);
       });
     }
 

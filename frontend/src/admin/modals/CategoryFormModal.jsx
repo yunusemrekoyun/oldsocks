@@ -2,6 +2,12 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import api from "../../../api";
 import { v4 as uuidv4 } from "uuid";
 import { useUploadQueue } from "../../context/UploadQueueContext";
+import {
+  mediaErrorMessage,
+  startMediaPreparation,
+  uploadMediaFile,
+  validateMediaFile,
+} from "../../services/mediaUpload";
 
 /* Basit chip */
 const Chip = ({ children }) => (
@@ -25,97 +31,6 @@ const Badge = ({ children, color = "gray" }) => {
     </span>
   );
 };
-
-/* ───── Medya Kontrol Yardımcıları (EN-BOY’A DOKUNMADAN) ───── */
-const ALLOWED_MIMES = ["image/jpeg", "image/png", "image/webp"];
-const READABLE_BUT_CONVERT = ["image/webp", "image/png"];
-const MAX_BYTES = 10 * 1024 * 1024; // 10MB
-const MIN_QUALITY = 0.6;
-const START_QUALITY = 0.9;
-
-function isHeicFile(file) {
-  const mime = (file?.type || "").toLowerCase();
-  const name = (file?.name || "").toLowerCase();
-  const ext = name.split(".").pop();
-  if (mime === "image/heic" || mime === "image/heif") return true;
-  if (ext === "heic" || ext === "heif") return true;
-  if (
-    (mime === "" || mime === "application/octet-stream") &&
-    (ext === "heic" || ext === "heif")
-  ) {
-    return true;
-  }
-  return false;
-}
-function ensureJpegName(name = "image.jpg") {
-  const base = name.replace(/\.[^.]+$/, "");
-  return `${base}.jpg`;
-}
-
-async function compressToJpegNoResize(
-  file,
-  {
-    maxBytes = MAX_BYTES,
-    startQuality = START_QUALITY,
-    minQuality = MIN_QUALITY,
-  }
-) {
-  if (isHeicFile(file)) {
-    throw new Error("HEIC/HEIF desteklenmiyor. Lütfen JPG veya PNG yükleyin.");
-  }
-
-  const dataUrl = await new Promise((resolve, reject) => {
-    const fr = new FileReader();
-    fr.onload = () => resolve(fr.result);
-    fr.onerror = () => reject(new Error("Dosya okunamadı."));
-    fr.readAsDataURL(file);
-  });
-
-  const img = await new Promise((resolve, reject) => {
-    const image = new Image();
-    image.onload = () => resolve(image);
-    image.onerror = () => reject(new Error("Görsel yüklenemedi."));
-    image.src = dataUrl;
-  });
-
-  const canvas = document.createElement("canvas");
-  canvas.width = img.width;
-  canvas.height = img.height;
-  const ctx = canvas.getContext("2d");
-  ctx.drawImage(img, 0, 0);
-
-  let q = startQuality;
-  let blob = await new Promise((res) => canvas.toBlob(res, "image/jpeg", q));
-  if (!blob) throw new Error("Sıkıştırma başarısız.");
-
-  while (blob.size > maxBytes && q > minQuality) {
-    q = Math.max(minQuality, +(q - 0.1).toFixed(2));
-    blob = await new Promise((res) => canvas.toBlob(res, "image/jpeg", q));
-    if (!blob) break;
-  }
-
-  if (!blob) throw new Error("Görsel dönüştürülemedi.");
-  if (blob.size > maxBytes) {
-    const mb = (blob.size / (1024 * 1024)).toFixed(2);
-    const lim = (maxBytes / (1024 * 1024)).toFixed(0);
-    throw new Error(
-      `Optimize edildi ancak dosya hâlâ çok büyük (${mb} MB > ${lim} MB). Lütfen daha küçük bir dosya seçin.`
-    );
-  }
-
-  const outFile = new File([blob], ensureJpegName(file.name), {
-    type: "image/jpeg",
-  });
-  const previewUrl = URL.createObjectURL(blob);
-
-  return {
-    file: outFile,
-    previewUrl,
-    width: img.width,
-    height: img.height,
-    quality: q,
-  };
-}
 
 /* 409 uyarı modalı */
 const BlockedProductsModal = ({ open, onClose, data }) => {
@@ -243,82 +158,18 @@ export default function CategoryFormModal({
 
   const onPickFile = async (file) => {
     if (!file) return;
-
-    if (isHeicFile(file)) {
-      setFieldErrors({
-        image: "HEIC/HEIF desteklenmiyor. Lütfen JPG veya PNG yükleyin.",
-      });
-      setInfoMsg("");
-      setImageTooLarge(true);
-      return;
-    }
-
-    setFieldErrors({ image: "" });
-    setInfoMsg("");
-    setImageTooLarge(false);
-
     try {
-      let processed = file;
-
-      // PNG/WEBP -> JPEG
-      if (READABLE_BUT_CONVERT.includes(file.type)) {
-        const { file: out, previewUrl } = await compressToJpegNoResize(file, {
-          maxBytes: MAX_BYTES,
-          startQuality: START_QUALITY,
-          minQuality: MIN_QUALITY,
-        });
-        processed = out;
-        setInfoMsg("Görsel optimize edilerek JPEG'e dönüştürüldü.");
-        setForm((f) => ({ ...f, image: processed }));
-        setPreviewUrl(previewUrl);
-        setDirty(true);
-        setImageTooLarge(false);
-        if (fileInputRef.current) fileInputRef.current.value = "";
-        return;
-      }
-
-      // sadece desteklenen tipler
-      if (!ALLOWED_MIMES.includes(file.type)) {
-        setFieldErrors({ image: "Sadece JPG/PNG/WEBP yükleyin." });
-        setInfoMsg("");
-        setImageTooLarge(true);
-        return;
-      }
-
-      // boyut > 10MB ise JPEG kalite düşür
-      if (file.size > MAX_BYTES) {
-        const {
-          file: out,
-          previewUrl,
-          quality,
-        } = await compressToJpegNoResize(file, {
-          maxBytes: MAX_BYTES,
-          startQuality: START_QUALITY,
-          minQuality: MIN_QUALITY,
-        });
-        processed = out;
-        setInfoMsg(
-          `Görsel boyutu yüksekti, kalite ${
-            quality?.toFixed ? quality.toFixed(2) : quality
-          } ile optimize edildi.`
-        );
-        setForm((f) => ({ ...f, image: processed }));
-        setPreviewUrl(previewUrl);
-        setDirty(true);
-        setImageTooLarge(false);
-        if (fileInputRef.current) fileInputRef.current.value = "";
-      } else {
-        // olduğu gibi kabul
-        setForm((f) => ({ ...f, image: file }));
-        setPreviewUrl(URL.createObjectURL(file));
-        setDirty(true);
-        setImageTooLarge(false);
-        if (fileInputRef.current) fileInputRef.current.value = "";
-      }
+      validateMediaFile(file, "category_image");
+      startMediaPreparation(file, "category_image");
+      setForm((current) => ({ ...current, image: file }));
+      setPreviewUrl(URL.createObjectURL(file));
+      setFieldErrors({ image: "" });
+      setInfoMsg("Görsel sunucuda farklı boyutlar için optimize edilecek.");
+      setDirty(true);
+      setImageTooLarge(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
     } catch (err) {
-      setFieldErrors({
-        image: err?.message || "Görsel işlenemedi. Lütfen JPG/PNG deneyin.",
-      });
+      setFieldErrors({ image: mediaErrorMessage(err) });
       setInfoMsg("");
       setImageTooLarge(true);
     }
@@ -346,70 +197,40 @@ export default function CategoryFormModal({
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    if (!form.image) {
+    if (!form.image && !isEdit) {
       onSaved("Lütfen görsel seçin.");
       return;
-    }
-
-    let uploadFile = form.image;
-
-    // Her durumda (tekrar) sıkıştırmayı dene ve kesin boyutu kontrol et
-    try {
-      const {
-        file: compressed,
-        previewUrl: purl,
-        quality,
-      } = await compressToJpegNoResize(uploadFile, {
-        maxBytes: MAX_BYTES,
-        startQuality: START_QUALITY,
-        minQuality: MIN_QUALITY,
-      });
-      uploadFile = compressed;
-      setPreviewUrl(purl);
-      setInfoMsg(
-        `Görsel kalite ${
-          quality?.toFixed ? quality.toFixed(2) : quality
-        } ile optimize edildi.`
-      );
-    } catch (err) {
-      onSaved(err.message || "Görsel işlenemedi.");
-      return; // ❌ istek atma
-    }
-
-    // 🔒 Son bariyer: 10MB üstüyse asla gönderme
-    if (uploadFile.size > MAX_BYTES) {
-      onSaved(
-        `Dosya çok büyük (${(uploadFile.size / 1024 / 1024).toFixed(
-          2
-        )} MB). 10MB altında olmalı.`
-      );
-      return; // ❌ istek atma
     }
 
     // uploadQueue task
     const id = uuidv4();
     addTask({ id, name: form.name || "Kategori", progress: 0 });
 
-    const fd = new FormData();
-    fd.append("name", form.name);
-    fd.append("image", uploadFile, uploadFile.name);
-    if (childrenInput.trim()) fd.append("children", childrenInput);
-
-    const cfg = {
-      // Content-Type’ı ELLE set etme: boundary’yi tarayıcı ekler
-      transformRequest: (d) => d, // axios bu objeye dokunmasın
-      onUploadProgress: (ev) => {
-        if (!ev.total) return;
-        const pct = Math.round((ev.loaded * 100) / ev.total);
-        updateTask(id, { progress: pct });
-      },
-    };
-
     try {
+      const asset = form.image
+        ? await uploadMediaFile(form.image, "category_image", {
+            onProgress: (progress) =>
+              updateTask(id, {
+                progress:
+                  progress.phase === "processing"
+                    ? 95
+                    : progress.phase === "ready"
+                    ? 100
+                    : Math.round(progress.percent * 0.9),
+                phase: progress.phase,
+                status: progress.phase,
+              }),
+          })
+        : null;
+      const payload = {
+        name: form.name,
+        children: childrenInput,
+        ...(asset ? { imageAssetId: asset.id } : {}),
+      };
       if (isEdit) {
-        await api.put(`/categories/${category._id}`, fd, cfg);
+        await api.put(`/categories/${category._id}`, payload);
       } else {
-        await api.post("/categories", fd, cfg);
+        await api.post("/categories", payload);
       }
 
       updateTask(id, { progress: 100, status: "success" });
@@ -433,10 +254,10 @@ export default function CategoryFormModal({
         return; // modal açık kalsın
       }
 
-      const msg =
-        status === 500
-          ? "Görselin boyutu çok yüksek. Lütfen 10MB altında bir görsel seçin."
-          : data?.message || "Kategori kaydedilemedi.";
+      const msg = mediaErrorMessage(
+        err,
+        data?.message || "Kategori kaydedilemedi."
+      );
 
       onSaved({ status, message: msg }); // ❌ hata → modal kapanmaz
     }
@@ -475,7 +296,7 @@ export default function CategoryFormModal({
                 <span className="text-sm">
                   {form.image
                     ? form.image.name
-                    : "Dosya seçin (JPG/PNG/WEBP; HEIC desteklenmez)"}
+                    : "Dosya seçin (JPG/PNG/WEBP/HEIC)"}
                 </span>
                 <input
                   type="file"
@@ -494,7 +315,7 @@ export default function CategoryFormModal({
                 <p className="text-xs text-red-600 mt-1">{fieldErrors.image}</p>
               )}
               <p className="text-xs text-gray-500 mt-1">
-                Sunucu limiti: 10MB. Bu sınırı aşan dosyalar yüklenmez.
+                Sunucu limiti: 15MB. HEIC/HEIF dahil desteklenen dosyalar sunucuda optimize edilir.
               </p>
             </div>
 

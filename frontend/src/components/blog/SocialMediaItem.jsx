@@ -65,13 +65,11 @@ export default function SocialMediaItem({ embedLink, caption }) {
       cleanup = processAndTune();
     }
     return () => cleanup?.();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Link değişince yeniden işle
   useEffect(() => {
     processAndTune();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [embedLink]);
 
   return (

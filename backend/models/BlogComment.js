@@ -14,7 +14,7 @@ const BlogCommentSchema = new Schema(
       ref: "User",
       required: true,
     },
-    text: { type: String, required: true, trim: true },
+    text: { type: String, required: true, trim: true, minlength: 2, maxlength: 1000 },
     replies: [
       {
         type: Schema.Types.ObjectId,

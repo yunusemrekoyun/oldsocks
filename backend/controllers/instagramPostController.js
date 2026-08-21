@@ -1,7 +1,36 @@
 // backend/controllers/instagramPostController.js
 const InstagramPost = require("../models/InstagramPost");
 
-// GET all
+function normalizeInstagramEmbedLink(value) {
+  try {
+    const url = new URL(String(value || "").trim());
+    const hostname = url.hostname.toLowerCase().replace(/^www\./, "");
+    const supportedPath = /^\/(p|reel|tv)\/[^/]+\/?$/i.test(url.pathname);
+
+    if (url.protocol !== "https:" || hostname !== "instagram.com" || !supportedPath) {
+      return null;
+    }
+
+    url.hostname = "www.instagram.com";
+    url.search = "";
+    url.hash = "";
+    return url.toString();
+  } catch {
+    return null;
+  }
+}
+
+exports.getPublicInstagramPosts = async (_req, res) => {
+  try {
+    const posts = await InstagramPost.find({ active: true })
+      .select("embedLink caption")
+      .sort({ createdAt: -1 });
+    return res.json(posts);
+  } catch {
+    return res.status(500).json({ message: "Gönderiler alınamadı." });
+  }
+};
+
 exports.getAllInstagramPosts = async (req, res) => {
   try {
     const posts = await InstagramPost.find().sort({ createdAt: -1 });
@@ -14,9 +43,12 @@ exports.getAllInstagramPosts = async (req, res) => {
 // CREATE with duplicate check
 exports.createInstagramPost = async (req, res) => {
   try {
-    const { embedLink, caption = "", active = true } = req.body;
+    const { caption = "", active = true } = req.body;
+    const embedLink = normalizeInstagramEmbedLink(req.body?.embedLink);
     if (!embedLink) {
-      return res.status(400).json({ message: "Embed link zorunludur." });
+      return res.status(400).json({
+        message: "Geçerli bir Instagram gönderi veya Reels bağlantısı girin.",
+      });
     }
 
     // Aynı embedLink zaten var mı?
@@ -40,10 +72,21 @@ exports.createInstagramPost = async (req, res) => {
 // UPDATE
 exports.updateInstagramPost = async (req, res) => {
   try {
+    const embedLink = normalizeInstagramEmbedLink(req.body?.embedLink);
+    if (!embedLink) {
+      return res.status(400).json({
+        message: "Geçerli bir Instagram gönderi veya Reels bağlantısı girin.",
+      });
+    }
+
     const updated = await InstagramPost.findByIdAndUpdate(
       req.params.id,
-      req.body,
-      { new: true }
+      {
+        embedLink,
+        caption: String(req.body?.caption || "").trim(),
+        active: req.body?.active !== false,
+      },
+      { new: true, runValidators: true }
     );
     if (!updated) return res.status(404).json({ message: "Post bulunamadı" });
     res.json(updated);
