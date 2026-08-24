@@ -13,6 +13,9 @@ router.post(
   ctrl.uploadVideo
 );
 
+// Admin sıralama güncelleme ("/:id" kalıbından önce tanımlanır)
+router.patch("/order", verifyToken, allowRoles("admin"), ctrl.reorderHeroVideos);
+
 // Admin video silme
 router.delete("/:id", verifyToken, allowRoles("admin"), ctrl.deleteHeroVideo);
 

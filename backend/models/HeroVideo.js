@@ -9,6 +9,8 @@ const HeroVideoSchema = new mongoose.Schema(
       default: null,
       index: true,
     },
+    // vitrinde gösterim sırası; küçük değer önce gelir
+    order: { type: Number, default: 0, index: true },
     // yeni: medya türü (geri uyum için varsayılan 'video')
     kind: {
       type: String,

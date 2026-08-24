@@ -15,6 +15,8 @@ import {
   ArrowUpTrayIcon,
   TrashIcon,
   ExclamationTriangleIcon,
+  ChevronLeftIcon,
+  ChevronRightIcon,
 } from "@heroicons/react/24/outline";
 import ToastAlert from "../../components/ui/ToastAlert";
 import api from "../../../api";
@@ -71,6 +73,7 @@ export default function HeroVideoPage() {
   const [selected, setSelected] = useState(null); // { url, kind }
   const [isFetching, setIsFetching] = useState(true);
   const [progress, setProgress] = useState(0);
+  const [reordering, setReordering] = useState(false);
 
   const inputRef = useRef(null);
   const { addTask, updateTask, removeTask } = useUploadQueue();
@@ -223,6 +226,34 @@ export default function HeroVideoPage() {
     }
   };
 
+  /* ————— Sıralama ————— */
+  const moveItem = async (index, direction) => {
+    const target = index + direction;
+    if (reordering || target < 0 || target >= videos.length) return;
+
+    const previous = videos;
+    const next = [...videos];
+    [next[index], next[target]] = [next[target], next[index]];
+
+    // Önce ekranda uygula, sonra sunucuya yaz; hata olursa eski sıraya dön.
+    setVideos(next);
+    setReordering(true);
+    try {
+      const res = await api.patch("/hero-videos/order", {
+        ids: next.map((item) => item._id),
+      });
+      setVideos(res.data);
+    } catch (err) {
+      setVideos(previous);
+      setToast({
+        msg: err?.response?.data?.message || "Sıralama kaydedilemedi",
+        type: "error",
+      });
+    } finally {
+      setReordering(false);
+    }
+  };
+
   /* ————— Delete ————— */
   const handleDelete = async () => {
     try {
@@ -246,7 +277,8 @@ export default function HeroVideoPage() {
                 Hero Medyaları
               </Typography>
               <Typography variant="small" className="text-gray-600">
-                En fazla 3 öğe yükleyebilirsiniz. (Video veya Görsel)
+                En fazla 3 öğe yükleyebilirsiniz. (Video veya Görsel) Kartların
+                altındaki oklarla vitrindeki gösterim sırasını değiştirebilirsiniz.
               </Typography>
 
               {/* Limit info bandı */}
@@ -340,7 +372,7 @@ export default function HeroVideoPage() {
       {videos.length > 0 && (
         <div className="p-4">
           <div className="grid grid-cols-1 xs:grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-5 gap-4">
-            {videos.map((item) => (
+            {videos.map((item, index) => (
               <div
                 key={item._id}
                 className="border rounded-lg overflow-hidden group relative cursor-pointer bg-white shadow-sm hover:shadow-md transition"
@@ -360,6 +392,13 @@ export default function HeroVideoPage() {
                     </div>
                   )}
 
+                  {/* Sıra numarası */}
+                  <div className="absolute left-2 top-2">
+                    <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-black/60 text-white text-xs font-semibold backdrop-blur">
+                      {index + 1}
+                    </span>
+                  </div>
+
                   {/* Type Badge */}
                   <div className="absolute left-2 bottom-2">
                     <Chip
@@ -368,6 +407,46 @@ export default function HeroVideoPage() {
                       className="bg-black/60 text-white backdrop-blur rounded-full"
                     />
                   </div>
+                </div>
+
+                {/* Sıralama */}
+                <div
+                  className="flex items-center justify-between gap-2 border-t bg-gray-50 px-2 py-1.5"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <Tooltip content="Öne al">
+                    <span>
+                      <Button
+                        size="sm"
+                        variant="text"
+                        disabled={index === 0 || reordering}
+                        onClick={() => moveItem(index, -1)}
+                        className="px-2 py-1 disabled:opacity-30"
+                        aria-label="Öne al"
+                      >
+                        <ChevronLeftIcon className="w-4 h-4" />
+                      </Button>
+                    </span>
+                  </Tooltip>
+
+                  <span className="text-xs text-gray-600">
+                    {index + 1}. sıra
+                  </span>
+
+                  <Tooltip content="Geriye al">
+                    <span>
+                      <Button
+                        size="sm"
+                        variant="text"
+                        disabled={index === videos.length - 1 || reordering}
+                        onClick={() => moveItem(index, 1)}
+                        className="px-2 py-1 disabled:opacity-30"
+                        aria-label="Geriye al"
+                      >
+                        <ChevronRightIcon className="w-4 h-4" />
+                      </Button>
+                    </span>
+                  </Tooltip>
                 </div>
 
                 {/* Actions */}
