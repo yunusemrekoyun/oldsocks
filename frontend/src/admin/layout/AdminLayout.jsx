@@ -27,6 +27,13 @@ import {
   TruckIcon,
   MegaphoneIcon,
   CircleStackIcon,
+  ClipboardDocumentListIcon,
+  ReceiptPercentIcon,
+  ShoppingCartIcon,
+  TicketIcon,
+  PhotoIcon,
+  SparklesIcon,
+  BoltIcon,
 } from "@heroicons/react/24/solid";
 
 /* --------- Küçük yardımcı --------- */
@@ -71,68 +78,96 @@ export default function AdminLayout({ children }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const navItems = useMemo(
+  // Menü işlevine göre gruplandı. Etiketler ve yollar aynı; tek fark, 17 satırlık
+  // düz listenin taranabilir bloklara ayrılması.
+  const navGroups = useMemo(
     () => [
-      { label: "Ana Sayfa", icon: <HomeIcon className="w-5 h-5" />, path: "/" },
       {
-        label: "Kategoriler",
-        icon: <TagIcon className="w-5 h-5" />,
-        path: "/admin/categories",
+        section: "",
+        items: [
+          { label: "Ana Sayfa", icon: <HomeIcon className="w-5 h-5" />, path: "/" },
+        ],
       },
       {
-        label: "Ürünler",
-        icon: <ShoppingBagIcon className="w-5 h-5" />,
-        path: "/admin/products",
+        section: "Katalog",
+        items: [
+          {
+            label: "Kategoriler",
+            icon: <TagIcon className="w-5 h-5" />,
+            path: "/admin/categories",
+          },
+          {
+            label: "Ürünler",
+            icon: <ShoppingBagIcon className="w-5 h-5" />,
+            path: "/admin/products",
+          },
+        ],
       },
       {
-        label: "Kargo",
-        icon: <TruckIcon className="w-5 h-5" />,
-        path: "/admin/shipping",
+        section: "Satış",
+        items: [
+          {
+            label: "Siparişler",
+            icon: <ClipboardDocumentListIcon className="w-5 h-5" />,
+            path: "/admin/orders",
+          },
+          {
+            label: "Kargo",
+            icon: <TruckIcon className="w-5 h-5" />,
+            path: "/admin/shipping",
+          },
+          {
+            label: "İndirimler",
+            icon: <ReceiptPercentIcon className="w-5 h-5" />,
+            path: "/admin/discounts",
+          },
+          {
+            label: "Sepet Kampanyaları",
+            icon: <ShoppingCartIcon className="w-5 h-5" />,
+            path: "/admin/cart-campaigns",
+          },
+          {
+            label: "Kuponlar",
+            icon: <TicketIcon className="w-5 h-5" />,
+            path: "/admin/coupons",
+          },
+        ],
       },
       {
-        label: "İndirimler",
-        icon: <TagIcon className="w-5 h-5" />,
-        path: "/admin/discounts",
+        section: "İçerik",
+        items: [
+          {
+            label: "Banner Ayarları",
+            icon: <PhotoIcon className="w-5 h-5" />,
+            path: "/admin/hero-videos",
+          },
+          {
+            label: "Kampanyalar",
+            icon: <SparklesIcon className="w-5 h-5" />,
+            path: "/admin/campaigns",
+          },
+          {
+            label: "Mini Kampanyalar",
+            icon: <BoltIcon className="w-5 h-5" />,
+            path: "/admin/minicampaigns",
+          },
+          {
+            label: "Duyuru Barı",
+            icon: <MegaphoneIcon className="w-5 h-5" />,
+            path: "/admin/announcement-bar",
+          },
+        ],
       },
-      {
-        label: "Sepet Kampanyaları",
-        icon: <TagIcon className="w-5 h-5" />,
-        path: "/admin/cart-campaigns",
-      },
-      {
-        label: "Kuponlar",
-        icon: <TagIcon className="w-5 h-5" />,
-        path: "/admin/coupons",
-      },
+    ],
+    []
+  );
+
+  const systemItems = useMemo(
+    () => [
       {
         label: "Kullanıcılar",
         icon: <UserCircleIcon className="w-5 h-5" />,
         path: "/admin/users",
-      },
-      {
-        label: "Banner Ayarları",
-        icon: <CameraIcon className="w-5 h-5" />,
-        path: "/admin/hero-videos",
-      },
-      {
-        label: "Kampanyalar",
-        icon: <TagIcon className="w-5 h-5" />,
-        path: "/admin/campaigns",
-      },
-      {
-        label: "Mini Kampanyalar",
-        icon: <TagIcon className="w-5 h-5" />,
-        path: "/admin/minicampaigns",
-      },
-      {
-        label: "Siparişler",
-        icon: <ShoppingBagIcon className="w-5 h-5" />,
-        path: "/admin/orders",
-      },
-      {
-        label: "Duyuru Barı",
-        icon: <MegaphoneIcon className="w-5 h-5" />,
-        path: "/admin/announcement-bar",
       },
       {
         label: "Medya Bakımı",
@@ -143,12 +178,51 @@ export default function AdminLayout({ children }) {
     []
   );
 
+  const SectionLabel = ({ children }) => (
+    <div className="px-3 pt-4 pb-1 text-[11px] font-semibold uppercase tracking-wider text-gray-400">
+      {children}
+    </div>
+  );
+
+  const NavLink = ({ label, icon, path }) => {
+    const active = isActive(path);
+    return (
+      <Link
+        to={path}
+        onClick={() => setOpen(false)}
+        aria-current={active ? "page" : undefined}
+        className={cx(
+          "relative flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition",
+          "focus:outline-none focus:ring-2 focus:ring-blue-200",
+          active
+            ? "bg-blue-50 text-blue-700"
+            : "hover:bg-gray-100 text-gray-800"
+        )}
+      >
+        <span
+          aria-hidden="true"
+          className={cx(
+            "absolute left-0 top-1 bottom-1 w-1 rounded-r",
+            active ? "bg-blue-600" : "bg-transparent"
+          )}
+        />
+        <ListItemPrefix>{icon}</ListItemPrefix>
+        <span className="truncate">{label}</span>
+        {path === "/admin/orders" && unseenOrders > 0 && (
+          <span className="ml-auto inline-flex items-center justify-center min-w-[18px] h-[18px] px-1.5 rounded-full bg-red-600 text-white text-[10px]">
+            {unseenOrders > 99 ? "99+" : unseenOrders}
+          </span>
+        )}
+      </Link>
+    );
+  };
+
   /* --------- Sidebar Bileşeni --------- */
   const SidebarContent = (
     <Card className="h-full w-full p-4 shadow-xl rounded-none">
       {/* Logo / Başlık */}
-      <div className="flex items-center justify-between mb-4">
-        <Typography variant="h5" color="blue-gray">
+      <div className="flex items-center justify-between mb-3 pb-3 border-b border-gray-100">
+        <Typography variant="h5" color="blue-gray" className="!text-lg">
           Admin Panel
         </Typography>
       </div>
@@ -160,47 +234,22 @@ export default function AdminLayout({ children }) {
         style={{ maxHeight: "calc(100svh - 100px)" }}
       >
         <List className="space-y-1">
-          {/* Düz linkler */}
-          {navItems.map(({ label, icon, path }) => {
-            const active = isActive(path);
-            return (
-              <Link
-                key={path}
-                to={path}
-                onClick={() => setOpen(false)}
-                aria-current={active ? "page" : undefined}
-                className={cx(
-                  "relative flex items-center gap-3 rounded px-3 py-2 text-sm font-medium transition",
-                  "focus:outline-none focus:ring-2 focus:ring-blue-200",
-                  active
-                    ? "bg-blue-50 text-blue-700"
-                    : "hover:bg-gray-100 text-gray-800"
-                )}
-              >
-                {/* Aktif sol şerit */}
-                <span
-                  aria-hidden="true"
-                  className={cx(
-                    "absolute left-0 top-0 h-full w-1 rounded-r",
-                    active ? "bg-blue-600" : "bg-transparent"
-                  )}
-                />
-                <ListItemPrefix>{icon}</ListItemPrefix>
-                <span className="truncate">{label}</span>
-                {path === "/admin/orders" && unseenOrders > 0 && (
-                  <span className="ml-auto inline-flex items-center justify-center min-w-[18px] h-[18px] px-1.5 rounded-full bg-red-600 text-white text-[10px]">
-                    {unseenOrders > 99 ? "99+" : unseenOrders}
-                  </span>
-                )}
-              </Link>
-            );
-          })}
+          {navGroups.map((group) => (
+            <div key={group.section || "genel"}>
+              {group.section && <SectionLabel>{group.section}</SectionLabel>}
+              <div className="space-y-1">
+                {group.items.map((item) => (
+                  <NavLink key={item.path} {...item} />
+                ))}
+              </div>
+            </div>
+          ))}
 
           {/* Bloglar menüsü */}
           <button
             onClick={() => setBlogMenuOpen((o) => !o)}
             className={cx(
-              "w-full text-left relative flex items-center gap-3 rounded px-3 py-2 text-sm font-medium transition",
+              "w-full text-left relative flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition",
               "focus:outline-none focus:ring-2 focus:ring-blue-200",
               isActive("/admin/blogs") || isActive("/admin/blog-categories")
                 ? "bg-blue-50 text-blue-700"
@@ -210,7 +259,7 @@ export default function AdminLayout({ children }) {
             <span
               aria-hidden="true"
               className={cx(
-                "absolute left-0 top-0 h-full w-1 rounded-r",
+                "absolute left-0 top-1 bottom-1 w-1 rounded-r",
                 isActive("/admin/blogs") || isActive("/admin/blog-categories")
                   ? "bg-blue-600"
                   : "bg-transparent"
@@ -238,7 +287,7 @@ export default function AdminLayout({ children }) {
               to="/admin/blogs"
               onClick={() => setOpen(false)}
               className={cx(
-                "block rounded px-3 py-1 text-sm transition",
+                "block rounded-md px-3 py-1.5 text-sm transition",
                 "focus:outline-none focus:ring-2 focus:ring-blue-200",
                 isActive("/admin/blogs")
                   ? "bg-blue-50 text-blue-700 font-semibold"
@@ -251,7 +300,7 @@ export default function AdminLayout({ children }) {
               to="/admin/blog-categories"
               onClick={() => setOpen(false)}
               className={cx(
-                "block rounded px-3 py-1 text-sm transition",
+                "block rounded-md px-3 py-1.5 text-sm transition",
                 "focus:outline-none focus:ring-2 focus:ring-blue-200",
                 isActive("/admin/blog-categories")
                   ? "bg-blue-50 text-blue-700 font-semibold"
@@ -266,7 +315,7 @@ export default function AdminLayout({ children }) {
           <button
             onClick={() => setCommentsMenuOpen((o) => !o)}
             className={cx(
-              "w-full text-left relative flex items-center gap-3 rounded px-3 py-2 text-sm font-medium transition",
+              "w-full text-left relative flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition",
               "focus:outline-none focus:ring-2 focus:ring-blue-200",
               isActive("/admin/comments") || isActive("/admin/replies")
                 ? "bg-blue-50 text-blue-700"
@@ -276,7 +325,7 @@ export default function AdminLayout({ children }) {
             <span
               aria-hidden="true"
               className={cx(
-                "absolute left-0 top-0 h-full w-1 rounded-r",
+                "absolute left-0 top-1 bottom-1 w-1 rounded-r",
                 isActive("/admin/comments") || isActive("/admin/replies")
                   ? "bg-blue-600"
                   : "bg-transparent"
@@ -350,7 +399,7 @@ export default function AdminLayout({ children }) {
           <button
             onClick={() => setInstagramMenuOpen((o) => !o)}
             className={cx(
-              "w-full text-left relative flex items-center gap-3 rounded px-3 py-2 text-sm font-medium transition",
+              "w-full text-left relative flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition",
               "focus:outline-none focus:ring-2 focus:ring-blue-200",
               isActive("/admin/instagram-posts")
                 ? "bg-blue-50 text-blue-700"
@@ -360,7 +409,7 @@ export default function AdminLayout({ children }) {
             <span
               aria-hidden="true"
               className={cx(
-                "absolute left-0 top-0 h-full w-1 rounded-r",
+                "absolute left-0 top-1 bottom-1 w-1 rounded-r",
                 isActive("/admin/instagram-posts")
                   ? "bg-blue-600"
                   : "bg-transparent"
@@ -388,7 +437,7 @@ export default function AdminLayout({ children }) {
               to="/admin/instagram-posts"
               onClick={() => setOpen(false)}
               className={cx(
-                "block rounded px-3 py-1 text-sm transition",
+                "block rounded-md px-3 py-1.5 text-sm transition",
                 "focus:outline-none focus:ring-2 focus:ring-blue-200",
                 isActive("/admin/instagram-posts")
                   ? "bg-blue-50 text-blue-700 font-semibold"
@@ -397,6 +446,13 @@ export default function AdminLayout({ children }) {
             >
               Gönderiler
             </Link>
+          </div>
+
+          <SectionLabel>Sistem</SectionLabel>
+          <div className="space-y-1">
+            {systemItems.map((item) => (
+              <NavLink key={item.path} {...item} />
+            ))}
           </div>
         </List>
       </div>
@@ -422,6 +478,10 @@ export default function AdminLayout({ children }) {
       discounts: "İndirimler",
       "announcement-bar": "Duyuru Barı",
       "media-maintenance": "Medya Bakımı",
+      "hero-videos": "Banner Ayarları",
+      shipping: "Kargo",
+      "cart-campaigns": "Sepet Kampanyaları",
+      coupons: "Kuponlar",
     };
     return parts.map((p) => map[p] || p);
   }, [location.pathname]);
@@ -480,9 +540,28 @@ export default function AdminLayout({ children }) {
             className="flex items-center justify-between px-4 md:px-6 h-14"
             style={{ paddingTop: "env(safe-area-inset-top)" }}
           >
-            <div className="min-w-0">
-              <div className="text-sm md:text-base font-medium text-gray-700 truncate">
-                {crumbs.length ? crumbs.join(" / ") : "Ana Sayfa"}
+            <div className="min-w-0 pl-12 md:pl-0">
+              <div className="text-sm md:text-base truncate">
+                {crumbs.length ? (
+                  crumbs.map((crumb, index) => (
+                    <span key={`${crumb}-${index}`}>
+                      {index > 0 && (
+                        <span className="text-gray-300 px-1.5">/</span>
+                      )}
+                      <span
+                        className={
+                          index === crumbs.length - 1
+                            ? "font-semibold text-gray-900"
+                            : "text-gray-500"
+                        }
+                      >
+                        {crumb}
+                      </span>
+                    </span>
+                  ))
+                ) : (
+                  <span className="font-semibold text-gray-900">Ana Sayfa</span>
+                )}
               </div>
             </div>
             <div className="flex items-center gap-2">
@@ -504,12 +583,3 @@ export default function AdminLayout({ children }) {
     </div>
   );
 }
-
-/* ---- opsiyonel: ince scrollbar (Tailwind global css’inize ekleyebilirsiniz) ----
-.custom-scrollbar::-webkit-scrollbar { width: 8px; }
-.custom-scrollbar::-webkit-scrollbar-thumb {
-  background-color: rgba(0,0,0,.12);
-  border-radius: 9999px;
-}
-.custom-scrollbar:hover::-webkit-scrollbar-thumb { background-color: rgba(0,0,0,.2); }
-*/

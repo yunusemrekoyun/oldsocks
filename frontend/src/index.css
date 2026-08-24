@@ -126,3 +126,23 @@
     text-size-adjust: 100%;
   }
 }
+
+/* Admin kenar çubuğu: ince, sadece gerektiğinde belirginleşen kaydırma çubuğu.
+   Sınıf AdminLayout içinde kullanılıyordu ama karşılığı tanımlı değildi. */
+.custom-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0, 0, 0, 0.12) transparent;
+}
+.custom-scrollbar::-webkit-scrollbar {
+  width: 8px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background-color: rgba(0, 0, 0, 0.12);
+  border-radius: 9999px;
+}
+.custom-scrollbar:hover::-webkit-scrollbar-thumb {
+  background-color: rgba(0, 0, 0, 0.22);
+}
