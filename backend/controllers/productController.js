@@ -1,6 +1,7 @@
 const Product = require("../models/Product");
 const Category = require("../models/Category");
 const { MediaError } = require("../services/media/errors");
+const { timedCache } = require("../services/timedCache");
 const {
   CatalogValidationError,
   parseProductPricing,
@@ -16,11 +17,10 @@ const {
   syncOwnerMediaReferences,
 } = require("../services/media/assets");
 
-const PRODUCTS_CACHE_TTL = 60 * 1000;
-let productsCache = { data: null, expiry: 0 };
+const productsCache = timedCache(60 * 1000);
 
 function invalidateProductsCache() {
-  productsCache = { data: null, expiry: 0 };
+  productsCache.invalidate();
 }
 
 function escapeRegex(value) {
@@ -118,19 +118,16 @@ exports.getProducts = async (req, res) => {
       }).select("color _id name");
       return res.json(products);
     }
-    const now = Date.now();
-    if (productsCache.data && now < productsCache.expiry) {
-      return res.json(productsCache.data);
-    }
-    const products = await populateProductMedia(
-      Product.find({ archivedAt: null })
-        .sort({ createdAt: -1 })
-        .select(
-          "name video images videoAsset imageAssets price originalPrice discount sizes color category parentProductId createdAt"
-        )
-    ).lean();
-    const result = products.map((product) => applyProductMedia(product, "list"));
-    productsCache = { data: result, expiry: Date.now() + PRODUCTS_CACHE_TTL };
+    const result = await productsCache.get(async () => {
+      const products = await populateProductMedia(
+        Product.find({ archivedAt: null })
+          .sort({ createdAt: -1 })
+          .select(
+            "name video images videoAsset imageAssets price originalPrice discount sizes color category parentProductId createdAt"
+          )
+      ).lean();
+      return products.map((product) => applyProductMedia(product, "list"));
+    });
     res.json(result);
   } catch (error) {
     console.error(error);

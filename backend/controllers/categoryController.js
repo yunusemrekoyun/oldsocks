@@ -1,6 +1,7 @@
 const Category = require("../models/Category");
 const Product = require("../models/Product");
 const { MediaError } = require("../services/media/errors");
+const { timedCache } = require("../services/timedCache");
 const {
   legacyAssetUrl,
   publicAsset,
@@ -9,11 +10,10 @@ const {
   syncOwnerMediaReferences,
 } = require("../services/media/assets");
 
-const CATEGORIES_CACHE_TTL = 60 * 1000;
-let categoriesCache = { data: null, expiry: 0 };
+const categoriesCache = timedCache(60 * 1000);
 
 function invalidateCategoriesCache() {
-  categoriesCache = { data: null, expiry: 0 };
+  categoriesCache.invalidate();
 }
 
 function parseChildren(value) {
@@ -54,12 +54,10 @@ async function syncCategory(category) {
 
 exports.getCategories = async (_req, res) => {
   try {
-    if (categoriesCache.data && Date.now() < categoriesCache.expiry) {
-      return res.json(categoriesCache.data);
-    }
-    const roots = await populatedCategory(Category.find({ parent: null, archivedAt: null }).sort("name")).lean();
-    const result = roots.map(applyCategoryMedia);
-    categoriesCache = { data: result, expiry: Date.now() + CATEGORIES_CACHE_TTL };
+    const result = await categoriesCache.get(async () => {
+      const roots = await populatedCategory(Category.find({ parent: null, archivedAt: null }).sort("name")).lean();
+      return roots.map(applyCategoryMedia);
+    });
     res.json(result);
   } catch (error) {
     console.error(error);

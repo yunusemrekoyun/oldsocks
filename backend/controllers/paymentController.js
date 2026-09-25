@@ -662,6 +662,7 @@ exports.inlineCheckoutHtml = async (req, res) => {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body: body.toString(),
+      signal: AbortSignal.timeout(15000),
     });
 
     const rawText = await resp.text();

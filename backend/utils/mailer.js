@@ -24,8 +24,16 @@ const frontendOrigin = String(process.env.FRONTEND_ORIGIN || "")
 const adminList = splitEmailList(process.env.ADMIN_EMAILS || fallbackTo || "");
 
 function createTransporter() {
+  const transportOptions = {
+    connectionTimeout: 10000,
+    greetingTimeout: 10000,
+    socketTimeout: 15000,
+    disableFileAccess: true,
+    disableUrlAccess: true,
+  };
   if (process.env.SMTP_HOST) {
     return nodemailer.createTransport({
+      ...transportOptions,
       host: process.env.SMTP_HOST,
       port: Number(process.env.SMTP_PORT || 587),
       secure: String(process.env.SMTP_SECURE || "").toLowerCase() === "true",
@@ -37,6 +45,7 @@ function createTransporter() {
   }
 
   return nodemailer.createTransport({
+    ...transportOptions,
     service: "gmail",
     auth: { user: transportUser, pass: transportPass },
   });
