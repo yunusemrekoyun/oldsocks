@@ -1,14 +1,17 @@
 const AnnouncementBar = require("../models/AnnouncementBar");
+const { timedCache } = require("../services/timedCache");
+
+const publicBarCache = timedCache(15 * 1000);
 
 /* ─────────────────────────────
  * Public: aktif bar (enabled=true)
  * ───────────────────────────── */
 exports.getPublicBar = async (req, res) => {
   try {
-    const bar =
+    const bar = await publicBarCache.get(async () =>
       (await AnnouncementBar.findOne({ enabled: true })
         .sort("-updatedAt")
-        .lean()) || null;
+        .lean()) || null);
     res.json(bar); // yoksa null döner
   } catch (e) {
     console.error("[AnnouncementBar][public] error:", e);
@@ -56,6 +59,7 @@ exports.upsertBar = async (req, res) => {
       setDefaultsOnInsert: true,
     });
 
+    publicBarCache.invalidate();
     res.json(bar);
   } catch (e) {
     console.error("[AnnouncementBar][upsert] error:", e);
@@ -69,6 +73,7 @@ exports.upsertBar = async (req, res) => {
 exports.deleteBar = async (req, res) => {
   try {
     await AnnouncementBar.deleteMany({});
+    publicBarCache.invalidate();
     res.json({ message: "Duyuru kaldırıldı." });
   } catch (e) {
     console.error("[AnnouncementBar][delete] error:", e);

@@ -1,6 +1,7 @@
 const mongoose = require("mongoose");
 const HeroVideo = require("../models/HeroVideo");
 const { MediaError } = require("../services/media/errors");
+const { timedCache } = require("../services/timedCache");
 const {
   legacyAssetUrl,
   publicAsset,
@@ -20,6 +21,7 @@ function serializeHero(item) {
 }
 
 const ORDER_SORT = { order: 1, createdAt: 1 };
+const heroCache = timedCache(15 * 1000);
 
 function listHeroVideos() {
   return HeroVideo.find().populate("mediaAsset").sort(ORDER_SORT);
@@ -58,6 +60,7 @@ exports.uploadVideo = async (req, res) => {
       ownerId: item._id,
       fields: { media: [asset._id] },
     });
+    heroCache.invalidate();
     const populated = await HeroVideo.findById(item._id).populate("mediaAsset");
     res.status(201).json(serializeHero(populated));
   } catch (error) {
@@ -69,8 +72,8 @@ exports.uploadVideo = async (req, res) => {
 
 exports.getHeroVideos = async (_req, res) => {
   try {
-    const items = await listHeroVideos();
-    res.json(items.map(serializeHero));
+    const items = await heroCache.get(async () => (await listHeroVideos()).map(serializeHero));
+    res.json(items);
   } catch (error) {
     console.error("Hero media list error:", error);
     res.status(500).json({ message: "Hero medyaları getirilemedi." });
@@ -115,6 +118,7 @@ exports.reorderHeroVideos = async (req, res) => {
       }))
     );
 
+    heroCache.invalidate();
     const items = await listHeroVideos();
     res.json(items.map(serializeHero));
   } catch (error) {
@@ -129,6 +133,7 @@ exports.deleteHeroVideo = async (req, res) => {
     if (!deleted) return res.status(404).json({ message: "Kayıt bulunamadı." });
     await removeOwnerMediaReferences("HeroVideo", deleted._id);
     await compactOrder();
+    heroCache.invalidate();
     res.json({ message: "Hero medyası silindi." });
   } catch (error) {
     console.error("Hero media delete error:", error);

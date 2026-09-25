@@ -1,6 +1,7 @@
 const mongoose = require("mongoose");
 const CartCampaign = require("../models/CartCampaign");
 const Product = require("../models/Product");
+const { timedCache } = require("../services/timedCache");
 const {
   calculateCartPricing,
   HttpError,
@@ -8,6 +9,7 @@ const {
 } = require("../services/cartPricingService");
 
 const { TEMPLATE_TYPES, HEADER_PLACEMENTS } = require("../models/CartCampaign");
+const headerCampaignCache = timedCache(15 * 1000);
 
 function parseDate(value, fieldName) {
   const d = new Date(value);
@@ -174,6 +176,7 @@ exports.createCampaign = async (req, res) => {
   try {
     const payload = await buildCampaignPayload(req.body);
     const created = await CartCampaign.create(payload);
+    headerCampaignCache.invalidate();
     const json = created.toObject();
     res.status(201).json(withLiveStatus(json));
   } catch (err) {
@@ -194,6 +197,7 @@ exports.updateCampaign = async (req, res) => {
     const payload = await buildCampaignPayload(req.body);
     existing.set(payload);
     await existing.save();
+    headerCampaignCache.invalidate();
 
     res.json(withLiveStatus(existing.toObject()));
   } catch (err) {
@@ -217,6 +221,7 @@ exports.toggleCampaign = async (req, res) => {
       { new: true }
     ).lean();
     if (!updated) return res.status(404).json({ message: "Kampanya bulunamadı." });
+    headerCampaignCache.invalidate();
     res.json(withLiveStatus(updated));
   } catch (err) {
     console.error("[CartCampaign][toggle] error:", err);
@@ -228,6 +233,7 @@ exports.deleteCampaign = async (req, res) => {
   try {
     const deleted = await CartCampaign.findByIdAndDelete(req.params.id).lean();
     if (!deleted) return res.status(404).json({ message: "Kampanya bulunamadı." });
+    headerCampaignCache.invalidate();
     res.json({ message: "Kampanya silindi." });
   } catch (err) {
     console.error("[CartCampaign][delete] error:", err);
@@ -237,16 +243,18 @@ exports.deleteCampaign = async (req, res) => {
 
 exports.listHeaderCampaigns = async (_req, res) => {
   try {
-    const now = new Date();
-    const campaigns = await CartCampaign.find({
-      isEnabled: true,
-      startAt: { $lte: now },
-      endAt: { $gte: now },
-      headerPlacement: { $in: ["top_panel", "sub_panel"] },
-    })
-      .sort({ createdAt: 1 })
-      .select("name headerPlacement productIds templateType createdAt")
-      .lean();
+    const campaigns = await headerCampaignCache.get(() => {
+      const now = new Date();
+      return CartCampaign.find({
+        isEnabled: true,
+        startAt: { $lte: now },
+        endAt: { $gte: now },
+        headerPlacement: { $in: ["top_panel", "sub_panel"] },
+      })
+        .sort({ createdAt: 1 })
+        .select("name headerPlacement productIds templateType createdAt")
+        .lean();
+    });
 
     res.json(campaigns);
   } catch (err) {

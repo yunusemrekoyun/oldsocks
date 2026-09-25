@@ -1,13 +1,13 @@
 function timedCache(ttlMs) {
-  let state = { value: null, expiresAt: 0, pending: null };
+  let state = { hasValue: false, value: undefined, expiresAt: 0, pending: null };
 
   return {
     invalidate() {
-      state = { value: null, expiresAt: 0, pending: null };
+      state = { hasValue: false, value: undefined, expiresAt: 0, pending: null };
     },
     get(load) {
       const current = state;
-      if (current.value !== null && Date.now() < current.expiresAt) {
+      if (current.hasValue && Date.now() < current.expiresAt) {
         return Promise.resolve(current.value);
       }
       if (!current.pending) {
@@ -15,6 +15,7 @@ function timedCache(ttlMs) {
           .then(load)
           .then((value) => {
             if (state === current) {
+              current.hasValue = true;
               current.value = value;
               current.expiresAt = Date.now() + ttlMs;
             }

@@ -2,6 +2,7 @@ const MiniCampaign = require("../models/MiniCampaign");
 const Product = require("../models/Product");
 const Category = require("../models/Category");
 const { MediaError } = require("../services/media/errors");
+const { timedCache } = require("../services/timedCache");
 const {
   applyProductMedia,
   legacyAssetUrl,
@@ -10,6 +11,14 @@ const {
   requireReadyAssets,
   syncOwnerMediaReferences,
 } = require("../services/media/assets");
+
+const campaignListCache = timedCache(15 * 1000);
+const activeCampaignCaches = new Map([0, 1, 2].map((slot) => [slot, timedCache(15 * 1000)]));
+
+function invalidateMiniCampaigns() {
+  campaignListCache.invalidate();
+  for (const cache of activeCampaignCaches.values()) cache.invalidate();
+}
 
 function parseArrayField(raw) {
   if (!raw) return [];
@@ -102,6 +111,7 @@ exports.createMiniCampaign = async (req, res) => {
       imageUrl: legacyAssetUrl(asset, "detail"),
     });
     await syncMini(campaign);
+    invalidateMiniCampaigns();
     res.status(201).json(serializeMini(await miniQuery(MiniCampaign.findById(campaign._id))));
   } catch (error) {
     if (error instanceof MediaError || error.statusCode) throw error;
@@ -112,8 +122,10 @@ exports.createMiniCampaign = async (req, res) => {
 
 exports.getMiniCampaigns = async (_req, res) => {
   try {
-    const campaigns = await miniQuery(MiniCampaign.find().sort({ slot: 1, createdAt: -1 }));
-    res.json(campaigns.map((campaign) => serializeMini(campaign)));
+    const campaigns = await campaignListCache.get(async () =>
+      (await miniQuery(MiniCampaign.find().sort({ slot: 1, createdAt: -1 })))
+        .map((campaign) => serializeMini(campaign)));
+    res.json(campaigns);
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: "Mini kampanyalar getirilemedi." });
@@ -162,6 +174,7 @@ exports.updateMiniCampaign = async (req, res) => {
     }
     await campaign.save();
     await syncMini(campaign);
+    invalidateMiniCampaigns();
     res.json(serializeMini(await miniQuery(MiniCampaign.findById(campaign._id))));
   } catch (error) {
     if (error instanceof MediaError || error.statusCode) throw error;
@@ -175,6 +188,7 @@ exports.deleteMiniCampaign = async (req, res) => {
     const campaign = await MiniCampaign.findByIdAndDelete(req.params.id);
     if (!campaign) return res.status(404).json({ message: "Mini kampanya bulunamadı." });
     await removeOwnerMediaReferences("MiniCampaign", campaign._id);
+    invalidateMiniCampaigns();
     res.json({ message: "Mini kampanya silindi." });
   } catch (error) {
     console.error(error);
@@ -191,6 +205,7 @@ exports.setActiveMiniCampaign = async (req, res) => {
     await MiniCampaign.updateMany({ slot }, { $set: { slot: null } });
     campaign.slot = slot;
     await campaign.save();
+    invalidateMiniCampaigns();
     res.json({ message: `Mini kampanya ${slot}. slota alındı.` });
   } catch (error) {
     console.error(error);
@@ -201,25 +216,29 @@ exports.setActiveMiniCampaign = async (req, res) => {
 exports.getActiveMiniCampaigns = async (req, res) => {
   try {
     const slot = parseSlot(req.query.slot);
-    const campaign = await miniQuery(
-      MiniCampaign.findOne(slot ? { slot } : { slot: { $in: [1, 2] } }).sort("slot")
-    );
-    if (!campaign) return res.status(404).json({ message: "Mini kampanya bulunamadı." });
-    let items = campaign.products?.filter(Boolean).map((product) => applyProductMedia(product, "list")) || [];
-    if (!items.length && campaign.categories?.length) {
-      const subs = await Category.find({ parent: { $in: campaign.categories }, archivedAt: null }).select("_id");
-      const categoryIds = [
-        ...campaign.categories.map((category) => category._id || category),
-        ...subs.map((category) => category._id),
-      ];
-      const products = await Product.find({ category: { $in: categoryIds }, archivedAt: null })
-        .select("name images imageAssets video videoAsset price originalPrice discount")
-        .populate("imageAssets")
-        .populate("videoAsset")
-        .lean();
-      items = products.map((product) => applyProductMedia(product, "list"));
-    }
-    res.json({ ...serializeMini(campaign, "detail"), items });
+    const result = await activeCampaignCaches.get(slot || 0).get(async () => {
+      const campaign = await miniQuery(
+        MiniCampaign.findOne(slot ? { slot } : { slot: { $in: [1, 2] } }).sort("slot")
+      );
+      if (!campaign) return null;
+      let items = campaign.products?.filter(Boolean).map((product) => applyProductMedia(product, "list")) || [];
+      if (!items.length && campaign.categories?.length) {
+        const subs = await Category.find({ parent: { $in: campaign.categories }, archivedAt: null }).select("_id");
+        const categoryIds = [
+          ...campaign.categories.map((category) => category._id || category),
+          ...subs.map((category) => category._id),
+        ];
+        const products = await Product.find({ category: { $in: categoryIds }, archivedAt: null })
+          .select("name images imageAssets video videoAsset price originalPrice discount")
+          .populate("imageAssets")
+          .populate("videoAsset")
+          .lean();
+        items = products.map((product) => applyProductMedia(product, "list"));
+      }
+      return { ...serializeMini(campaign, "detail"), items };
+    });
+    if (!result) return res.status(404).json({ message: "Mini kampanya bulunamadı." });
+    res.json(result);
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: "Mini kampanya getirilemedi." });

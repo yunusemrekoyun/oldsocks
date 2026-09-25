@@ -1,7 +1,10 @@
 const ShippingMethod = require("../models/ShippingMethod");
+const { timedCache } = require("../services/timedCache");
+
+const shippingCache = timedCache(15 * 1000);
 
 exports.list = async (_req, res) => {
-  const rows = await ShippingMethod.find().sort({ createdAt: -1 }).lean();
+  const rows = await shippingCache.get(() => ShippingMethod.find().sort({ createdAt: -1 }).lean());
   res.json(rows);
 };
 
@@ -20,6 +23,7 @@ exports.create = async (req, res) => {
         ? null
         : Number(freeShippingThreshold),
   });
+  shippingCache.invalidate();
   res.status(201).json(doc);
 };
 
@@ -38,11 +42,13 @@ exports.update = async (req, res) => {
     new: true,
   });
   if (!doc) return res.status(404).json({ message: "Bulunamadı." });
+  shippingCache.invalidate();
   res.json(doc);
 };
 
 exports.remove = async (req, res) => {
   const r = await ShippingMethod.findByIdAndDelete(req.params.id);
   if (!r) return res.status(404).json({ message: "Bulunamadı." });
+  shippingCache.invalidate();
   res.json({ ok: true });
 };

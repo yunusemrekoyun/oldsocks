@@ -31,3 +31,12 @@ test("değişiklik sırasında başlayan eski sorgu yeni önbelleği doldurmaz",
   assert.equal(await old, "old");
   assert.equal(await cache.get(async () => "wrong"), "new");
 });
+
+test("boş sonuç tekrar tekrar veritabanına gitmez", async () => {
+  const cache = timedCache(60_000);
+  let queries = 0;
+  const load = async () => { queries += 1; return null; };
+  assert.equal(await cache.get(load), null);
+  assert.equal(await cache.get(load), null);
+  assert.equal(queries, 1);
+});

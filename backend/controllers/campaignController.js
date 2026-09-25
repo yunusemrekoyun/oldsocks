@@ -2,6 +2,7 @@ const Campaign = require("../models/Campaign");
 const Product = require("../models/Product");
 const Category = require("../models/Category");
 const { MediaError } = require("../services/media/errors");
+const { timedCache } = require("../services/timedCache");
 const {
   applyProductMedia,
   legacyAssetUrl,
@@ -10,6 +11,8 @@ const {
   requireReadyAssets,
   syncOwnerMediaReferences,
 } = require("../services/media/assets");
+
+const activeCampaignCache = timedCache(15 * 1000);
 
 function parseArrayField(raw) {
   if (!raw) return [];
@@ -97,6 +100,7 @@ exports.createCampaign = async (req, res) => {
       categories,
     });
     await syncCampaign(campaign);
+    activeCampaignCache.invalidate();
     const populated = await campaignQuery(Campaign.findById(campaign._id));
     res.status(201).json(serializeCampaign(populated));
   } catch (error) {
@@ -154,6 +158,7 @@ exports.updateCampaign = async (req, res) => {
     }
     await campaign.save();
     await syncCampaign(campaign);
+    activeCampaignCache.invalidate();
     const populated = await campaignQuery(Campaign.findById(campaign._id));
     res.json(serializeCampaign(populated));
   } catch (error) {
@@ -168,6 +173,7 @@ exports.deleteCampaign = async (req, res) => {
     const campaign = await Campaign.findByIdAndDelete(req.params.id);
     if (!campaign) return res.status(404).json({ message: "Kampanya bulunamadı." });
     await removeOwnerMediaReferences("Campaign", campaign._id);
+    activeCampaignCache.invalidate();
     res.json({ message: "Kampanya silindi." });
   } catch (error) {
     console.error(error);
@@ -182,6 +188,7 @@ exports.setActiveCampaign = async (req, res) => {
     await Campaign.updateMany({ _id: { $ne: campaign._id } }, { $set: { isActive: false } });
     campaign.isActive = true;
     await campaign.save();
+    activeCampaignCache.invalidate();
     res.json({ message: "Kampanya aktif edildi." });
   } catch (error) {
     console.error(error);
@@ -191,26 +198,30 @@ exports.setActiveCampaign = async (req, res) => {
 
 exports.getActiveCampaign = async (_req, res) => {
   try {
-    const campaign = await campaignQuery(Campaign.findOne({ isActive: true }));
-    if (!campaign) return res.status(404).json({ message: "Aktif kampanya bulunamadı." });
-    let items = [];
-    if (campaign.products?.length) {
-      items = campaign.products.filter(Boolean).map((product) => applyProductMedia(product, "list"));
-    } else if (campaign.categories?.length) {
-      const subs = await Category.find({ parent: { $in: campaign.categories }, archivedAt: null }).select("_id");
-      const categoryIds = [
-        ...campaign.categories.map((category) => category._id || category),
-        ...subs.map((category) => category._id),
-      ];
-      const products = await Product.find({ category: { $in: categoryIds }, archivedAt: null })
-        .select("name images imageAssets video videoAsset price originalPrice discount")
-        .populate("imageAssets")
-        .populate("videoAsset")
-        .lean();
-      items = products.map((product) => applyProductMedia(product, "list"));
-    }
-    const serialized = serializeCampaign(campaign, "detail");
-    res.json({ ...serialized, items });
+    const result = await activeCampaignCache.get(async () => {
+      const campaign = await campaignQuery(Campaign.findOne({ isActive: true }));
+      if (!campaign) return null;
+      let items = [];
+      if (campaign.products?.length) {
+        items = campaign.products.filter(Boolean).map((product) => applyProductMedia(product, "list"));
+      } else if (campaign.categories?.length) {
+        const subs = await Category.find({ parent: { $in: campaign.categories }, archivedAt: null }).select("_id");
+        const categoryIds = [
+          ...campaign.categories.map((category) => category._id || category),
+          ...subs.map((category) => category._id),
+        ];
+        const products = await Product.find({ category: { $in: categoryIds }, archivedAt: null })
+          .select("name images imageAssets video videoAsset price originalPrice discount")
+          .populate("imageAssets")
+          .populate("videoAsset")
+          .lean();
+        items = products.map((product) => applyProductMedia(product, "list"));
+      }
+      const serialized = serializeCampaign(campaign, "detail");
+      return { ...serialized, items };
+    });
+    if (!result) return res.status(404).json({ message: "Aktif kampanya bulunamadı." });
+    res.json(result);
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: "Aktif kampanya getirilemedi." });
