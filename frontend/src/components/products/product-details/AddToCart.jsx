@@ -19,7 +19,6 @@ export default function AddToCart({
   const [selectedColor, setSelectedColor] = useState(color || null);
   const [colorOptions, setColorOptions] = useState([]);
   const [qty, setQty] = useState(1);
-  const [available, setAvailable] = useState(Infinity);
   const [warn, setWarn] = useState("");
   const [showAdded, setShowAdded] = useState(false); // sadece yazı için
   const [hasAddedToCart, setHasAddedToCart] = useState(false); // buton için
@@ -27,6 +26,14 @@ export default function AddToCart({
   const { addToCart } = useCart();
   const navigate = useNavigate();
   const sentWarnRef = useRef(false);
+  const sizeRows = Array.isArray(sizes) ? sizes : [];
+  const withoutSize = sizeRows.length === 1 && !String(sizeRows[0]?.size || "").trim();
+  const effectiveSize = withoutSize ? "" : selectedSize;
+  const selectedRow = sizeRows.find((row) => String(row.size || "") === effectiveSize);
+  const available = Number(selectedRow?.stock || 0);
+  const stockMessage = withoutSize
+    ? `Bu üründen en fazla ${available} adet ekleyebilirsiniz.`
+    : `Bu bedende en fazla ${available} adet ekleyebilirsiniz.`;
 
   /* varyant renkleri çek */
   useEffect(() => {
@@ -46,23 +53,22 @@ export default function AddToCart({
     setSelectedColor(color || null);
   }, [productId, color]);
 
-  /* seçilen bedene göre stok */
+  /* Ürün veya stok değişince miktarı geçerli aralıkta tut. */
   useEffect(() => {
-    if (sizes.length === 0) {
-      setAvailable(Infinity);
-      return;
-    }
-    const row = sizes.find((s) => s.size === selectedSize);
-    const stock = row ? row.stock : 0;
-    setAvailable(stock);
-    setQty((q) => Math.min(q, stock || 1));
-  }, [selectedSize, sizes]);
+    setQty((current) => Math.min(current, available || 1));
+  }, [available]);
+
+  useEffect(() => {
+    setSelectedSize(null);
+    setQty(1);
+    setHasAddedToCart(false);
+  }, [productId]);
 
   /* adet kontrolleri */
   const increment = () => {
     setQty((q) => {
       if (q + 1 > available) {
-        showWarn(`Bu bedende en fazla ${available} adet ekleyebilirsiniz.`);
+        showWarn(stockMessage);
         return q;
       }
       return q + 1;
@@ -82,12 +88,14 @@ export default function AddToCart({
 
   /* sepete ekle */
   const canAdd =
-    (sizes.length === 0 || selectedSize !== null) &&
+    available > 0 &&
+    (withoutSize || selectedSize !== null) &&
     (colorOptions.length === 0 || selectedColor !== null);
 
   const handleAddToCart = () => {
+    if (!canAdd) return;
     if (qty > available) {
-      showWarn(`Bu bedende en fazla ${available} adet ekleyebilirsiniz.`);
+      showWarn(stockMessage);
       return;
     }
 
@@ -96,7 +104,7 @@ export default function AddToCart({
       name: productName,
       image,
       price,
-      size: selectedSize,
+      size: effectiveSize,
       color: selectedColor,
       qty,
     });
@@ -202,10 +210,10 @@ export default function AddToCart({
       </div>
 
       {/* beden */}
-      {sizes.length > 0 && (
+      {sizeRows.length > 0 && !withoutSize && (
         <CustomDropdown
           label="Beden"
-          options={sizes}
+          options={sizeRows}
           selected={selectedSize}
           onChange={setSelectedSize}
           getLabel={(opt) => opt.size}

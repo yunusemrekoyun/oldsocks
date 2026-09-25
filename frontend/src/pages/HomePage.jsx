@@ -1,20 +1,19 @@
 import React from "react";
 import Hero from "../components/hero/Hero";
 import Categories from "../components/categories/Categories";
-import ProductGrid from "../components/products/ProductGrid"; // Ürün ızgarası bileşeni
 import SecondHero from "../components/hero/SecondHero"; // İkinci hero bileşenini ekle
 import Campaigns from "../components/campaigns/Campaigns";
 import Services from "../components/services/Services";
-import NewProducts from "../components/products/NewProducts";
+import HomeProductSection from "../components/products/HomeProductSection";
 
 const HomePage = () => (
   <>
     <Hero />
-    <NewProducts />
     <Categories />
-    <ProductGrid seed="A" title="ÖNE ÇIKAN ÜRÜNLER" />
+    <HomeProductSection sectionKey="new" />
+    <HomeProductSection sectionKey="featured" />
     <SecondHero />
-    <ProductGrid seed="B" title="ÇOK SATAN ÜRÜNLER" />
+    <HomeProductSection sectionKey="popular" />
     <Campaigns />
     <Services />
   </>

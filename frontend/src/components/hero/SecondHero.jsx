@@ -29,7 +29,7 @@ export default function SecondHero() {
     navigate("/shop", {
       state: {
         campaignItems: items,
-        campaignTitle: title,
+        campaignTitle: title || "Kampanya",
       },
     });
   };
@@ -42,27 +42,24 @@ export default function SecondHero() {
           src={imageProps.src}
           srcSet={imageProps.srcSet}
           sizes={imageProps.sizes}
-          alt={title}
+          alt={title || "Kampanya görseli"}
           loading="lazy"
           decoding="async"
           className="w-full h-full object-cover"
         />
       </div>
 
-      {/* Koyu overlay */}
-      <div className="absolute inset-0 bg-dark1/70" />
-
       {/* İçerik */}
-      <div className="absolute inset-0 flex flex-col items-center justify-center text-center px-6">
-        <h2 className="text-3xl md:text-5xl lg:text-6xl font-playfair font-bold text-white uppercase leading-tight">
-          {title}
-        </h2>
-        <p className="mt-3 text-lg md:text-2xl text-light2 tracking-wide">
-          {subtitle}
-        </p>
+      <div className="absolute inset-0 flex flex-col items-center justify-end text-center px-6 pb-8 md:pb-12">
+        {(title || subtitle) && (
+          <div className="max-w-4xl bg-dark1/85 px-5 py-3 text-white">
+            {title && <h2 className="font-playfair text-2xl font-bold uppercase leading-tight md:text-4xl">{title}</h2>}
+            {subtitle && <p className="mt-1 text-sm md:text-lg">{subtitle}</p>}
+          </div>
+        )}
         <button
           onClick={handleClick}
-          className="mt-6 px-8 py-3 bg-dark3 hover:bg-dark2 text-white font-medium rounded-full transition duration-300"
+          className="mt-3 rounded-full bg-dark1 px-8 py-3 font-medium text-white transition-colors duration-200 hover:bg-dark2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
         >
           {buttonText}
         </button>

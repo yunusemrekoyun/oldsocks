@@ -265,7 +265,6 @@ export default function CampaignsPage() {
   const validateAndSetErrors = () => {
     const errs = { title: "", buttonText: "", selection: "", image: "" };
 
-    if (!form.title.trim()) errs.title = "Başlık zorunludur.";
     if (!form.buttonText.trim()) errs.buttonText = "Buton metni zorunludur.";
 
     if (!selectionType) {
@@ -293,7 +292,7 @@ export default function CampaignsPage() {
     const ok = validateAndSetErrors();
     if (!ok) {
       setToast({
-        msg: "Lütfen zorunlu alanları doldurun: Başlık, Buton, Seçim ve Görsel.",
+        msg: "Lütfen zorunlu alanları doldurun: Buton, Seçim ve Görsel.",
         type: "error",
       });
       return;
@@ -529,9 +528,6 @@ export default function CampaignsPage() {
                   alt={c.title}
                   className="w-full h-full object-cover"
                 />
-                {/* gradient overlay */}
-                <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-black/15 to-transparent pointer-events-none" />
-
                 {/* HOVER'DA ORTADA DÜZENLE (desktop) */}
                 <button
                   onClick={() => openEdit(c)}
@@ -555,7 +551,7 @@ export default function CampaignsPage() {
 
               <CardBody>
                 <Typography variant="h6" className="line-clamp-1">
-                  {c.title}
+                  {c.title || "Başlıksız kampanya"}
                 </Typography>
                 <Typography className="text-gray-600 line-clamp-2">
                   {c.subtitle}
@@ -639,7 +635,7 @@ export default function CampaignsPage() {
           <div className="rounded-md border border-amber-200 bg-amber-50 text-amber-900 p-3 mb-4 text-sm flex items-start gap-2">
             <ExclamationTriangleIcon className="w-5 h-5 mt-0.5 shrink-0" />
             <div>
-              <b>Zorunlu alanlar:</b> Başlık, Buton Metni, Seçim Türü ve en az
+              <b>Zorunlu alanlar:</b> Buton Metni, Seçim Türü ve en az
               bir seçim, ayrıca yeni kampanya oluştururken Kapak Görseli.
             </div>
           </div>
@@ -649,7 +645,7 @@ export default function CampaignsPage() {
             <div className="space-y-4">
               <div>
                 <Input
-                  label="Başlık *"
+                  label="Başlık (opsiyonel)"
                   value={form.title}
                   onChange={(e) => {
                     setForm((f) => ({ ...f, title: e.target.value }));
@@ -872,34 +868,24 @@ export default function CampaignsPage() {
                       Görsel seçilmedi
                     </div>
                   )}
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-black/15 to-transparent" />
-                  <div className="absolute top-2 left-2">
-                    <Badge color="amber">
-                      {selectionType
-                        ? selectionType === "products"
-                          ? "Ürün hedefli"
-                          : selectionType === "categories"
-                          ? "Kategori hedefli"
-                          : "Alt kategori hedefli"
-                        : "Hedef seçilmedi"}
-                    </Badge>
+                  <div className="absolute inset-x-0 bottom-3 flex flex-col items-center gap-2 px-4 text-center">
+                    {(form.title || form.subtitle) && <div className="bg-gray-900/90 px-3 py-2 text-white">
+                      {form.title && <div className="font-semibold">{form.title}</div>}
+                      {form.subtitle && <div className="text-xs">{form.subtitle}</div>}
+                    </div>}
+                    <span className="rounded-full bg-gray-900 px-4 py-2 text-xs font-semibold text-white">{form.buttonText || "Buton metni"}</span>
                   </div>
                 </div>
                 <div className="p-4">
-                  <Typography variant="h6" className="line-clamp-1">
-                    {form.title || "Kampanya Başlığı"}
-                  </Typography>
-                  <Typography className="text-gray-600 line-clamp-2">
-                    {form.subtitle || "Kısa açıklama metni burada görünecek."}
-                  </Typography>
-                  <Button
-                    size="sm"
-                    variant="outlined"
-                    className="mt-4"
-                    disabled
-                  >
-                    {form.buttonText || "Buton"}
-                  </Button>
+                  <Badge color="amber">
+                    {selectionType
+                      ? selectionType === "products"
+                        ? "Ürün hedefli"
+                        : selectionType === "categories"
+                        ? "Kategori hedefli"
+                        : "Alt kategori hedefli"
+                      : "Hedef seçilmedi"}
+                  </Badge>
                 </div>
               </div>
             </div>

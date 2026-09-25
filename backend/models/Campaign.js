@@ -2,7 +2,7 @@ const mongoose = require("mongoose");
 
 const CampaignSchema = new mongoose.Schema(
   {
-    title: { type: String, required: true, trim: true },
+    title: { type: String, default: "", trim: true },
     subtitle: { type: String, trim: true, default: "" }, // <-- zorunlu değil
     buttonText: { type: String, required: true, trim: true },
     imageUrl: { type: String, default: "" },

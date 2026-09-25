@@ -143,6 +143,11 @@ export default function AdminLayout({ children }) {
             path: "/admin/hero-videos",
           },
           {
+            label: "Ana Sayfa Düzeni",
+            icon: <HomeIcon className="w-5 h-5" />,
+            path: "/admin/storefront",
+          },
+          {
             label: "Kampanyalar",
             icon: <SparklesIcon className="w-5 h-5" />,
             path: "/admin/campaigns",

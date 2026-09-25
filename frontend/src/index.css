@@ -1,8 +1,48 @@
-@import url("https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Bodoni+Moda:wght@500;600;700&family=Manrope:wght@400;500;600;700&family=Playfair+Display:wght@700&display=swap");
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+.storefront-font-classic {
+  --storefront-body-font: Arial, Helvetica, sans-serif;
+  --storefront-heading-font: "Playfair Display", Georgia, serif;
+}
+
+.storefront-font-modern {
+  --storefront-body-font: "Manrope", Arial, sans-serif;
+  --storefront-heading-font: "Manrope", Arial, sans-serif;
+}
+
+.storefront-font-fashion {
+  --storefront-body-font: "Manrope", Arial, sans-serif;
+  --storefront-heading-font: "Bodoni Moda", Georgia, serif;
+}
+
+.storefront-theme {
+  font-family: var(--storefront-body-font);
+}
+
+.storefront-theme h1,
+.storefront-theme h2,
+.storefront-theme h3,
+.storefront-theme .font-playfair {
+  font-family: var(--storefront-heading-font);
+}
+
+.home-product-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1.5rem;
+}
+
+@media (min-width: 640px) {
+  .home-product-grid {
+    width: var(--home-desktop-width);
+    grid-template-columns: repeat(var(--home-count), minmax(0, 1fr));
+    margin-inline: auto;
+  }
+}
 
 .no-scrollbar::-webkit-scrollbar {
   display: none;

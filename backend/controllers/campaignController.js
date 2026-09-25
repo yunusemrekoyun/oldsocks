@@ -78,8 +78,8 @@ async function syncCampaign(campaign) {
 exports.createCampaign = async (req, res) => {
   try {
     const { title, subtitle, buttonText } = req.body;
-    if (!title || !buttonText) {
-      return res.status(400).json({ message: "Başlık ve buton metni zorunludur." });
+    if (!String(buttonText || "").trim()) {
+      return res.status(400).json({ message: "Buton metni zorunludur." });
     }
     const products = parseArrayField(req.body.products);
     const categories = parseArrayField(req.body.categories);
@@ -91,7 +91,7 @@ exports.createCampaign = async (req, res) => {
       max: 1,
     });
     const campaign = await Campaign.create({
-      title,
+      title: String(title || "").trim(),
       subtitle,
       buttonText,
       imageAsset: asset._id,
@@ -136,13 +136,13 @@ exports.updateCampaign = async (req, res) => {
   try {
     const campaign = await Campaign.findById(req.params.id);
     if (!campaign) return res.status(404).json({ message: "Kampanya bulunamadı." });
-    if (!req.body.title || !req.body.buttonText) {
-      return res.status(400).json({ message: "Başlık ve buton metni zorunludur." });
+    if (!String(req.body.buttonText || "").trim()) {
+      return res.status(400).json({ message: "Buton metni zorunludur." });
     }
     const products = parseArrayField(req.body.products);
     const categories = parseArrayField(req.body.categories);
     await validateTargets(products, categories);
-    campaign.title = req.body.title;
+    campaign.title = String(req.body.title || "").trim();
     campaign.buttonText = req.body.buttonText;
     campaign.subtitle = req.body.subtitle ?? campaign.subtitle;
     campaign.products = products;

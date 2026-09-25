@@ -28,6 +28,7 @@ router.use("/auth", require("./auth"));
 // core CRUD
 router.use("/users", require("./users"));
 router.use("/products", require("./products"));
+router.use("/storefront", require("./storefront"));
 router.use("/categories", require("./categories"));
 router.use("/campaigns", require("./campaign"));
 router.use("/mini-campaigns", require("./miniCampaigns"));
