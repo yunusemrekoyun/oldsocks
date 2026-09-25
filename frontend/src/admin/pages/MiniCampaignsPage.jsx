@@ -22,6 +22,7 @@ import {
 } from "@heroicons/react/24/outline";
 import api from "../../../api";
 import ToastAlert from "../../components/ui/ToastAlert";
+import MultiSelectionList from "../components/MultiSelectionList";
 import { v4 as uuidv4 } from "uuid";
 import { useUploadQueue } from "../../context/UploadQueueContext";
 import {
@@ -701,67 +702,30 @@ export default function MiniCampaignsPage() {
               {/* çoklu seçim */}
               {selectionType && (
                 <div className="space-y-2">
-                  <label className="block font-medium">
-                    {selectionType === "products"
-                      ? "Ürünleri Seçin *"
-                      : selectionType === "categories"
-                      ? "Kategorileri Seçin *"
-                      : "Alt Kategorileri Seçin *"}
-                  </label>
-
-                  <select
-                    multiple
-                    className="w-full border rounded p-2 h-36"
-                    value={
+                  <MultiSelectionList
+                    key={`${selectionType}-${form._id || "new"}-${dialogOpen}`}
+                    label={
                       selectionType === "products"
-                        ? form.products
-                        : form.categories
+                        ? "Ürünleri seçin *"
+                        : selectionType === "categories"
+                        ? "Kategorileri seçin *"
+                        : "Alt kategorileri seçin *"
                     }
-                    onChange={(e) => {
-                      const vals = Array.from(e.target.selectedOptions).map(
-                        (o) => o.value
-                      );
+                    itemName={selectionType === "products" ? "ürün" : "kategori"}
+                    options={currentSelectOptions}
+                    value={selectionType === "products" ? form.products : form.categories}
+                    disabled={saving}
+                    onChange={(ids) => {
                       setForm((f) => ({
                         ...f,
                         products:
-                          selectionType === "products" ? vals : f.products,
+                          selectionType === "products" ? ids : f.products,
                         categories:
-                          selectionType !== "products" ? vals : f.categories,
+                          selectionType !== "products" ? ids : f.categories,
                       }));
-
                       setFieldErrors((er) => ({ ...er, selection: "" }));
                     }}
-                  >
-                    {currentSelectOptions.map((opt) => (
-                      <option key={opt._id} value={opt._id}>
-                        {opt.name}
-                      </option>
-                    ))}
-                  </select>
-
-                  {/* seçili chip'ler */}
-                  <div className="flex flex-wrap gap-2 pt-1">
-                    {(selectionType === "products"
-                      ? form.products
-                      : form.categories
-                    ).map((id) => {
-                      const src =
-                        selectionType === "products"
-                          ? options.products
-                          : selectionType === "categories"
-                          ? options.categories
-                          : options.subcategories;
-                      const item = src.find((x) => x._id === id);
-                      return (
-                        <span
-                          key={id}
-                          className="px-2 py-1 rounded-full text-xs bg-gray-100"
-                        >
-                          {item?.name || "—"}
-                        </span>
-                      );
-                    })}
-                  </div>
+                  />
                 </div>
               )}
 

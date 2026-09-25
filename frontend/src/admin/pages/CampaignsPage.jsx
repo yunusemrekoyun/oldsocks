@@ -23,6 +23,7 @@ import {
 import api from "../../../api";
 import ToastAlert from "../../components/ui/ToastAlert";
 import ConfirmDialog from "../../components/ui/ConfirmDialog";
+import MultiSelectionList from "../components/MultiSelectionList";
 import { v4 as uuidv4 } from "uuid";
 import { useUploadQueue } from "../../context/UploadQueueContext";
 import {
@@ -399,23 +400,6 @@ export default function CampaignsPage() {
 
   /* ---------------- helpers ---------------- */
   const currentOptions = options[selectionType] || [];
-  const selectedNames = useMemo(() => {
-    const mapById = (arr) =>
-      arr.reduce((acc, x) => {
-        acc[x._id] = x.name;
-        return acc;
-      }, {});
-    const source =
-      selectionType === "products"
-        ? mapById(options.products)
-        : selectionType === "categories"
-        ? mapById(options.categories)
-        : mapById(options.subcategories);
-
-    const ids = selectionType === "products" ? form.products : form.categories;
-
-    return ids.map((id) => ({ id, name: source[id] || "—" }));
-  }, [selectionType, options, form.products, form.categories]);
 
   // Dosya seçimi (optimizasyon + uyarı akışı)
   const onPickFile = async (file) => {
@@ -759,62 +743,31 @@ export default function CampaignsPage() {
               {/* çoklu seçim */}
               {selectionType && (
                 <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <label className="block font-medium">
-                      {selectionType === "products"
-                        ? "Ürünleri Seçin *"
-                        : selectionType === "categories"
-                        ? "Kategorileri Seçin *"
-                        : "Alt Kategorileri Seçin *"}
-                    </label>
-                    <Badge color={selectionCount > 0 ? "blue" : "gray"}>
-                      {selectionCount} seçili
-                    </Badge>
-                  </div>
-
-                  <select
-                    multiple
-                    className="w-full border rounded p-2 h-36"
-                    value={
+                  <MultiSelectionList
+                    key={`${selectionType}-${form._id || "new"}-${dialogOpen}`}
+                    label={
                       selectionType === "products"
-                        ? form.products
-                        : form.categories
+                        ? "Ürünleri seçin *"
+                        : selectionType === "categories"
+                        ? "Kategorileri seçin *"
+                        : "Alt kategorileri seçin *"
                     }
-                    onChange={(e) => {
-                      const vals = Array.from(e.target.selectedOptions).map(
-                        (o) => o.value
-                      );
+                    itemName={selectionType === "products" ? "ürün" : "kategori"}
+                    options={currentOptions}
+                    value={selectionType === "products" ? form.products : form.categories}
+                    disabled={saving}
+                    onChange={(ids) => {
                       setForm((f) => ({
                         ...f,
                         products:
-                          selectionType === "products" ? vals : f.products,
+                          selectionType === "products" ? ids : f.products,
                         categories:
-                          selectionType !== "products" ? vals : f.categories,
+                          selectionType !== "products" ? ids : f.categories,
                       }));
                       setDirty(true);
                       setFieldErrors((er) => ({ ...er, selection: "" }));
                     }}
-                  >
-                    {currentOptions.map((opt) => (
-                      <option key={opt._id} value={opt._id}>
-                        {opt.name}
-                      </option>
-                    ))}
-                  </select>
-
-                  {/* seçili chip'ler */}
-                  {selectedNames.length > 0 && (
-                    <div className="flex flex-wrap gap-2 pt-1">
-                      {selectedNames.map((x) => (
-                        <span
-                          key={x.id}
-                          className="px-2 py-1 rounded-full text-xs bg-gray-100"
-                        >
-                          {x.name}
-                        </span>
-                      ))}
-                    </div>
-                  )}
+                  />
                 </div>
               )}
 

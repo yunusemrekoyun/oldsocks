@@ -112,6 +112,9 @@ export default function CouponsPage() {
         .filter(Boolean),
     [form.productIds, productMap]
   );
+  const selectedVisibleCount = filteredProducts.filter((product) =>
+    form.productIds.includes(String(product._id))
+  ).length;
 
   const resetForm = () => {
     setForm(emptyForm);
@@ -541,6 +544,36 @@ export default function CouponsPage() {
                     className="w-full rounded-lg border border-gray-200 py-2 pl-9 pr-3 text-sm outline-none transition focus:border-dark1"
                   />
                 </div>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  disabled={!filteredProducts.length || selectedVisibleCount === filteredProducts.length}
+                  onClick={() => {
+                    setDirty(true);
+                    setForm((prev) => ({
+                      ...prev,
+                      productIds: [...new Set([...prev.productIds, ...filteredProducts.map((product) => String(product._id))])],
+                    }));
+                  }}
+                  className="rounded-md border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-800 hover:bg-gray-50 disabled:opacity-50"
+                >
+                  Görünenleri seç
+                </button>
+                <button
+                  type="button"
+                  disabled={!selectedVisibleCount}
+                  onClick={() => {
+                    const visibleIds = new Set(filteredProducts.map((product) => String(product._id)));
+                    setDirty(true);
+                    setForm((prev) => ({ ...prev, productIds: prev.productIds.filter((id) => !visibleIds.has(id)) }));
+                  }}
+                  className="rounded-md border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-800 hover:bg-gray-50 disabled:opacity-50"
+                >
+                  Görünenleri kaldır
+                </button>
+                <span className="ml-auto text-xs text-gray-700">{form.productIds.length} seçili</span>
               </div>
 
               <div className="grid max-h-[55vh] grid-cols-1 gap-3 overflow-auto pr-1 sm:grid-cols-2 xl:grid-cols-3">

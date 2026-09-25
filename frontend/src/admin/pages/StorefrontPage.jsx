@@ -122,6 +122,10 @@ export default function StorefrontPage() {
 
     {Object.entries(sectionNames).map(([key, label]) => {
       const section = settings.sections[key];
+      const selectedVisibleCount = matchingProducts.filter((product) => section.productIds.includes(product._id)).length;
+      const visibleIds = matchingProducts.map((product) => product._id);
+      const combinedIds = [...new Set([...section.productIds, ...visibleIds])];
+      const overLimit = combinedIds.length > 40;
       return <section key={key} className="rounded-xl border border-gray-200 bg-white p-5 sm:p-6">
         <div className="flex flex-wrap items-baseline justify-between gap-2">
           <h2 className="text-lg font-semibold text-gray-900">{label}</h2>
@@ -149,6 +153,12 @@ export default function StorefrontPage() {
           <label className="block text-sm font-medium text-gray-800">Ürün havuzu ({section.productIds.length}/40)
             <input type="search" className="mt-2 w-full rounded-lg border border-gray-300 px-3 py-2.5 text-base outline-none focus:border-gray-900" placeholder="Ürün ara" value={search} onChange={(event) => setSearch(event.target.value)} />
           </label>
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <button type="button" disabled={!visibleIds.length || selectedVisibleCount === visibleIds.length || overLimit} onClick={() => setSection(key, { productIds: combinedIds })} className="rounded-md border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-800 hover:bg-gray-50 disabled:opacity-50">Görünenleri seç</button>
+            <button type="button" disabled={!selectedVisibleCount} onClick={() => { const visibleSet = new Set(visibleIds); setSection(key, { productIds: section.productIds.filter((id) => !visibleSet.has(id)) }); }} className="rounded-md border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-800 hover:bg-gray-50 disabled:opacity-50">Görünenleri kaldır</button>
+            <button type="button" disabled={!section.productIds.length} onClick={() => setSection(key, { productIds: [] })} className="rounded-md border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-800 hover:bg-gray-50 disabled:opacity-50">Tümünü temizle</button>
+          </div>
+          {overLimit && <p className="mt-2 text-xs text-gray-700">Tüm görünenleri seçmek 40 ürün sınırını aşar. Aramayı daraltın.</p>}
           <div className="mt-2 max-h-64 overflow-y-auto rounded-lg border border-gray-200 p-2">
             {matchingProducts.map((product) => <label key={product._id} className="flex cursor-pointer items-center gap-3 rounded-md px-2 py-2 text-sm hover:bg-gray-50">
               <input type="checkbox" checked={section.productIds.includes(product._id)} onChange={() => toggleProduct(key, product._id)} />

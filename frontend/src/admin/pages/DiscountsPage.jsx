@@ -474,11 +474,24 @@ export default function DiscountsPage() {
                         onClick={() =>
                           setForm((f) => ({
                             ...f,
-                            targetIds: filteredProducts.map((p) => p._id),
+                            targetIds: [...new Set([...f.targetIds, ...filteredProducts.map((p) => String(p._id))])],
                           }))
                         }
                       >
-                        Tümünü Seç
+                        Görünenleri Seç
+                      </button>
+                      <button
+                        type="button"
+                        className="text-xs px-2 py-1 rounded border"
+                        onClick={() => {
+                          const visibleIds = new Set(filteredProducts.map((p) => String(p._id)));
+                          setForm((f) => ({
+                            ...f,
+                            targetIds: f.targetIds.filter((id) => !visibleIds.has(String(id))),
+                          }));
+                        }}
+                      >
+                        Görünenleri Kaldır
                       </button>
                       <button
                         type="button"
@@ -487,7 +500,7 @@ export default function DiscountsPage() {
                           setForm((f) => ({ ...f, targetIds: [] }))
                         }
                       >
-                        Temizle
+                        Tümünü Temizle
                       </button>
                     </div>
                   </div>

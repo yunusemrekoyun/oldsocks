@@ -20,6 +20,7 @@ import {
 import api from "../../../api";
 import ToastAlert from "../../components/ui/ToastAlert";
 import ConfirmDialog from "../../components/ui/ConfirmDialog";
+import MultiSelectionList from "../components/MultiSelectionList";
 import { v4 as uuidv4 } from "uuid";
 import { useUploadQueue } from "../../context/UploadQueueContext";
 import {
@@ -610,49 +611,17 @@ export default function BlogsPage() {
               </div>
 
               {/* kategoriler */}
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <label className="block text-sm font-medium">
-                    Kategoriler *
-                  </label>
-                  <Badge color={form.categories.length ? "blue" : "gray"}>
-                    {form.categories.length} seçili
-                  </Badge>
-                </div>
-                <select
-                  multiple
-                  className="w-full border rounded p-2 h-32"
-                  value={form.categories}
-                  onChange={(e) => {
-                    const vals = Array.from(e.target.selectedOptions).map(
-                      (o) => o.value
-                    );
-                    setForm((f) => ({ ...f, categories: vals }));
-                    setDirty(true);
-                  }}
-                >
-                  {categories.map((c) => (
-                    <option key={c._id} value={c._id}>
-                      {c.name}
-                    </option>
-                  ))}
-                </select>
-                {form.categories.length > 0 && (
-                  <div className="flex flex-wrap gap-2">
-                    {form.categories
-                      .map((id) => categories.find((c) => c._id === id)?.name)
-                      .filter(Boolean)
-                      .map((name) => (
-                        <span
-                          key={name}
-                          className="px-2 py-0.5 rounded-full text-xs bg-gray-100"
-                        >
-                          {name}
-                        </span>
-                      ))}
-                  </div>
-                )}
-              </div>
+              <MultiSelectionList
+                key={`blog-categories-${form._id || "new"}-${dialogOpen}`}
+                label="Kategoriler *"
+                itemName="kategori"
+                options={categories}
+                value={form.categories}
+                onChange={(ids) => {
+                  setForm((f) => ({ ...f, categories: ids }));
+                  setDirty(true);
+                }}
+              />
 
               {/* yazar */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
