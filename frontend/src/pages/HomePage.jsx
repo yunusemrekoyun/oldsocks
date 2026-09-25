@@ -8,16 +8,19 @@ import HomeProductSection from "../components/products/HomeProductSection";
 import { normalizeSectionOrder, useStorefrontSettings } from "../context/storefrontSettings";
 
 const HomePage = () => {
-  const { sectionOrder } = useStorefrontSettings();
+  const { sectionOrder, sections } = useStorefrontSettings();
   const order = normalizeSectionOrder(sectionOrder);
+  const productSection = (key) => sections?.[key]?.visible === false
+    ? null
+    : <HomeProductSection key={key} sectionKey={key} />;
 
   return <>
     <Hero />
     <Categories />
-    <HomeProductSection sectionKey={order[0]} />
-    <HomeProductSection sectionKey={order[1]} />
+    {productSection(order[0])}
+    {productSection(order[1])}
     <SecondHero />
-    <HomeProductSection sectionKey={order[2]} />
+    {productSection(order[2])}
     <Campaigns />
     <Services />
   </>;

@@ -10,9 +10,9 @@ const defaults = Object.freeze({
   heroButtonOpacity: 30,
   sectionOrder: ["new", "featured", "popular"],
   sections: {
-    new: { heading: "Yeni Eklenen Ürünler", source: "latest", categoryId: null, productIds: [], shuffle: true },
-    featured: { heading: "Öne Çıkan Ürünler", source: "random", categoryId: null, productIds: [], shuffle: true },
-    popular: { heading: "Çok Satan Ürünler", source: "best_selling", categoryId: null, productIds: [], shuffle: false },
+    new: { heading: "Yeni Eklenen Ürünler", source: "latest", categoryId: null, productIds: [], shuffle: true, visible: true },
+    featured: { heading: "Öne Çıkan Ürünler", source: "random", categoryId: null, productIds: [], shuffle: true, visible: true },
+    popular: { heading: "Çok Satan Ürünler", source: "best_selling", categoryId: null, productIds: [], shuffle: false, visible: true },
   },
 });
 const sectionKeys = ["new", "featured", "popular"];
@@ -40,6 +40,7 @@ function publicSettings(doc) {
         categoryId: section.categoryId ? String(section.categoryId) : null,
         productIds: section.productIds.map(String),
         shuffle: section.shuffle,
+        visible: section.visible !== false,
       }];
     })),
   };
@@ -68,7 +69,7 @@ async function bestSellerIds() {
 
 exports.getPublic = async (_req, res) => {
   const settings = await loadSettings();
-  const needsSales = sectionKeys.some((key) => settings.sections[key].source === "best_selling");
+  const needsSales = sectionKeys.some((key) => settings.sections[key].visible && settings.sections[key].source === "best_selling");
   const bestSellingProductIds = needsSales ? await bestSellerIds() : [];
   res.set("Cache-Control", "public, max-age=5, s-maxage=5");
   res.json({ ...settings, bestSellingProductIds });
@@ -81,14 +82,15 @@ exports.getAdmin = async (_req, res) => {
 
 exports.update = async (req, res) => {
   const input = req.body || {};
+  const currentSettings = await loadSettings();
   if (!fonts.has(input.fontPreset)) {
     return res.status(400).json({ message: "Yazı ailesi geçersiz." });
   }
-  const heroButtonOpacity = Number(input.heroButtonOpacity ?? (await loadSettings()).heroButtonOpacity);
+  const heroButtonOpacity = Number(input.heroButtonOpacity ?? currentSettings.heroButtonOpacity);
   if (!Number.isInteger(heroButtonOpacity) || heroButtonOpacity < 0 || heroButtonOpacity > 100) {
     return res.status(400).json({ message: "Hero buton opaklığı 0–100 arasında olmalıdır." });
   }
-  const sectionOrder = input.sectionOrder ?? (await loadSettings()).sectionOrder;
+  const sectionOrder = input.sectionOrder ?? currentSettings.sectionOrder;
   if (!validSectionOrder(sectionOrder)) {
     return res.status(400).json({ message: "Ürün alanlarının sırası geçersiz." });
   }
@@ -99,13 +101,17 @@ exports.update = async (req, res) => {
     const source = row?.source;
     const categoryId = row?.categoryId || null;
     const productIds = Array.isArray(row?.productIds) ? row.productIds : [];
+    const visible = row?.visible ?? currentSettings.sections[key].visible;
     if (!heading || heading.length > 80 || !sources.has(source)) {
       return res.status(400).json({ message: `${key} alanının başlığı veya kaynağı geçersiz.` });
     }
-    if (source === "category" && !mongoose.isValidObjectId(categoryId)) {
+    if (typeof visible !== "boolean") {
+      return res.status(400).json({ message: `${key} görünürlük ayarı geçersiz.` });
+    }
+    if (visible && source === "category" && !mongoose.isValidObjectId(categoryId)) {
       return res.status(400).json({ message: `${key} için kategori seçin.` });
     }
-    if (source === "manual" && (!productIds.length || productIds.length > 40)) {
+    if (source === "manual" && (productIds.length > 40 || (visible && !productIds.length))) {
       return res.status(400).json({ message: `${key} için 1–40 ürün seçin.` });
     }
     if (productIds.some((id) => !mongoose.isValidObjectId(id))) {
@@ -114,18 +120,19 @@ exports.update = async (req, res) => {
     sections[key] = {
       heading,
       source,
-      categoryId: source === "category" ? categoryId : null,
+      categoryId: source === "category" && mongoose.isValidObjectId(categoryId) ? categoryId : null,
       productIds: source === "manual" ? [...new Set(productIds)] : [],
       shuffle: Boolean(row.shuffle),
+      visible,
     };
   }
 
   for (const key of sectionKeys) {
     const row = sections[key];
-    if (row.source === "category" && !(await Category.exists({ _id: row.categoryId, archivedAt: null }))) {
+    if (row.visible && row.source === "category" && !(await Category.exists({ _id: row.categoryId, archivedAt: null }))) {
       return res.status(400).json({ message: `${key} kategorisi bulunamadı.` });
     }
-    if (row.source === "manual") {
+    if (row.visible && row.source === "manual") {
       const count = await Product.countDocuments({ _id: { $in: row.productIds }, archivedAt: null });
       if (count !== row.productIds.length) {
         return res.status(400).json({ message: `${key} içindeki ürünlerden biri bulunamadı.` });

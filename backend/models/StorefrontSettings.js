@@ -11,6 +11,7 @@ const sectionSchema = new mongoose.Schema({
   categoryId: { type: mongoose.Schema.Types.ObjectId, ref: "Category", default: null },
   productIds: [{ type: mongoose.Schema.Types.ObjectId, ref: "Product" }],
   shuffle: { type: Boolean, default: false },
+  visible: { type: Boolean, default: true },
 }, { _id: false });
 
 const storefrontSettingsSchema = new mongoose.Schema({

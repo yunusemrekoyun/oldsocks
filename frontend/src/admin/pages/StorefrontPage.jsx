@@ -120,11 +120,11 @@ export default function StorefrontPage() {
         setNotice({ type: "error", text: `${sectionNames[index]} için başlık girin.` });
         return;
       }
-      if (section.source === "category" && !section.categoryId) {
+      if (section.visible !== false && section.source === "category" && !section.categoryId) {
         setNotice({ type: "error", text: `${sectionNames[index]} için kategori seçin.` });
         return;
       }
-      if (section.source === "manual" && !section.productIds.length) {
+      if (section.visible !== false && section.source === "manual" && !section.productIds.length) {
         setNotice({ type: "error", text: `${sectionNames[index]} için ürün seçin.` });
         return;
       }
@@ -179,7 +179,7 @@ export default function StorefrontPage() {
 
     <div>
       <h2 className="text-lg font-semibold text-gray-900">Ürün alanlarının sırası</h2>
-      <p className="mt-1 text-sm text-gray-600">Kartları tutamaçtan sürükleyin veya oklarla taşıyın. Kampanya bannerı ikinci ve üçüncü alan arasında kalır. Sırayı uygulamak için değişiklikleri kaydedin.</p>
+      <p className="mt-1 text-sm text-gray-600">Kartları tutamaçtan sürükleyin veya oklarla taşıyın. Kampanya bannerı ikinci ve üçüncü alan arasında kalır. Gizlenen alanların ayarları korunur. Değişiklikleri uygulamak için kaydedin.</p>
     </div>
 
     {sectionOrder.map((key, index) => {
@@ -204,7 +204,7 @@ export default function StorefrontPage() {
           if (draggingKeyRef.current) moveSection(draggingKeyRef.current, key, event.clientY >= event.currentTarget.getBoundingClientRect().top + event.currentTarget.offsetHeight / 2);
           finishDrag();
         }}
-        className={`relative rounded-xl border border-gray-200 bg-white p-5 sm:p-6 ${draggingKey === key ? "opacity-60" : ""}`}
+        className={`relative rounded-xl border p-5 sm:p-6 ${section.visible === false ? "border-dashed border-gray-300 bg-gray-50" : "border-gray-200 bg-white"} ${draggingKey === key ? "opacity-60" : ""}`}
       >
         {dropPosition?.key === key && <span aria-hidden="true" className={`pointer-events-none absolute inset-x-3 h-1 rounded-full bg-blue-600 ${dropPosition.after ? "-bottom-1" : "-top-1"}`} />}
         <div className="flex flex-wrap items-start justify-between gap-3">
@@ -224,8 +224,13 @@ export default function StorefrontPage() {
               className="cursor-grab rounded-md p-2 text-gray-600 hover:bg-gray-100 hover:text-gray-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-900 active:cursor-grabbing"
             ><GripVertical size={18} aria-hidden="true" /></button>
             <h2 className="text-lg font-semibold text-gray-900">{label}</h2>
+            {section.visible === false && <span className="rounded-full bg-gray-200 px-2 py-1 text-xs font-medium text-gray-700">Gizli</span>}
           </div>
-          <div className="flex items-center gap-1 text-xs text-gray-600">
+          <div className="flex flex-wrap items-center gap-2 text-xs text-gray-600">
+            <label className="mr-2 flex cursor-pointer items-center gap-2 text-sm font-medium text-gray-800">
+              <input type="checkbox" checked={section.visible !== false} onChange={(event) => setSection(key, { visible: event.target.checked })} className="h-4 w-4 accent-gray-900" />
+              Ana sayfada göster
+            </label>
             <span className="mr-2">{index + 1} / {sectionOrder.length}</span>
             <button type="button" onClick={() => moveByOne(key, -1)} disabled={index === 0} aria-label={`${label} alanını yukarı taşı`} title="Yukarı taşı" className="rounded-md border border-gray-200 p-2 hover:bg-gray-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-900 disabled:cursor-not-allowed disabled:opacity-40"><ArrowUp size={16} aria-hidden="true" /></button>
             <button type="button" onClick={() => moveByOne(key, 1)} disabled={index === sectionOrder.length - 1} aria-label={`${label} alanını aşağı taşı`} title="Aşağı taşı" className="rounded-md border border-gray-200 p-2 hover:bg-gray-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-900 disabled:cursor-not-allowed disabled:opacity-40"><ArrowDown size={16} aria-hidden="true" /></button>
