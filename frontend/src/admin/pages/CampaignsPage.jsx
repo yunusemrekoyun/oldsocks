@@ -111,6 +111,8 @@ export default function CampaignsPage() {
     title: "",
     subtitle: "",
     buttonText: "",
+    overlayOpacity: 0,
+    buttonOpacity: 30,
     imageUrl: "",
     imageFile: null,
     products: [],
@@ -193,6 +195,8 @@ export default function CampaignsPage() {
       title: "",
       subtitle: "",
       buttonText: "",
+      overlayOpacity: 0,
+      buttonOpacity: 30,
       imageUrl: "",
       imageFile: null,
       products: [],
@@ -224,6 +228,8 @@ export default function CampaignsPage() {
       title: c.title,
       subtitle: c.subtitle,
       buttonText: c.buttonText,
+      overlayOpacity: c.overlayOpacity ?? 0,
+      buttonOpacity: c.buttonOpacity ?? 30,
       imageUrl: c.imageUrl,
       imageFile: null,
       products: prodIds,
@@ -324,6 +330,8 @@ export default function CampaignsPage() {
         title: form.title,
         subtitle: form.subtitle || "",
         buttonText: form.buttonText,
+        overlayOpacity: form.overlayOpacity,
+        buttonOpacity: form.buttonOpacity,
         products: form.products,
         categories: form.categories,
         ...(asset ? { imageAssetId: asset.id } : {}),
@@ -691,6 +699,23 @@ export default function CampaignsPage() {
                 )}
               </div>
 
+              <div className="rounded-lg border border-gray-200 p-4 space-y-4">
+                <div>
+                  <label htmlFor="campaign-overlay-opacity" className="flex justify-between gap-4 text-sm font-medium text-gray-800">
+                    <span>Görsel karartması</span><span>%{form.overlayOpacity}</span>
+                  </label>
+                  <input id="campaign-overlay-opacity" type="range" min="0" max="100" step="5" value={form.overlayOpacity} onChange={(event) => { setForm((current) => ({ ...current, overlayOpacity: Number(event.target.value) })); setDirty(true); }} className="mt-2 w-full accent-gray-900" />
+                  <p className="mt-1 text-xs text-gray-600">%0 karartma yok, %100 tamamen siyah.</p>
+                </div>
+                <div>
+                  <label htmlFor="campaign-button-opacity" className="flex justify-between gap-4 text-sm font-medium text-gray-800">
+                    <span>Buton arka planının opaklığı</span><span>%{form.buttonOpacity}</span>
+                  </label>
+                  <input id="campaign-button-opacity" type="range" min="0" max="100" step="5" value={form.buttonOpacity} onChange={(event) => { setForm((current) => ({ ...current, buttonOpacity: Number(event.target.value) })); setDirty(true); }} className="mt-2 w-full accent-gray-900" />
+                  <p className="mt-1 text-xs text-gray-600">%0 şeffaf, %100 tamamen siyah. Yazı ve kenarlık görünür kalır.</p>
+                </div>
+              </div>
+
               {/* seçim türü */}
               <div>
                 <label className="block mb-2 font-medium">Seçim Türü *</label>
@@ -868,12 +893,13 @@ export default function CampaignsPage() {
                       Görsel seçilmedi
                     </div>
                   )}
+                  {form.overlayOpacity > 0 && <div className="pointer-events-none absolute inset-0 bg-black" style={{ opacity: form.overlayOpacity / 100 }} />}
                   <div className="absolute inset-x-0 bottom-3 flex flex-col items-center gap-2 px-4 text-center">
                     {(form.title || form.subtitle) && <div className="bg-gray-900/90 px-3 py-2 text-white">
                       {form.title && <div className="font-semibold">{form.title}</div>}
                       {form.subtitle && <div className="text-xs">{form.subtitle}</div>}
                     </div>}
-                    <span className="rounded-full bg-gray-900 px-4 py-2 text-xs font-semibold text-white">{form.buttonText || "Buton metni"}</span>
+                    <span className="campaign-cta rounded-full border border-white px-4 py-2 text-xs font-semibold text-white backdrop-blur-sm" style={{ "--button-opacity": form.buttonOpacity / 100 }}>{form.buttonText || "Buton metni"}</span>
                   </div>
                 </div>
                 <div className="p-4">

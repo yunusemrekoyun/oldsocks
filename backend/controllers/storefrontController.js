@@ -7,6 +7,7 @@ const { timedCache } = require("../services/timedCache");
 
 const defaults = Object.freeze({
   fontPreset: "classic",
+  heroButtonOpacity: 30,
   sections: {
     new: { heading: "Yeni Eklenen Ürünler", source: "latest", categoryId: null, productIds: [], shuffle: true },
     featured: { heading: "Öne Çıkan Ürünler", source: "random", categoryId: null, productIds: [], shuffle: true },
@@ -24,6 +25,7 @@ function publicSettings(doc) {
   const value = doc.toObject ? doc.toObject() : doc;
   return {
     fontPreset: value.fontPreset,
+    heroButtonOpacity: value.heroButtonOpacity ?? defaults.heroButtonOpacity,
     sections: Object.fromEntries(sectionKeys.map((key) => {
       const section = value.sections[key];
       return [key, {
@@ -76,6 +78,10 @@ exports.update = async (req, res) => {
   if (!fonts.has(input.fontPreset)) {
     return res.status(400).json({ message: "Yazı ailesi geçersiz." });
   }
+  const heroButtonOpacity = Number(input.heroButtonOpacity ?? (await loadSettings()).heroButtonOpacity);
+  if (!Number.isInteger(heroButtonOpacity) || heroButtonOpacity < 0 || heroButtonOpacity > 100) {
+    return res.status(400).json({ message: "Hero buton opaklığı 0–100 arasında olmalıdır." });
+  }
   const sections = {};
   for (const key of sectionKeys) {
     const row = input.sections?.[key];
@@ -119,7 +125,7 @@ exports.update = async (req, res) => {
 
   const doc = await StorefrontSettings.findOneAndUpdate(
     { key: "main" },
-    { $set: { fontPreset: input.fontPreset, sections } },
+    { $set: { fontPreset: input.fontPreset, heroButtonOpacity, sections } },
     { upsert: true, new: true, runValidators: true, setDefaultsOnInsert: true }
   );
   settingsCache.invalidate();

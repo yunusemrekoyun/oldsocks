@@ -4,6 +4,7 @@ import publicApi from "../../../publicApi";
 import { Swiper, SwiperSlide } from "swiper/react";
 import { Autoplay, Pagination } from "swiper/modules";
 import { getResponsiveImageProps } from "../../utils/media";
+import { useStorefrontSettings } from "../../context/storefrontSettings";
 import "swiper/css";
 import "swiper/css/pagination";
 
@@ -54,6 +55,8 @@ function useHeroHeightLimit(elRef) {
 }
 
 export default function Hero() {
+  const { heroButtonOpacity = 30 } = useStorefrontSettings();
+  const buttonOpacity = Math.max(0, Math.min(100, heroButtonOpacity)) / 100;
   const [items, setItems] = useState([]);
   const singleRef = useRef(null);
   const singleHeightPx = useHeroHeightLimit(singleRef);
@@ -136,7 +139,8 @@ export default function Hero() {
         {/* CTA */}
         <Link
           to="/shop"
-          className="absolute bottom-16 left-1/2 -translate-x-1/2 px-6 py-3 text-white border border-white rounded-full bg-black/30 backdrop-blur-sm hover:bg-white hover:text-black transition z-20"
+          className="hero-cta absolute bottom-16 left-1/2 -translate-x-1/2 px-6 py-3 text-white border border-white rounded-full backdrop-blur-sm transition z-20"
+          style={{ "--button-opacity": buttonOpacity }}
         >
           Alışverişe Başla
         </Link>
@@ -164,7 +168,8 @@ export default function Hero() {
       {/* CTA */}
       <Link
         to="/shop"
-        className="absolute bottom-16 left-1/2 -translate-x-1/2 px-6 py-3 text-white border border-white rounded-full bg-black/30 backdrop-blur-sm hover:bg-white hover:text-black transition z-20"
+        className="hero-cta absolute bottom-16 left-1/2 -translate-x-1/2 px-6 py-3 text-white border border-white rounded-full backdrop-blur-sm transition z-20"
+        style={{ "--button-opacity": buttonOpacity }}
       >
         Alışverişe Başla
       </Link>

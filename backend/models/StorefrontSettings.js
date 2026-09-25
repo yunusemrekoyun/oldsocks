@@ -15,6 +15,7 @@ const sectionSchema = new mongoose.Schema({
 const storefrontSettingsSchema = new mongoose.Schema({
   key: { type: String, default: "main", unique: true, immutable: true },
   fontPreset: { type: String, enum: ["classic", "modern", "fashion"], default: "classic" },
+  heroButtonOpacity: { type: Number, min: 0, max: 100, default: 30, validate: Number.isInteger },
   sections: {
     new: { type: sectionSchema, required: true },
     featured: { type: sectionSchema, required: true },

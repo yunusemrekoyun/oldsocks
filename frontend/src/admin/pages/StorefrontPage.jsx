@@ -96,6 +96,19 @@ export default function StorefrontPage() {
     </div>
 
     <section className="rounded-xl border border-gray-200 bg-white p-5 sm:p-6">
+      <h2 className="text-lg font-semibold text-gray-900">Hero butonu</h2>
+      <label htmlFor="hero-button-opacity" className="mt-4 flex justify-between gap-4 text-sm font-medium text-gray-800">
+        <span>Buton arka planının opaklığı</span>
+        <span>%{settings.heroButtonOpacity ?? 30}</span>
+      </label>
+      <input id="hero-button-opacity" type="range" min="0" max="100" step="5" value={settings.heroButtonOpacity ?? 30} onChange={(event) => setSettings((current) => ({ ...current, heroButtonOpacity: Number(event.target.value) }))} className="mt-3 w-full accent-gray-900" />
+      <p className="mt-1 text-xs text-gray-600">%0 tamamen şeffaf, %100 tamamen siyah. Yazı ve kenarlık görünür kalır.</p>
+      <div className="mt-4 flex min-h-28 items-center justify-center rounded-lg bg-gradient-to-r from-stone-300 via-stone-500 to-stone-800 p-4">
+        <span className="hero-cta rounded-full border border-white px-6 py-3 text-sm font-medium text-white backdrop-blur-sm" style={{ "--button-opacity": (settings.heroButtonOpacity ?? 30) / 100 }}>Alışverişe Başla</span>
+      </div>
+    </section>
+
+    <section className="rounded-xl border border-gray-200 bg-white p-5 sm:p-6">
       <h2 className="text-lg font-semibold text-gray-900">Mağaza yazı ailesi</h2>
       <p className="mt-1 text-sm text-gray-600">Seçim mağaza, sepet ve ödeme sayfalarındaki başlık ve metinlere uygulanır. Yönetim panelinin okunabilirliği korunur.</p>
       <div className="mt-5 grid gap-3 md:grid-cols-3">

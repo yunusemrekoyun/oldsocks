@@ -18,6 +18,8 @@ export default function SecondHero() {
   if (!campaign) return null;
 
   const { title, subtitle, buttonText, imageUrl, items } = campaign;
+  const overlayOpacity = Math.max(0, Math.min(100, campaign.overlayOpacity ?? 0));
+  const buttonOpacity = Math.max(0, Math.min(100, campaign.buttonOpacity ?? 30));
   const imageProps = getResponsiveImageProps(campaign.media || imageUrl, {
     widths: [640, 960, 1280, 1600, 1920],
     defaultWidth: 1280,
@@ -49,6 +51,8 @@ export default function SecondHero() {
         />
       </div>
 
+      {overlayOpacity > 0 && <div className="pointer-events-none absolute inset-0 bg-black" style={{ opacity: overlayOpacity / 100 }} />}
+
       {/* İçerik */}
       <div className="absolute inset-0 flex flex-col items-center justify-end text-center px-6 pb-8 md:pb-12">
         {(title || subtitle) && (
@@ -59,7 +63,8 @@ export default function SecondHero() {
         )}
         <button
           onClick={handleClick}
-          className="mt-3 rounded-full bg-dark1 px-8 py-3 font-medium text-white transition-colors duration-200 hover:bg-dark2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+          className="campaign-cta mt-3 rounded-full border border-white px-8 py-3 font-medium text-white backdrop-blur-sm transition-colors duration-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+          style={{ "--button-opacity": buttonOpacity / 100 }}
         >
           {buttonText}
         </button>

@@ -14,6 +14,15 @@ const {
 
 const activeCampaignCache = timedCache(15 * 1000);
 
+function parseOpacity(value, fallback, label) {
+  if (value === undefined || value === null || value === "") return fallback;
+  const result = Number(value);
+  if (Number.isInteger(result) && result >= 0 && result <= 100) return result;
+  const error = new Error(`${label} 0–100 arasında olmalıdır.`);
+  error.statusCode = 400;
+  throw error;
+}
+
 function parseArrayField(raw) {
   if (!raw) return [];
   if (Array.isArray(raw)) return raw;
@@ -94,6 +103,8 @@ exports.createCampaign = async (req, res) => {
       title: String(title || "").trim(),
       subtitle,
       buttonText,
+      overlayOpacity: parseOpacity(req.body.overlayOpacity, 0, "Görsel karartması"),
+      buttonOpacity: parseOpacity(req.body.buttonOpacity, 30, "Buton opaklığı"),
       imageAsset: asset._id,
       imageUrl: legacyAssetUrl(asset, "detail"),
       products,
@@ -144,6 +155,8 @@ exports.updateCampaign = async (req, res) => {
     await validateTargets(products, categories);
     campaign.title = String(req.body.title || "").trim();
     campaign.buttonText = req.body.buttonText;
+    campaign.overlayOpacity = parseOpacity(req.body.overlayOpacity, campaign.overlayOpacity ?? 0, "Görsel karartması");
+    campaign.buttonOpacity = parseOpacity(req.body.buttonOpacity, campaign.buttonOpacity ?? 30, "Buton opaklığı");
     campaign.subtitle = req.body.subtitle ?? campaign.subtitle;
     campaign.products = products;
     campaign.categories = categories;

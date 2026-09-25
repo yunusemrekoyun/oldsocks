@@ -30,6 +30,17 @@
   font-family: var(--storefront-heading-font);
 }
 
+.hero-cta,
+.campaign-cta {
+  background-color: rgb(0 0 0 / var(--button-opacity, 0.3));
+}
+
+.hero-cta:hover,
+.campaign-cta:hover {
+  background-color: #fff;
+  color: #000;
+}
+
 .home-product-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
