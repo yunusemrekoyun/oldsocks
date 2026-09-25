@@ -1,4 +1,4 @@
-import api from "../../api";
+import publicApi from "../../publicApi";
 
 let cache = null;
 let timestamp = 0;
@@ -16,7 +16,7 @@ export async function getCategoriesCached(force = false) {
     return inFlight;
   }
 
-  inFlight = api
+  inFlight = publicApi
     .get("/categories")
     .then((res) => {
       const data = Array.isArray(res.data) ? res.data : [];

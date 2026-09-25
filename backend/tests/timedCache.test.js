@@ -40,3 +40,14 @@ test("boş sonuç tekrar tekrar veritabanına gitmez", async () => {
   assert.equal(await cache.get(load), null);
   assert.equal(queries, 1);
 });
+
+test("yük durumuna göre süre değişebilir", async () => {
+  let ttl = 0;
+  const cache = timedCache(() => ttl);
+  let queries = 0;
+  const load = async () => ++queries;
+  assert.equal(await cache.get(load), 1);
+  ttl = 60_000;
+  assert.equal(await cache.get(load), 2);
+  assert.equal(await cache.get(load), 2);
+});

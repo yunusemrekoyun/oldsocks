@@ -3,6 +3,7 @@ const router = express.Router();
 
 const { verifyToken } = require("../middleware/auth");
 const { allowRoles } = require("../middleware/roles");
+const { trafficMonitor } = require("../services/trafficMonitor");
 
 // Sağlık kontrolü
 router.get("/", (req, res) => res.json({ message: "API çalışıyor 🚀" }));
@@ -16,6 +17,10 @@ router.get("/protected", verifyToken, (req, res) =>
 router.get("/admin-only", verifyToken, allowRoles("admin"), (req, res) =>
   res.json({ message: "Admin paneline hoş geldin." })
 );
+router.get("/admin/traffic", verifyToken, allowRoles("admin"), (_req, res) => {
+  res.set("Cache-Control", "no-store");
+  res.json(trafficMonitor.snapshot());
+});
 
 // auth
 router.use("/auth", require("./auth"));

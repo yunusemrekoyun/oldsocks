@@ -1,4 +1,4 @@
-import api from "../../api";
+import publicApi from "../../publicApi";
 
 let cache = null;
 let timestamp = 0;
@@ -16,8 +16,8 @@ export async function getProductsCached(force = false) {
     return inFlight;
   }
 
-  inFlight = api
-    .get("/products")
+  inFlight = publicApi
+    .get("/products?view=compact")
     .then((res) => {
       cache = Array.isArray(res.data) ? res.data : [];
       timestamp = Date.now();

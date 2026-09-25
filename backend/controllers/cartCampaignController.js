@@ -256,6 +256,7 @@ exports.listHeaderCampaigns = async (_req, res) => {
         .lean();
     });
 
+    res.set("Cache-Control", "public, max-age=5, s-maxage=5");
     res.json(campaigns);
   } catch (err) {
     console.error("[CartCampaign][header] error:", err);

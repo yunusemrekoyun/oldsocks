@@ -58,6 +58,7 @@ exports.getCategories = async (_req, res) => {
       const roots = await populatedCategory(Category.find({ parent: null, archivedAt: null }).sort("name")).lean();
       return roots.map(applyCategoryMedia);
     });
+    res.set("Cache-Control", "public, max-age=5, s-maxage=5");
     res.json(result);
   } catch (error) {
     console.error(error);

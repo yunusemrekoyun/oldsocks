@@ -3,6 +3,7 @@ const Product = require("../models/Product");
 const Category = require("../models/Category");
 const { MediaError } = require("../services/media/errors");
 const { timedCache } = require("../services/timedCache");
+const { trafficMonitor } = require("../services/trafficMonitor");
 const {
   applyProductMedia,
   legacyAssetUrl,
@@ -12,8 +13,8 @@ const {
   syncOwnerMediaReferences,
 } = require("../services/media/assets");
 
-const campaignListCache = timedCache(15 * 1000);
-const activeCampaignCaches = new Map([0, 1, 2].map((slot) => [slot, timedCache(15 * 1000)]));
+const campaignListCache = timedCache(() => trafficMonitor.publicTtlMs(15 * 1000));
+const activeCampaignCaches = new Map([0, 1, 2].map((slot) => [slot, timedCache(() => trafficMonitor.publicTtlMs(15 * 1000))]));
 
 function invalidateMiniCampaigns() {
   campaignListCache.invalidate();
@@ -125,6 +126,7 @@ exports.getMiniCampaigns = async (_req, res) => {
     const campaigns = await campaignListCache.get(async () =>
       (await miniQuery(MiniCampaign.find().sort({ slot: 1, createdAt: -1 })))
         .map((campaign) => serializeMini(campaign)));
+    res.set("Cache-Control", "public, max-age=5, s-maxage=5");
     res.json(campaigns);
   } catch (error) {
     console.error(error);
@@ -238,6 +240,7 @@ exports.getActiveMiniCampaigns = async (req, res) => {
       return { ...serializeMini(campaign, "detail"), items };
     });
     if (!result) return res.status(404).json({ message: "Mini kampanya bulunamadı." });
+    res.set("Cache-Control", "public, max-age=5, s-maxage=5");
     res.json(result);
   } catch (error) {
     console.error(error);

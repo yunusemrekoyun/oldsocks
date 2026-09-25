@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState, useRef } from "react";
 import { FaSearch, FaTimes } from "react-icons/fa";
 import { useNavigate } from "react-router-dom";
-import api from "../../../api";
+import { getProductsCached } from "../../services/productCache";
 import { formatTry } from "../../utils/currency";
 
 export default function SearchModal({ open, onClose }) {
@@ -26,9 +26,8 @@ export default function SearchModal({ open, onClose }) {
   // Veriler çekilsin
   useEffect(() => {
     if (!open) return;
-    api
-      .get("/products")
-      .then(({ data }) => setAllProducts(data))
+    getProductsCached()
+      .then(setAllProducts)
       .catch(console.error);
     setQuery("");
   }, [open]);

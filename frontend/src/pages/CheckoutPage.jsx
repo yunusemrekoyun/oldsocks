@@ -77,18 +77,20 @@ export default function CheckoutPage() {
       setAppliedCampaign(null);
       setAppliedCoupon(null);
       setPricingError(null);
+      setPricingLoading(false);
       return;
     }
 
     let alive = true;
-    (async () => {
+    const controller = new AbortController();
+    setPricingLoading(true);
+    const timer = setTimeout(async () => {
       try {
-        setPricingLoading(true);
         const { data } = await api.post("/cart-campaigns/preview", {
           cartItems: items,
           selectedCampaignId: selectedCampaignId || null,
           couponCode: selectedCouponCode || null,
-        });
+        }, { signal: controller.signal });
         if (!alive) return;
         setPricingSummary(data?.summary || null);
         setAppliedCampaign(data?.appliedCampaign || null);
@@ -113,10 +115,12 @@ export default function CheckoutPage() {
       } finally {
         if (alive) setPricingLoading(false);
       }
-    })();
+    }, 350);
 
     return () => {
       alive = false;
+      clearTimeout(timer);
+      controller.abort();
     };
   }, [
     items,

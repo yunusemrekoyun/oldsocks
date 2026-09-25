@@ -113,6 +113,7 @@ exports.createCampaign = async (req, res) => {
 exports.getCampaigns = async (_req, res) => {
   try {
     const campaigns = await campaignQuery(Campaign.find());
+    res.set("Cache-Control", "public, max-age=5, s-maxage=5");
     res.json(campaigns.map((campaign) => serializeCampaign(campaign)));
   } catch (error) {
     console.error(error);
@@ -221,6 +222,7 @@ exports.getActiveCampaign = async (_req, res) => {
       return { ...serialized, items };
     });
     if (!result) return res.status(404).json({ message: "Aktif kampanya bulunamadı." });
+    res.set("Cache-Control", "public, max-age=5, s-maxage=5");
     res.json(result);
   } catch (error) {
     console.error(error);

@@ -1,7 +1,8 @@
 const AnnouncementBar = require("../models/AnnouncementBar");
 const { timedCache } = require("../services/timedCache");
+const { trafficMonitor } = require("../services/trafficMonitor");
 
-const publicBarCache = timedCache(15 * 1000);
+const publicBarCache = timedCache(() => trafficMonitor.publicTtlMs(15 * 1000));
 
 /* ─────────────────────────────
  * Public: aktif bar (enabled=true)
@@ -12,6 +13,7 @@ exports.getPublicBar = async (req, res) => {
       (await AnnouncementBar.findOne({ enabled: true })
         .sort("-updatedAt")
         .lean()) || null);
+    res.set("Cache-Control", "public, max-age=5, s-maxage=5");
     res.json(bar); // yoksa null döner
   } catch (e) {
     console.error("[AnnouncementBar][public] error:", e);

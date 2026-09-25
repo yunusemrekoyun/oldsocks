@@ -142,13 +142,15 @@ export default function GuestCheckoutPage() {
       setAppliedCampaign(null);
       setAppliedCoupon(null);
       setPricingError(null);
+      setPricingLoading(false);
       return;
     }
 
     let alive = true;
-    (async () => {
+    const controller = new AbortController();
+    setPricingLoading(true);
+    const timer = setTimeout(async () => {
       try {
-        setPricingLoading(true);
         const email =
           EMAIL_REGEX.test(String(buyer.email || "").trim().toLowerCase())
             ? String(buyer.email || "").trim().toLowerCase()
@@ -158,7 +160,7 @@ export default function GuestCheckoutPage() {
           selectedCampaignId: selectedCampaignId || null,
           couponCode: selectedCouponCode || null,
           customerEmail: email,
-        });
+        }, { signal: controller.signal });
         if (!alive) return;
         setPricingSummary(data?.summary || null);
         setAppliedCampaign(data?.appliedCampaign || null);
@@ -183,10 +185,12 @@ export default function GuestCheckoutPage() {
       } finally {
         if (alive) setPricingLoading(false);
       }
-    })();
+    }, 350);
 
     return () => {
       alive = false;
+      clearTimeout(timer);
+      controller.abort();
     };
   }, [
     buyer.email,

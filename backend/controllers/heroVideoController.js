@@ -2,6 +2,7 @@ const mongoose = require("mongoose");
 const HeroVideo = require("../models/HeroVideo");
 const { MediaError } = require("../services/media/errors");
 const { timedCache } = require("../services/timedCache");
+const { trafficMonitor } = require("../services/trafficMonitor");
 const {
   legacyAssetUrl,
   publicAsset,
@@ -21,7 +22,7 @@ function serializeHero(item) {
 }
 
 const ORDER_SORT = { order: 1, createdAt: 1 };
-const heroCache = timedCache(15 * 1000);
+const heroCache = timedCache(() => trafficMonitor.publicTtlMs(15 * 1000));
 
 function listHeroVideos() {
   return HeroVideo.find().populate("mediaAsset").sort(ORDER_SORT);
@@ -73,6 +74,7 @@ exports.uploadVideo = async (req, res) => {
 exports.getHeroVideos = async (_req, res) => {
   try {
     const items = await heroCache.get(async () => (await listHeroVideos()).map(serializeHero));
+    res.set("Cache-Control", "public, max-age=5, s-maxage=5");
     res.json(items);
   } catch (error) {
     console.error("Hero media list error:", error);

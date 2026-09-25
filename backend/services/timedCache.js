@@ -17,7 +17,8 @@ function timedCache(ttlMs) {
             if (state === current) {
               current.hasValue = true;
               current.value = value;
-              current.expiresAt = Date.now() + ttlMs;
+              const duration = typeof ttlMs === "function" ? ttlMs() : ttlMs;
+              current.expiresAt = Date.now() + duration;
             }
             return value;
           })

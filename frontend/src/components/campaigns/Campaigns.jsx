@@ -2,7 +2,7 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import CampaignItem from "./CampaignItem";
-import api from "../../../api";
+import publicApi from "../../../publicApi";
 
 export default function Campaigns() {
   const [slots, setSlots] = useState([]);
@@ -10,7 +10,7 @@ export default function Campaigns() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    api
+    publicApi
       .get("/mini-campaigns")
       .then(({ data }) => setSlots(data))
       .catch(console.error)
@@ -19,7 +19,7 @@ export default function Campaigns() {
 
   const handleSlotClick = async (slot) => {
     try {
-      const { data } = await api.get(`/mini-campaigns/active?slot=${slot}`);
+      const { data } = await publicApi.get(`/mini-campaigns/active?slot=${slot}`);
       // ShopPage'e yönlendir:
       navigate("/shop", {
         state: {

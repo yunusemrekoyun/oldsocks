@@ -1,7 +1,7 @@
 // src/components/SecondHero.jsx
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom"; // ← import ettik
-import api from "../../../api";
+import publicApi from "../../../publicApi";
 import { getResponsiveImageProps } from "../../utils/media";
 
 export default function SecondHero() {
@@ -9,7 +9,7 @@ export default function SecondHero() {
   const navigate = useNavigate(); // ← navigate hook
 
   useEffect(() => {
-    api
+    publicApi
       .get("/campaigns/active")
       .then(({ data }) => setCampaign(data))
       .catch((err) => console.error("Aktif kampanya alınamadı:", err));

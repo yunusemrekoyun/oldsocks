@@ -17,7 +17,7 @@ import { useCart } from "../../context/useCart";
 import SearchModal from "../search/SearchModal";
 import useCategoriesCache from "../../hooks/useCategoriesCache";
 import logo from "../../assets/logo/logo.webp";
-import api from "../../../api";
+import publicApi from "../../../publicApi";
 
 const DISCOUNT_HOVER_KEY = "__discount_campaigns__";
 
@@ -51,7 +51,7 @@ const Header = () => {
     let alive = true;
     (async () => {
       try {
-        const { data } = await api.get("/cart-campaigns/header");
+        const { data } = await publicApi.get("/cart-campaigns/header");
         if (!alive) return;
         setHeaderCampaigns(Array.isArray(data) ? data : []);
       } catch (e) {

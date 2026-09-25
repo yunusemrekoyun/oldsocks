@@ -5,6 +5,7 @@ const shippingCache = timedCache(15 * 1000);
 
 exports.list = async (_req, res) => {
   const rows = await shippingCache.get(() => ShippingMethod.find().sort({ createdAt: -1 }).lean());
+  res.set("Cache-Control", "public, max-age=5, s-maxage=5");
   res.json(rows);
 };
 

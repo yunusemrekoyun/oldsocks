@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import api from "../../api";
+import publicApi from "../../publicApi";
 
 export default function AnnouncementBar() {
   const [data, setData] = useState(null);
@@ -10,7 +10,7 @@ export default function AnnouncementBar() {
   useEffect(() => {
     (async () => {
       try {
-        const { data } = await api.get("/announcement-bar");
+        const { data } = await publicApi.get("/announcement-bar");
         setData({
           enabled: !!data?.enabled,
           text: (data?.text || "").trim(),

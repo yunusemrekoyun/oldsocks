@@ -13,6 +13,7 @@ const mongoose = require("mongoose");
 const connectDB = require("./config/db");
 const apiRoutes = require("./routes");
 const requestId = require("./middleware/requestId");
+const { trafficMonitor } = require("./services/trafficMonitor");
 const { MediaError, toMediaErrorPayload } = require("./services/media/errors");
 const {
   directoryPath,
@@ -30,6 +31,13 @@ const mediaStorageReady = initializeMediaStorage();
 app.set("trust proxy", 1); // gerçek istemci IP’si için
 app.disable("x-powered-by");
 app.use(requestId);
+app.use((req, res, next) => {
+  if (!req.path.startsWith("/api/v1")) return next();
+  const finish = trafficMonitor.begin();
+  res.once("finish", () => finish(res.statusCode));
+  res.once("close", () => finish(res.writableEnded ? res.statusCode : 499));
+  next();
+});
 
 /* 3) CORS (çoklu origin whitelist) */
 const ALLOWED_ORIGINS = (process.env.FRONTEND_ORIGIN || "")
@@ -190,6 +198,11 @@ app.get("/healthz", (req, res) => {
     env: process.env.NODE_ENV || "development",
     mongo: mongoose.connection.readyState, // 1 ise bağlı
   });
+});
+
+app.get("/readyz", (req, res) => {
+  const ready = mongoose.connection.readyState === 1;
+  res.status(ready ? 200 : 503).json({ ok: ready });
 });
 
 /* 10) Rate limit uygulaması (sıra önemli) */

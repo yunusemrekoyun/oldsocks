@@ -2,6 +2,7 @@ const Product = require("../models/Product");
 const Category = require("../models/Category");
 const { MediaError } = require("../services/media/errors");
 const { timedCache } = require("../services/timedCache");
+const { compactProductListItem } = require("../services/catalogResponses");
 const {
   CatalogValidationError,
   parseProductPricing,
@@ -126,9 +127,14 @@ exports.getProducts = async (req, res) => {
             "name video images videoAsset imageAssets price originalPrice discount sizes color category parentProductId createdAt"
           )
       ).lean();
-      return products.map((product) => applyProductMedia(product, "list"));
+      const full = products.map((product) => applyProductMedia(product, "list"));
+      return { full, compact: full.map(compactProductListItem) };
     });
-    res.json(result);
+    if (req.query.view === "compact") {
+      res.set("Cache-Control", "public, max-age=5, s-maxage=5");
+      return res.json(result.compact);
+    }
+    res.json(result.full);
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: "Ürünler getirilirken hata oluştu." });

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import api from "../../../api";
+import publicApi from "../../../publicApi";
 import { Swiper, SwiperSlide } from "swiper/react";
 import { Autoplay, Pagination } from "swiper/modules";
 import { getResponsiveImageProps } from "../../utils/media";
@@ -59,7 +59,7 @@ export default function Hero() {
   const singleHeightPx = useHeroHeightLimit(singleRef);
 
   useEffect(() => {
-    api
+    publicApi
       .get("/hero-videos")
       .then((res) => setItems(res.data || []))
       .catch((err) => console.error("Hero media alınamadı:", err));

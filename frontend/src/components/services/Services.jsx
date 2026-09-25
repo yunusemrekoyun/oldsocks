@@ -1,7 +1,7 @@
 // src/components/Services.jsx
 import React, { useEffect, useState } from "react";
 import { FaShippingFast, FaShieldAlt, FaHeadset } from "react-icons/fa";
-import api from "../../../api";
+import publicApi from "../../../publicApi";
 import { formatTry } from "../../utils/currency";
 
 const baseServices = [
@@ -32,7 +32,7 @@ const Services = () => {
     let alive = true;
     (async () => {
       try {
-        const { data } = await api.get("/shipping");
+        const { data } = await publicApi.get("/shipping");
         if (!alive) return;
         const list = Array.isArray(data) ? data : [];
 
