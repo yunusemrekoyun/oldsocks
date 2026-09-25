@@ -9,15 +9,17 @@ Bu özellik müşteri hesabı bağlanana kadar kapalıdır. İlk yerel ve sunucu
 3. Sunucuda `restic` ve `rclone` kurulu olmalı. API ve medya/yedek işçisi aynı `oldscks` kullanıcısıyla çalışmalı ve `/srv/oldscks/media` ile `/srv/oldscks/backup` dizinlerine erişebilmeli. Kurulumdan önce `install -d -o oldscks -g oldscks -m 0700 /srv/oldscks/backup` ile anahtar dizinini hazırlayın. Örnek servis dosyasına ikinci `ReadWritePaths` yolu eklendi. Canlı systemd dosyasını ayrıca kontrol edin; bu depodaki örnek canlı sunucunun gerçek servis konumunu temsil etmeyebilir.
 4. API ortamında `BACKEND_PUBLIC_URL=https://api.oldscks.com` ve `FRONTEND_ORIGIN=https://oldscks.com` olmalı. `MEDIA_ROOT` gerçek medya dizinini göstermeli. Anahtar varsayılan olarak medya dizininin kardeşi olan `backup/master.key` yolunda oluşur. Başka yol gerekiyorsa `BACKUP_KEY_FILE` ayarlayın. Anahtar dosyasının izni `0600`, üst dizinin izni `0700` olmalı.
 5. Yönetim ekranında **Yedekler** sayfasına müşteri Client ID ve Client secret değerlerini girsin, sonra Google hesabını bağlasın. Değerleri sohbet, Git veya düz metin dosyasında paylaşmayın.
-6. Yönetici parolasıyla şifreli kurtarma kitini indirin. Kit dosyasını ve kit parolasını sunucu ile Drive'dan ayrı güvenli yerlerde tutun. Kit kaybolursa sunucunun tamamen kaybolduğu durumda Drive yedeğine erişilemez.
+6. Yönetici parolasıyla şifreli kurtarma kitini indirin. İndirilen dosyayı yönetim ekranında seçip kit parolasıyla doğrulayın; doğrulama olmadan günlük veya elle yedekleme açılamaz. Kit dosyasını ve kit parolasını sunucu ile Drive'dan ayrı güvenli yerlerde tutun. Kit kaybolursa sunucunun tamamen kaybolduğu durumda Drive yedeğine erişilemez.
 7. **Şimdi yedek al** ile ilk Drive yedeğini başlatın. İşlem geçmişinde tamamlandığını ve tarihli sürümün listelendiğini görün. Sonra günlük takvimi açın.
+
+Google hesabı yeniden bağlanırsa takvim kapanır. Yeni bağlantı için yeni kurtarma kiti indirip doğruladıktan sonra takvimi tekrar açın. Yeni bir kit indirilmesi de doğrulama durumunu sıfırlar ve takvimi kapatır.
 
 Google `drive.file` izni uygulamanın oluşturduğu dosyalarla sınırlıdır. Rclone için uygulamaya özel OAuth istemcisi kullanılır; [rclone Drive belgesi](https://rclone.org/drive/) kapsamı ve kurulum yolunu açıklar.
 
 ## Çalışma ve geri dönüş kuralları
 
 - Günlük saat İstanbul saatidir. İşçi seçilen saatten sonra çalıştığında o güne ait tek otomatik işi sıraya alır. Sunucu bütün gün kapalıysa o gün yedek oluşmaz; son başarı tarihini yönetim ekranından izleyin.
-- Veritabanı ve `assets`, `trash`, `quarantine` medya dizinleri restic ile şifrelenerek Drive'a aktarılır. Yedek tamamlanmadan önce hazır medya kayıtlarının dosya referansları doğrulanır; tamamlandıktan sonra `restic check` çalışır.
+- Veritabanı ve `assets`, `trash`, `quarantine` medya dizinleri restic ile şifrelenerek Drive'a aktarılır. Yedek tamamlanmadan önce medya ağacı ve hazır medya kayıtlarının tüm dosya referansları doğrulanır; tamamlandıktan sonra `restic check` çalışır.
 - Normal sürümlerde 30 günlük, 8 haftalık, 12 aylık saklama politikası uygulanır. Geri yükleme öncesi alınan güvenlik sürümleri ayrı etiketle tutulur; bunlar bu otomatik politikaya dahil değildir. Drive alanını yönetim ekranından veya müşteri hesabından izleyin.
 - Yönetim ekranındaki geri dönüş yalnızca **ürünler, kategoriler ve medya kayıtları/dosyaları** içindir. Siparişler, kullanıcılar, ödeme durumları, kampanyalar, bloglar ve diğer ayarlar korunur. Daha sonra eklenen ürün/kategoriler silinmez, mağazada gizlenir. Eşleşen ürünlerin güncel stokları korunur; geçmişten geri gelen ve artık mevcut olmayan ürünler sıfır stokla açılır.
 - Önce etki raporu hazırlanır. Geri yükleme isteğinde yönetici parolası ve açık onay gerekir. Uygulama önce güncel durumun ayrıca Drive yedeğini alır, sonra katalogu veritabanı işlemi içinde değiştirir. Rapor sonrası katalog veya stok değişmişse geri yükleme durur ve yeni rapor gerekir.
@@ -51,4 +53,4 @@ Aktarım mevcut veritabanında koleksiyon veya hedef dizinlerde dosya görürse 
 
 ## Bu aşamadaki doğrulama
 
-İlk gerçek arşiv EJSON/gzip olarak okundu; 25 koleksiyon ayrı MongoDB 8.0.4 test veritabanına aktarıldı. Ayrı replica set testinde sonraki ürün/kategori gizleme, güncel stokları ve sonradan eklenmiş siparişleri koruma doğrulandı. Google OAuth ve restic/rclone üzerinden gerçek Drive yedekleme/kurtarma, müşteri hesabı bağlanmadığı için henüz uçtan uca denenmedi.
+İlk gerçek arşiv EJSON/gzip olarak okundu; 25 koleksiyon ayrı MongoDB 8.0.4 test veritabanına aktarıldı. Arşivdeki 2.214 medya dosyası ve 330 hazır medya kaydının referansları doğrulandı. Ayrı replica set testinde sonraki ürün/kategori gizleme, güncel stokları ve sonradan eklenmiş siparişleri koruma doğrulandı. Google OAuth ve restic/rclone üzerinden gerçek Drive yedekleme/kurtarma, müşteri hesabı bağlanmadığı için henüz uçtan uca denenmedi.

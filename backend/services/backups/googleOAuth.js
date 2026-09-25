@@ -140,7 +140,7 @@ async function finishConnection({ state, code }) {
         tokenEncrypted: await encrypt(token),
         connectedAt: new Date(),
         enabled: false,
-        recoveryKitDownloadedAt: null,
+        recoveryKitVerifiedAt: null,
         lastError: "",
       },
     }

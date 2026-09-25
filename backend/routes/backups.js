@@ -8,7 +8,7 @@ const { verifyToken } = require("../middleware/auth");
 const { allowRoles } = require("../middleware/roles");
 const { binaryStatus, connectionValues, rcloneConfig, REPOSITORY, restic, withRuntime } = require("../services/backups/commands");
 const { queueBackup, queuePreview, queueRestore } = require("../services/backups/jobs");
-const { makeRecoveryKit, masterKey } = require("../services/backups/secrets");
+const { makeRecoveryKit, masterKey, openRecoveryKit } = require("../services/backups/secrets");
 const {
   SETTINGS_SELECT,
   adminUrl,
@@ -48,7 +48,7 @@ router.get("/status", async (_req, res, next) => {
       clientConfigured: Boolean(settings?.clientIdEncrypted && settings?.clientSecretEncrypted),
       connected: Boolean(settings?.tokenEncrypted),
       connectedAt: settings?.connectedAt || null,
-      recoveryKitDownloadedAt: settings?.recoveryKitDownloadedAt || null,
+      recoveryKitVerifiedAt: settings?.recoveryKitVerifiedAt || null,
       enabled: Boolean(settings?.enabled),
       dailyTime: settings?.dailyTime || "02:00",
       lastSuccessAt: settings?.lastSuccessAt || null,
@@ -93,13 +93,32 @@ router.post("/recovery-kit", sensitiveLimiter, async (req, res, next) => {
       },
       req.body?.passphrase
     );
-    await BackupSettings.updateOne(
-      { key: "primary" },
-      { $set: { recoveryKitDownloadedAt: new Date() } }
-    );
+    await BackupSettings.updateOne({ key: "primary" }, { $set: { recoveryKitVerifiedAt: null, enabled: false } });
     res.setHeader("Content-Disposition", 'attachment; filename="oldsocks-kurtarma-kiti.json"');
     res.type("application/json").send(JSON.stringify(kit, null, 2));
   } catch (error) { next(error); }
+});
+
+router.post("/recovery-kit/verify", sensitiveLimiter, async (req, res, next) => {
+  try {
+    const payload = await openRecoveryKit(req.body?.kit, req.body?.passphrase);
+    const values = await connectionValues(await getSettings());
+    const expected = {
+      repository: REPOSITORY,
+      rcloneConfig: rcloneConfig(values),
+      resticPassword: values.password,
+      masterKey: (await masterKey()).toString("base64"),
+    };
+    if (Object.entries(expected).some(([key, value]) => payload[key] !== value)) {
+      return res.status(409).json({ message: "Bu kit geçerli Drive bağlantısına ait değil. Yeni kiti indirin." });
+    }
+    const verifiedAt = new Date();
+    await BackupSettings.updateOne({ key: "primary" }, { $set: { recoveryKitVerifiedAt: verifiedAt } });
+    res.json({ verifiedAt });
+  } catch (error) {
+    if (error?.statusCode) return next(error);
+    res.status(400).json({ message: "Kit veya parola doğrulanamadı." });
+  }
 });
 
 router.patch("/settings", async (req, res, next) => {
@@ -113,7 +132,7 @@ router.patch("/settings", async (req, res, next) => {
     if (!settings) return res.status(409).json({ message: "Önce Google Drive bağlantısını kurun." });
     if (enabled) {
       const binaries = await binaryStatus();
-      if (!settings.tokenEncrypted || !settings.recoveryKitDownloadedAt || !binaries.rclone || !binaries.restic) {
+      if (!settings.tokenEncrypted || !settings.recoveryKitVerifiedAt || !binaries.rclone || !binaries.restic) {
         return res.status(409).json({ message: "Bağlantı, kurtarma kiti ve sunucu araçları tamamlanmalı." });
       }
     }
@@ -128,7 +147,7 @@ router.post("/runs", async (req, res, next) => {
   try {
     const settings = await getSettings();
     const binaries = await binaryStatus();
-    if (!settings?.tokenEncrypted || !settings.recoveryKitDownloadedAt || !binaries.rclone || !binaries.restic) {
+    if (!settings?.tokenEncrypted || !settings.recoveryKitVerifiedAt || !binaries.rclone || !binaries.restic) {
       return res.status(409).json({ message: "Bağlantı, kurtarma kiti ve sunucu araçları tamamlanmalı." });
     }
     const job = await queueBackup(req.user.userId);

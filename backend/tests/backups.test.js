@@ -1,7 +1,11 @@
 const assert = require("node:assert/strict");
+const fs = require("node:fs/promises");
+const os = require("node:os");
+const path = require("node:path");
 const { test } = require("node:test");
 const { makeRecoveryKit, openRecoveryKit } = require("../services/backups/secrets");
 const { mergedSizes } = require("../services/backups/restore");
+const { verifyMediaInStage, verifyMediaTree } = require("../services/backups/media");
 
 test("kurtarma kiti yalnızca doğru parola ile açılır", async () => {
   const payload = {
@@ -24,4 +28,32 @@ test("katalog geri yüklemesi mevcut stokları korur, eski ürünü sıfır stok
     ["S", 2], ["M", 0], ["L", 4],
   ]);
   assert.deepEqual(mergedSizes(historic, null).map((item) => item.stock), [0, 0]);
+});
+
+test("medya dosyaları eksikse yedek geçerli sayılmaz", async (t) => {
+  const stage = await fs.mkdtemp(path.join(os.tmpdir(), "oldsocks-media-test-"));
+  t.after(() => fs.rm(stage, { recursive: true, force: true }));
+  for (const name of ["assets", "trash", "quarantine"]) {
+    await fs.mkdir(path.join(stage, "media", name), { recursive: true });
+  }
+  const archive = { collections: [{ name: "mediaassets", documents: [{
+    status: "ready", manifestKey: "abc/manifest.json", variants: [{ key: "abc/image.webp" }],
+  }] }] };
+  await assert.rejects(verifyMediaInStage({ collections: [] }, stage), /no media asset collection/);
+  assert.deepEqual(await verifyMediaTree(stage), { files: 0, bytes: 0 });
+  await assert.rejects(verifyMediaInStage(archive, stage), { code: "ENOENT" });
+  await fs.mkdir(path.join(stage, "media", "assets", "abc"));
+  await fs.writeFile(path.join(stage, "media", "assets", "abc", "manifest.json"), "{}");
+  await fs.writeFile(path.join(stage, "media", "assets", "abc", "image.webp"), "x");
+  assert.deepEqual(await verifyMediaInStage(archive, stage), { readyAssets: 1, referencedFiles: 2 });
+});
+
+test("medya ağacındaki sembolik bağlantı reddedilir", async (t) => {
+  const stage = await fs.mkdtemp(path.join(os.tmpdir(), "oldsocks-media-test-"));
+  t.after(() => fs.rm(stage, { recursive: true, force: true }));
+  for (const name of ["assets", "trash", "quarantine"]) {
+    await fs.mkdir(path.join(stage, "media", name), { recursive: true });
+  }
+  await fs.symlink(os.tmpdir(), path.join(stage, "media", "assets", "outside"));
+  await assert.rejects(verifyMediaTree(stage), /link or unsupported/);
 });

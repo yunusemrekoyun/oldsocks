@@ -40,6 +40,8 @@ export default function BackupsPage() {
   const [clientSecret, setClientSecret] = useState("");
   const [adminPassword, setAdminPassword] = useState("");
   const [passphrase, setPassphrase] = useState("");
+  const [kitFile, setKitFile] = useState(null);
+  const [kitPassphrase, setKitPassphrase] = useState("");
   const [dailyTime, setDailyTime] = useState("02:00");
   const [enabled, setEnabled] = useState(false);
   const [scheduleDirty, setScheduleDirty] = useState(false);
@@ -167,13 +169,31 @@ export default function BackupsPage() {
       link.click(); link.remove();
       window.setTimeout(() => URL.revokeObjectURL(url), 30000);
       setAdminPassword(""); setPassphrase("");
-      setMessage("Kurtarma kiti indirildi. Dosyayı ve parolasını güvenli, ayrı yerlerde saklayın.");
+      setMessage("Kit oluşturuldu. İndirdiğiniz dosyayı aşağıdan seçip parolasıyla doğrulayın; ardından yedeklemeyi açabilirsiniz.");
       await refresh();
     } catch (requestError) {
       if (requestError?.response?.data instanceof Blob) {
         try { setError(JSON.parse(await requestError.response.data.text()).message); }
         catch { setError(errorText(requestError)); }
       } else setError(errorText(requestError));
+    } finally { setBusy(""); }
+  }
+
+  async function verifyKit(event) {
+    event.preventDefault();
+    if (!kitFile) return;
+    setBusy("verify"); setError(""); setMessage("");
+    try {
+      if (kitFile.size > 64 * 1024) throw new Error("Seçilen kit dosyası beklenenden büyük.");
+      let kit;
+      try { kit = JSON.parse(await kitFile.text()); }
+      catch { throw new Error("Seçilen dosya geçerli bir JSON kurtarma kiti değil."); }
+      await api.post("/backups/recovery-kit/verify", { kit, passphrase: kitPassphrase });
+      setKitPassphrase(""); setKitFile(null);
+      setMessage("Kurtarma kiti doğrulandı. Dosyayı ve parolasını sunucudan ayrı, güvenli yerlerde saklayın.");
+      await refresh();
+    } catch (requestError) {
+      setError(requestError?.response ? errorText(requestError) : requestError?.message || errorText(requestError));
     } finally { setBusy(""); }
   }
 
@@ -211,7 +231,7 @@ export default function BackupsPage() {
   if (loading) return <div className="p-6 text-sm text-gray-600">Yedekler yükleniyor…</div>;
 
   const toolsReady = status?.binaries?.rclone && status?.binaries?.restic;
-  const canRun = status?.connected && status?.recoveryKitDownloadedAt && toolsReady;
+  const canRun = status?.connected && status?.recoveryKitVerifiedAt && toolsReady;
 
   return (
     <div className="mx-auto max-w-5xl space-y-6 p-4 pb-12 sm:p-6">
@@ -243,19 +263,29 @@ export default function BackupsPage() {
             <div className="sm:col-span-2"><button disabled={Boolean(busy)} className="rounded-lg bg-gray-900 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">{busy === "client" ? "Kaydediliyor…" : "Kimlik bilgilerini kaydet"}</button></div>
           </form>
         ) : status?.connected ? (
-          <p className="text-sm text-emerald-700">Google hesabı bağlı. Erişim yalnızca bu uygulamanın oluşturduğu Drive dosyalarıyla sınırlı.</p>
+          <div className="space-y-3">
+            <p className="text-sm text-emerald-700">Google hesabı bağlı. Erişim yalnızca bu uygulamanın oluşturduğu Drive dosyalarıyla sınırlı.</p>
+            <button type="button" disabled={Boolean(busy) || Boolean(activeJobId)} onClick={connect} className="rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50">Google hesabını yeniden bağla</button>
+            <p className="text-xs leading-5 text-gray-500">Erişim süresi dolduysa yeniden bağlayın. Ardından yeni kurtarma kitini indirip doğrulayın ve günlük yedeklemeyi tekrar açın.</p>
+          </div>
         ) : (
           <button type="button" disabled={Boolean(busy)} onClick={connect} className="rounded-lg bg-blue-700 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-800 disabled:opacity-50">Google hesabını bağla</button>
         )}
         <p className="mt-4 break-all rounded-lg bg-gray-50 px-3 py-2 text-xs text-gray-600">OAuth yönlendirme adresi: {status?.callbackUri}</p>
+        <p className="mt-2 text-xs leading-5 text-gray-500">Google Cloud OAuth uygulaması kalıcı yedekleme için In production durumunda olmalı.</p>
       </Panel>
 
       {status?.connected && <Panel title="2. Kurtarma kiti" description="Sunucu tamamen kaybolursa Drive’daki şifreli yedekleri açmak için bu kit ve belirleyeceğiniz parola gerekir. Kiti sunucudan ayrı saklayın.">
-        <div className="mb-4 flex items-center gap-2 text-sm"><KeyIcon className="h-5 w-5 text-gray-500" /><StatusPill good={Boolean(status.recoveryKitDownloadedAt)}>{status.recoveryKitDownloadedAt ? `Oluşturuldu · ${formatDate(status.recoveryKitDownloadedAt)}` : "Henüz oluşturulmadı"}</StatusPill></div>
+        <div className="mb-4 flex items-center gap-2 text-sm"><KeyIcon className="h-5 w-5 text-gray-500" /><StatusPill good={Boolean(status.recoveryKitVerifiedAt)}>{status.recoveryKitVerifiedAt ? `Dosya doğrulandı · ${formatDate(status.recoveryKitVerifiedAt)}` : "Dosya doğrulanmadı"}</StatusPill></div>
         <form onSubmit={downloadKit} className="grid gap-4 sm:grid-cols-2">
           <label className="text-sm font-medium text-gray-700">Yönetici parolanız<input required type="password" autoComplete="current-password" value={adminPassword} onChange={(event) => setAdminPassword(event.target.value)} className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" /></label>
           <label className="text-sm font-medium text-gray-700">Kit için yeni parola (en az 16 karakter)<input required minLength={16} type="password" autoComplete="new-password" value={passphrase} onChange={(event) => setPassphrase(event.target.value)} className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" /></label>
           <div className="sm:col-span-2"><button disabled={Boolean(busy)} className="inline-flex items-center gap-2 rounded-lg border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-800 hover:bg-gray-50 disabled:opacity-50"><ArrowDownTrayIcon className="h-4 w-4" />{busy === "kit" ? "Hazırlanıyor…" : "Şifreli kiti indir"}</button></div>
+        </form>
+        <form onSubmit={verifyKit} className="mt-5 grid gap-4 border-t border-gray-100 pt-5 sm:grid-cols-2">
+          <label className="text-sm font-medium text-gray-700">İndirdiğiniz kit dosyası<input required type="file" accept=".json,application/json" onChange={(event) => setKitFile(event.target.files?.[0] || null)} className="mt-1 block w-full text-sm text-gray-600 file:mr-3 file:rounded-lg file:border-0 file:bg-gray-100 file:px-3 file:py-2 file:font-medium file:text-gray-800" /></label>
+          <label className="text-sm font-medium text-gray-700">Kit parolası<input required type="password" autoComplete="off" value={kitPassphrase} onChange={(event) => setKitPassphrase(event.target.value)} className="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" /></label>
+          <div className="sm:col-span-2"><button disabled={Boolean(busy) || !kitFile} className="rounded-lg bg-gray-900 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">{busy === "verify" ? "Doğrulanıyor…" : "Dosyayı doğrula"}</button></div>
         </form>
       </Panel>}
 

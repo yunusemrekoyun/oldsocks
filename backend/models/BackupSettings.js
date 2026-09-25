@@ -8,7 +8,7 @@ const BackupSettingsSchema = new mongoose.Schema(
     tokenEncrypted: { type: String, default: "", select: false },
     resticPasswordEncrypted: { type: String, default: "", select: false },
     connectedAt: { type: Date, default: null },
-    recoveryKitDownloadedAt: { type: Date, default: null },
+    recoveryKitVerifiedAt: { type: Date, default: null },
     enabled: { type: Boolean, default: false },
     dailyTime: { type: String, default: "02:00" },
     lastScheduledOn: { type: String, default: "" },

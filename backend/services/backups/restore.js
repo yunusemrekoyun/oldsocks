@@ -14,7 +14,7 @@ const { invalidateProductsCache } = require("../../controllers/productController
 const { invalidateCategoriesCache } = require("../../controllers/categoryController");
 const { readDatabaseArchive } = require("./database");
 const { restic, withRuntime } = require("./commands");
-const { verifyMediaInStage } = require("./media");
+const { verifyMediaInStage, verifyMediaTree } = require("./media");
 
 const { EJSON } = mongoose.mongo.BSON;
 const SNAPSHOT_ID = /^[a-f0-9]{64}$/;
@@ -94,7 +94,8 @@ async function getSnapshot(settings, snapshotId, action) {
       await restic(["restore", snapshotId, "--target", destination], runtime, { timeoutMs: 2 * 60 * 60 * 1000 });
       const restored = path.join(destination, snapshot.paths[0].slice(1));
       const archive = await readDatabaseArchive(path.join(restored, "mongodb.ejson.gz"));
-      const media = await verifyMediaInStage(archive, restored);
+      const tree = await verifyMediaTree(restored);
+      const media = { ...(await verifyMediaInStage(archive, restored)), ...tree };
       return await action({ archive, media, restored, snapshot, runtime });
     } finally {
       await fs.rm(destination, { recursive: true, force: true });

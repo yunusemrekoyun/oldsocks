@@ -4,6 +4,8 @@ const os = require("node:os");
 const path = require("node:path");
 const { run } = require("../services/backups/commands");
 const { openRecoveryKit } = require("../services/backups/secrets");
+const { readDatabaseArchive } = require("../services/backups/database");
+const { verifyMediaInStage, verifyMediaTree } = require("../services/backups/media");
 
 async function hiddenPrompt() {
   if (!process.stdin.isTTY) throw new Error("Parola girişi için terminal gerekli.");
@@ -75,6 +77,9 @@ async function main() {
     await fs.mkdir(restoredRoot, { mode: 0o700 });
     await command(["restore", snapshotId, "--target", restoredRoot]);
     const source = path.join(restoredRoot, selected.paths[0].slice(1));
+    const archive = await readDatabaseArchive(path.join(source, "mongodb.ejson.gz"));
+    await verifyMediaTree(source);
+    await verifyMediaInStage(archive, source);
     await fs.copyFile(path.join(source, "mongodb.ejson.gz"), path.join(target, "mongodb.ejson.gz"));
     await fs.cp(path.join(source, "media"), path.join(target, "media"), { recursive: true, errorOnExist: true });
     await fs.writeFile(path.join(target, "master.key"), Buffer.from(payload.masterKey, "base64"), { mode: 0o600 });

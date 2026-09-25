@@ -3,6 +3,7 @@ const fs = require("node:fs/promises");
 const path = require("node:path");
 const mongoose = require("mongoose");
 const { readDatabaseArchive } = require("../services/backups/database");
+const { verifyMediaInStage, verifyMediaTree } = require("../services/backups/media");
 
 async function mustBeAbsent(file, label) {
   try {
@@ -27,10 +28,9 @@ async function main() {
   const key = await fs.readFile(path.join(source, "master.key"));
   if (key.length !== 32) throw new Error("Kurtarma anahtarı geçersiz.");
   const archive = await readDatabaseArchive(path.join(source, "mongodb.ejson.gz"));
-  for (const name of ["assets", "trash", "quarantine"]) {
-    const stat = await fs.stat(path.join(source, "media", name));
-    if (!stat.isDirectory()) throw new Error(`Medya klasörü geçersiz: ${name}`);
-  }
+  await verifyMediaTree(source);
+  const verifiedMedia = await verifyMediaInStage(archive, source);
+  console.log(`Medya doğrulandı: ${verifiedMedia.readyAssets} hazır kayıt, ${verifiedMedia.referencedFiles} dosya.`);
   await mustBeAbsent(mediaRoot, "Medya hedefi");
   await mustBeAbsent(keyFile, "Yedek anahtarı hedefi");
   const client = new mongoose.mongo.MongoClient(uri, { serverSelectionTimeoutMS: 15000 });

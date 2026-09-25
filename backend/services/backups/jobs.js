@@ -10,7 +10,7 @@ const { directoryPath } = require("../media/storage");
 const { readDatabaseArchive, writeDatabaseArchive } = require("./database");
 const { ensureRepository, restic, withRuntime } = require("./commands");
 const { SETTINGS_SELECT } = require("./googleOAuth");
-const { verifyMediaInStage } = require("./media");
+const { verifyMediaInStage, verifyMediaTree } = require("./media");
 const { applyCatalog, copyMissingMedia, getSnapshot, impactReport } = require("./restore");
 
 const POLL_MS = 60 * 1000;
@@ -38,7 +38,7 @@ async function queueScheduledBackup() {
       key: "primary",
       enabled: true,
       tokenEncrypted: { $ne: "" },
-      recoveryKitDownloadedAt: { $ne: null },
+      recoveryKitVerifiedAt: { $ne: null },
       dailyTime: { $lte: now.time },
       lastScheduledOn: { $ne: now.date },
     },
@@ -123,7 +123,8 @@ async function createStage() {
       });
     }
     const archive = await readDatabaseArchive(databasePath);
-    const media = await verifyMediaInStage(archive, stage);
+    const tree = await verifyMediaTree(stage);
+    const media = { ...(await verifyMediaInStage(archive, stage)), ...tree };
     const protectedAssetIds = (archive.collections.find((item) => item.name === "mediaassets")?.documents || [])
       .filter((asset) => asset.status === "ready")
       .map((asset) => asset._id);
@@ -172,7 +173,7 @@ async function uploadStage(settings, stage, tag) {
 
 async function runBackup(job) {
   const settings = await BackupSettings.findOne({ key: "primary" }).select(SETTINGS_SELECT);
-  if (!settings?.tokenEncrypted || !settings.recoveryKitDownloadedAt) {
+  if (!settings?.tokenEncrypted || !settings.recoveryKitVerifiedAt) {
     throw new Error("Drive connection or recovery kit is missing");
   }
   const snapshot = await createStage();
@@ -232,7 +233,7 @@ async function runPreview(job) {
 
 async function runRestore(job) {
   const settings = await BackupSettings.findOne({ key: "primary" }).select(SETTINGS_SELECT);
-  if (!settings?.tokenEncrypted || !settings.recoveryKitDownloadedAt) {
+  if (!settings?.tokenEncrypted || !settings.recoveryKitVerifiedAt) {
     throw new Error("Drive connection or recovery kit is missing");
   }
   await getSnapshot(settings, job.snapshotId, async ({ archive, media, restored }) => {
