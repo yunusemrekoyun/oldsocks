@@ -27,6 +27,7 @@ import {
   TruckIcon,
   MegaphoneIcon,
   CircleStackIcon,
+  CloudArrowUpIcon,
   ClipboardDocumentListIcon,
   ReceiptPercentIcon,
   ShoppingCartIcon,
@@ -173,6 +174,11 @@ export default function AdminLayout({ children }) {
         label: "Medya Bakımı",
         icon: <CircleStackIcon className="w-5 h-5" />,
         path: "/admin/media-maintenance",
+      },
+      {
+        label: "Yedekler",
+        icon: <CloudArrowUpIcon className="w-5 h-5" />,
+        path: "/admin/backups",
       },
     ],
     []

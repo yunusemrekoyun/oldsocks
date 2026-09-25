@@ -23,6 +23,7 @@ const CategorySchema = new mongoose.Schema(
       ref: "Category",
       default: null,
     },
+    archivedAt: { type: Date, default: null, index: true },
   },
   {
     timestamps: true,

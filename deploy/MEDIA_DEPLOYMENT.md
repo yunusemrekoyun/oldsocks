@@ -79,6 +79,7 @@ cache'i ezmez.
 6. Yedekleme servisi devreye girene kadar medya tek fiziksel kopyadır; bu nedenle ilk ürün
    yüklemesinden önce en az VPS snapshot/volume snapshot koruması açılmalıdır.
 
-Google Drive yedek servisinin API sözleşmesi ayrı fazdır. Tasarım gereği yedek servisi dosyayı
-ana siteden yetkili, kısa ömürlü bir erişimle okuyacak; kendi VPS diskine kalıcı kopya yazmadan
-Drive'a akıtacak ve geçici dosya oluşursa başarılı/başarısız sonuçta hemen silecektir.
+Google Drive yedekleme ve dışarıdan kurtarma akışı [BACKUPS.md](BACKUPS.md) içinde anlatılır.
+Yedek işçisi veritabanı ve medyayı kısa ömürlü, erişimi sınırlı bir geçici dizine kopyalar;
+restic doğrulamasından sonra bu dizini siler. Canlı sunucuda ilk Drive yedeği başarıyla
+doğrulanmadan bu korumaya güvenilmemelidir.

@@ -29,8 +29,8 @@ function parseSlot(raw) {
 
 async function validateTargets(products, categories) {
   const [productCount, categoryCount] = await Promise.all([
-    Product.countDocuments({ _id: { $in: products } }),
-    Category.countDocuments({ _id: { $in: categories } }),
+    Product.countDocuments({ _id: { $in: products }, archivedAt: null }),
+    Category.countDocuments({ _id: { $in: categories }, archivedAt: null }),
   ]);
   if (productCount !== new Set(products.map(String)).size) {
     const error = new Error("Geçersiz ürün seçimi.");
@@ -49,10 +49,11 @@ function miniQuery(query) {
     .populate("imageAsset")
     .populate({
       path: "products",
+      match: { archivedAt: null },
       select: "name images imageAssets video videoAsset price originalPrice discount",
       populate: [{ path: "imageAssets" }, { path: "videoAsset" }],
     })
-    .populate("categories", "name image imageAsset");
+    .populate({ path: "categories", match: { archivedAt: null }, select: "name image imageAsset" });
 }
 
 function serializeMini(campaign, context = "list") {
@@ -63,7 +64,7 @@ function serializeMini(campaign, context = "list") {
     value.imageAssetId = String(value.imageAsset._id);
   }
   if (Array.isArray(value.products)) {
-    value.products = value.products.map((product) => applyProductMedia(product, "list"));
+    value.products = value.products.filter(Boolean).map((product) => applyProductMedia(product, "list"));
   }
   return value;
 }
@@ -204,14 +205,14 @@ exports.getActiveMiniCampaigns = async (req, res) => {
       MiniCampaign.findOne(slot ? { slot } : { slot: { $in: [1, 2] } }).sort("slot")
     );
     if (!campaign) return res.status(404).json({ message: "Mini kampanya bulunamadı." });
-    let items = campaign.products?.map((product) => applyProductMedia(product, "list")) || [];
+    let items = campaign.products?.filter(Boolean).map((product) => applyProductMedia(product, "list")) || [];
     if (!items.length && campaign.categories?.length) {
-      const subs = await Category.find({ parent: { $in: campaign.categories } }).select("_id");
+      const subs = await Category.find({ parent: { $in: campaign.categories }, archivedAt: null }).select("_id");
       const categoryIds = [
         ...campaign.categories.map((category) => category._id || category),
         ...subs.map((category) => category._id),
       ];
-      const products = await Product.find({ category: { $in: categoryIds } })
+      const products = await Product.find({ category: { $in: categoryIds }, archivedAt: null })
         .select("name images imageAssets video videoAsset price originalPrice discount")
         .populate("imageAssets")
         .populate("videoAsset")

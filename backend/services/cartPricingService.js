@@ -363,7 +363,7 @@ async function calculateCartPricing(rawItems, options = {}) {
   const productIds = Array.from(
     new Set(Array.from(aggregated.values()).map((it) => it.id))
   );
-  const products = await Product.find({ _id: { $in: productIds } })
+  const products = await Product.find({ _id: { $in: productIds }, archivedAt: null })
     .select("name price originalPrice sizes color")
     .lean();
   const productMap = new Map(products.map((p) => [String(p._id), p]));

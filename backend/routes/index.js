@@ -28,6 +28,7 @@ router.use("/campaigns", require("./campaign"));
 router.use("/mini-campaigns", require("./miniCampaigns"));
 router.use("/orders", require("./orders"));
 router.use("/media", require("./media"));
+router.use("/backups", require("./backups"));
 
 // blog
 router.use("/blogs", require("./blog"));

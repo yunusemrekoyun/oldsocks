@@ -53,6 +53,7 @@ const ProductSchema = new mongoose.Schema(
       default: null,
       index: true,
     },
+    archivedAt: { type: Date, default: null, index: true },
   },
   { timestamps: true }
 );

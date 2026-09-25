@@ -40,7 +40,7 @@ function applyCategoryMedia(category) {
 function populatedCategory(query) {
   return query
     .populate("imageAsset")
-    .populate({ path: "children", select: "name image imageAsset parent", populate: "imageAsset" })
+    .populate({ path: "children", match: { archivedAt: null }, select: "name image imageAsset parent", populate: "imageAsset" })
     .populate("parent", "name");
 }
 
@@ -57,7 +57,7 @@ exports.getCategories = async (_req, res) => {
     if (categoriesCache.data && Date.now() < categoriesCache.expiry) {
       return res.json(categoriesCache.data);
     }
-    const roots = await populatedCategory(Category.find({ parent: null }).sort("name")).lean();
+    const roots = await populatedCategory(Category.find({ parent: null, archivedAt: null }).sort("name")).lean();
     const result = roots.map(applyCategoryMedia);
     categoriesCache = { data: result, expiry: Date.now() + CATEGORIES_CACHE_TTL };
     res.json(result);
@@ -69,7 +69,7 @@ exports.getCategories = async (_req, res) => {
 
 exports.getCategory = async (req, res) => {
   try {
-    const category = await populatedCategory(Category.findById(req.params.id));
+    const category = await populatedCategory(Category.findOne({ _id: req.params.id, archivedAt: null }));
     if (!category) return res.status(404).json({ message: "Kategori bulunamadı." });
     res.json(applyCategoryMedia(category));
   } catch (error) {
@@ -77,6 +77,8 @@ exports.getCategory = async (req, res) => {
     res.status(500).json({ message: "Kategori getirilirken hata oluştu." });
   }
 };
+
+exports.invalidateCategoriesCache = invalidateCategoriesCache;
 
 exports.createCategory = async (req, res) => {
   try {

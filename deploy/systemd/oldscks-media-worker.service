@@ -21,7 +21,7 @@ NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
 ProtectHome=true
-ReadWritePaths=/srv/oldscks/media
+ReadWritePaths=/srv/oldscks/media /srv/oldscks/backup
 
 Nice=5
 IOSchedulingClass=best-effort

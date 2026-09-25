@@ -75,7 +75,7 @@ exports.createProduct = async (req, res) => {
     const name = requiredText(req.body.name, "Ürün adı");
     const pricing = parseProductPricing(req.body);
     const sizes = parseProductSizes(req.body.sizes);
-    if (!(await Category.exists({ _id: category }))) {
+    if (!(await Category.exists({ _id: category, archivedAt: null }))) {
       return res.status(400).json({ message: "Geçersiz kategori." });
     }
     const { imageAssets, videoAsset } = await resolveProductAssets(req.body);
@@ -113,6 +113,7 @@ exports.getProducts = async (req, res) => {
     if (req.query.varyantsOf) {
       const baseId = req.query.varyantsOf;
       const products = await Product.find({
+        archivedAt: null,
         $or: [{ _id: baseId }, { parentProductId: baseId }],
       }).select("color _id name");
       return res.json(products);
@@ -122,7 +123,7 @@ exports.getProducts = async (req, res) => {
       return res.json(productsCache.data);
     }
     const products = await populateProductMedia(
-      Product.find()
+      Product.find({ archivedAt: null })
         .sort({ createdAt: -1 })
         .select(
           "name video images videoAsset imageAssets price originalPrice discount sizes color category parentProductId createdAt"
@@ -140,7 +141,7 @@ exports.getProducts = async (req, res) => {
 exports.getProduct = async (req, res) => {
   try {
     const product = await populateProductMedia(
-      Product.findById(req.params.id).select(
+      Product.findOne({ _id: req.params.id, archivedAt: null }).select(
         "video images videoAsset imageAssets price originalPrice discount category sizes description color name parentProductId"
       )
     );
@@ -151,6 +152,8 @@ exports.getProduct = async (req, res) => {
     res.status(500).json({ message: "Ürün getirilirken hata oluştu." });
   }
 };
+
+exports.invalidateProductsCache = invalidateProductsCache;
 
 exports.updateProduct = async (req, res) => {
   try {
@@ -165,7 +168,7 @@ exports.updateProduct = async (req, res) => {
       req.body.sizes !== undefined
         ? parseProductSizes(req.body.sizes)
         : parseProductSizes(existing.sizes);
-    if (req.body.category && !(await Category.exists({ _id: req.body.category }))) {
+    if (req.body.category && !(await Category.exists({ _id: req.body.category, archivedAt: null }))) {
       return res.status(400).json({ message: "Geçersiz kategori." });
     }
 
@@ -251,7 +254,7 @@ exports.createProductWithNewColor = async (req, res) => {
     const baseId = req.params.baseProductId;
     const color = String(req.body.color || "").trim();
     if (!color) return res.status(400).json({ message: "Renk zorunludur." });
-    const base = await Product.findById(baseId);
+    const base = await Product.findOne({ _id: baseId, archivedAt: null });
     if (!base) return res.status(404).json({ message: "Ana ürün bulunamadı." });
     const name = requiredText(req.body.name ?? base.name, "Ürün adı");
     const pricing = parseProductPricing({

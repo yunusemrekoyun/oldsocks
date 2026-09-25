@@ -49,6 +49,7 @@ const AnnouncementBarPage = lazy(() => import("./admin/pages/AnnouncementBarPage
 const CartCampaignsPage = lazy(() => import("./admin/pages/CartCampaignsPage"));
 const CouponsPage = lazy(() => import("./admin/pages/CouponsPage"));
 const MediaMaintenancePage = lazy(() => import("./admin/pages/MediaMaintenancePage"));
+const BackupsPage = lazy(() => import("./admin/pages/BackupsPage"));
 
 function RouteFallback() {
   return <div className="min-h-[40vh] py-16 text-center">Yükleniyor…</div>;
@@ -123,6 +124,7 @@ export default function App() {
               <Route path="shipping" element={<ShippingMethodsPage />} />
               <Route path="announcement-bar" element={<AnnouncementBarPage />} />
               <Route path="media-maintenance" element={<MediaMaintenancePage />} />
+              <Route path="backups" element={<BackupsPage />} />
               <Route path="*" element={<Navigate to="/admin" replace />} />
             </Route>
           </Route>

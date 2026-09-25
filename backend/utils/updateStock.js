@@ -31,6 +31,7 @@ async function applyStockChanges(order, options = {}) {
       updateOne: {
         filter: {
           _id: productId,
+          archivedAt: null,
           sizes: {
             $elemMatch: { size: sizeKey, stock: { $gte: quantity } },
           },
