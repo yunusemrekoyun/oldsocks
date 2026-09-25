@@ -5,18 +5,22 @@ import SecondHero from "../components/hero/SecondHero"; // İkinci hero bileşen
 import Campaigns from "../components/campaigns/Campaigns";
 import Services from "../components/services/Services";
 import HomeProductSection from "../components/products/HomeProductSection";
+import { normalizeSectionOrder, useStorefrontSettings } from "../context/storefrontSettings";
 
-const HomePage = () => (
-  <>
+const HomePage = () => {
+  const { sectionOrder } = useStorefrontSettings();
+  const order = normalizeSectionOrder(sectionOrder);
+
+  return <>
     <Hero />
     <Categories />
-    <HomeProductSection sectionKey="new" />
-    <HomeProductSection sectionKey="featured" />
+    <HomeProductSection sectionKey={order[0]} />
+    <HomeProductSection sectionKey={order[1]} />
     <SecondHero />
-    <HomeProductSection sectionKey="popular" />
+    <HomeProductSection sectionKey={order[2]} />
     <Campaigns />
     <Services />
-  </>
-);
+  </>;
+};
 
 export default HomePage;

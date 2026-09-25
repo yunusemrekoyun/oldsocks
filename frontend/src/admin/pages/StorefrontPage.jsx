@@ -1,7 +1,10 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { ArrowDown, ArrowUp, GripVertical } from "lucide-react";
 import api from "../../../api";
+import { normalizeSectionOrder } from "../../context/storefrontSettings";
+import { getResponsiveImageProps } from "../../utils/media";
 
-const sectionNames = { new: "İlk ürün alanı", featured: "Orta ürün alanı", popular: "Son ürün alanı" };
+const sectionNames = ["İlk ürün alanı", "Orta ürün alanı", "Son ürün alanı"];
 const sources = [
   ["latest", "Son eklenen ürünler"],
   ["best_selling", "Gerçek satışlara göre çok satanlar"],
@@ -15,6 +18,25 @@ const fonts = [
   { value: "fashion", label: "Moda", detail: "Bodoni başlık, Manrope metin", heading: '"Bodoni Moda", Georgia, serif', body: '"Manrope", Arial, sans-serif' },
 ];
 
+function ProductThumbnail({ product }) {
+  const [failed, setFailed] = useState(false);
+  const poster = product.media?.images?.[0] || product.images?.[0];
+  const image = getResponsiveImageProps(poster, { widths: [96, 160, 240], defaultWidth: 160, sizes: "40px" });
+
+  return <a
+    href={`/product-details/${product._id}`}
+    target="_blank"
+    rel="noopener noreferrer"
+    aria-label={`${product.name} ürününü yeni sekmede aç`}
+    title="Ürünü yeni sekmede aç"
+    className="flex h-12 w-10 shrink-0 items-center justify-center overflow-hidden rounded border border-gray-200 bg-gray-100 text-center text-[9px] leading-tight text-gray-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-900"
+  >
+    {image.src && !failed
+      ? <img src={image.src} srcSet={image.srcSet} sizes={image.sizes} alt="" className="h-full w-full object-cover" loading="lazy" onError={() => setFailed(true)} />
+      : <span>Görsel yok</span>}
+  </a>;
+}
+
 export default function StorefrontPage() {
   const [settings, setSettings] = useState(null);
   const [products, setProducts] = useState([]);
@@ -23,13 +45,16 @@ export default function StorefrontPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState(null);
+  const [draggingKey, setDraggingKey] = useState(null);
+  const [dropPosition, setDropPosition] = useState(null);
+  const draggingKeyRef = useRef(null);
 
   useEffect(() => {
     let active = true;
     Promise.all([api.get("/storefront/admin"), api.get("/products"), api.get("/categories")])
       .then(([settingsResponse, productsResponse, categoriesResponse]) => {
         if (!active) return;
-        setSettings(settingsResponse.data);
+        setSettings({ ...settingsResponse.data, sectionOrder: normalizeSectionOrder(settingsResponse.data.sectionOrder) });
         setProducts(productsResponse.data || []);
         setCategories((categoriesResponse.data || []).flatMap((root) => [root, ...(root.children || [])]));
       })
@@ -48,6 +73,36 @@ export default function StorefrontPage() {
     sections: { ...current.sections, [key]: { ...current.sections[key], ...patch } },
   }));
 
+  const moveSection = (fromKey, targetKey, after = false) => {
+    if (fromKey === targetKey) return;
+    setSettings((current) => {
+      const order = normalizeSectionOrder(current.sectionOrder).filter((key) => key !== fromKey);
+      const targetIndex = order.indexOf(targetKey);
+      if (targetIndex < 0) return current;
+      order.splice(targetIndex + Number(after), 0, fromKey);
+      return { ...current, sectionOrder: order };
+    });
+    setNotice(null);
+  };
+
+  const moveByOne = (key, direction) => {
+    setSettings((current) => {
+      const order = [...normalizeSectionOrder(current.sectionOrder)];
+      const index = order.indexOf(key);
+      const nextIndex = index + direction;
+      if (index < 0 || nextIndex < 0 || nextIndex >= order.length) return current;
+      [order[index], order[nextIndex]] = [order[nextIndex], order[index]];
+      return { ...current, sectionOrder: order };
+    });
+    setNotice(null);
+  };
+
+  const finishDrag = () => {
+    draggingKeyRef.current = null;
+    setDraggingKey(null);
+    setDropPosition(null);
+  };
+
   const toggleProduct = (key, id) => {
     const current = settings.sections[key].productIds || [];
     const exists = current.includes(id);
@@ -59,17 +114,18 @@ export default function StorefrontPage() {
   };
 
   const save = async () => {
-    for (const [key, section] of Object.entries(settings.sections)) {
+    for (const [index, key] of normalizeSectionOrder(settings.sectionOrder).entries()) {
+      const section = settings.sections[key];
       if (!section.heading.trim()) {
-        setNotice({ type: "error", text: `${sectionNames[key]} için başlık girin.` });
+        setNotice({ type: "error", text: `${sectionNames[index]} için başlık girin.` });
         return;
       }
       if (section.source === "category" && !section.categoryId) {
-        setNotice({ type: "error", text: `${sectionNames[key]} için kategori seçin.` });
+        setNotice({ type: "error", text: `${sectionNames[index]} için kategori seçin.` });
         return;
       }
       if (section.source === "manual" && !section.productIds.length) {
-        setNotice({ type: "error", text: `${sectionNames[key]} için ürün seçin.` });
+        setNotice({ type: "error", text: `${sectionNames[index]} için ürün seçin.` });
         return;
       }
     }
@@ -88,11 +144,12 @@ export default function StorefrontPage() {
 
   if (loading) return <div className="p-6 text-gray-600">Ana sayfa ayarları yükleniyor…</div>;
   if (!settings) return <div className="p-6 text-red-700">{notice?.text || "Ayarlar açılamadı."}</div>;
+  const sectionOrder = normalizeSectionOrder(settings.sectionOrder);
 
   return <div className="mx-auto max-w-5xl space-y-8 p-4 pb-24 sm:p-6">
     <div>
       <h1 className="text-2xl font-semibold text-gray-900">Ana Sayfa Düzeni</h1>
-      <p className="mt-2 max-w-2xl text-sm leading-6 text-gray-600">Ürün alanlarının başlığını ve hangi ürünlerin gösterileceğini seçin. Her alanda dört ürün görünür.</p>
+      <p className="mt-2 max-w-2xl text-sm leading-6 text-gray-600">Ürün alanlarını sürükleyerek sıralayın, başlıklarını ve kaynaklarını seçin. Her alanda dört ürün görünür.</p>
     </div>
 
     <section className="rounded-xl border border-gray-200 bg-white p-5 sm:p-6">
@@ -120,16 +177,59 @@ export default function StorefrontPage() {
       </div>
     </section>
 
-    {Object.entries(sectionNames).map(([key, label]) => {
+    <div>
+      <h2 className="text-lg font-semibold text-gray-900">Ürün alanlarının sırası</h2>
+      <p className="mt-1 text-sm text-gray-600">Kartları tutamaçtan sürükleyin veya oklarla taşıyın. Kampanya bannerı ikinci ve üçüncü alan arasında kalır. Sırayı uygulamak için değişiklikleri kaydedin.</p>
+    </div>
+
+    {sectionOrder.map((key, index) => {
+      const label = sectionNames[index];
       const section = settings.sections[key];
       const selectedVisibleCount = matchingProducts.filter((product) => section.productIds.includes(product._id)).length;
       const visibleIds = matchingProducts.map((product) => product._id);
       const combinedIds = [...new Set([...section.productIds, ...visibleIds])];
       const overLimit = combinedIds.length > 40;
-      return <section key={key} className="rounded-xl border border-gray-200 bg-white p-5 sm:p-6">
-        <div className="flex flex-wrap items-baseline justify-between gap-2">
-          <h2 className="text-lg font-semibold text-gray-900">{label}</h2>
-          <span className="text-xs text-gray-500">Ana sayfadaki sırası sabit</span>
+      return <section
+        key={key}
+        aria-label={`${label}: ${section.heading}`}
+        onDragOver={(event) => {
+          if (!draggingKeyRef.current || draggingKeyRef.current === key) return;
+          event.preventDefault();
+          event.dataTransfer.dropEffect = "move";
+          const after = event.clientY >= event.currentTarget.getBoundingClientRect().top + event.currentTarget.offsetHeight / 2;
+          setDropPosition((current) => current?.key === key && current.after === after ? current : { key, after });
+        }}
+        onDrop={(event) => {
+          event.preventDefault();
+          if (draggingKeyRef.current) moveSection(draggingKeyRef.current, key, event.clientY >= event.currentTarget.getBoundingClientRect().top + event.currentTarget.offsetHeight / 2);
+          finishDrag();
+        }}
+        className={`relative rounded-xl border border-gray-200 bg-white p-5 sm:p-6 ${draggingKey === key ? "opacity-60" : ""}`}
+      >
+        {dropPosition?.key === key && <span aria-hidden="true" className={`pointer-events-none absolute inset-x-3 h-1 rounded-full bg-blue-600 ${dropPosition.after ? "-bottom-1" : "-top-1"}`} />}
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              draggable
+              onDragStart={(event) => {
+                draggingKeyRef.current = key;
+                setDraggingKey(key);
+                event.dataTransfer.effectAllowed = "move";
+                event.dataTransfer.setData("text/plain", key);
+              }}
+              onDragEnd={finishDrag}
+              aria-label={`${label} alanını sürükleyerek sırala`}
+              title="Sürükleyerek sırala"
+              className="cursor-grab rounded-md p-2 text-gray-600 hover:bg-gray-100 hover:text-gray-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-900 active:cursor-grabbing"
+            ><GripVertical size={18} aria-hidden="true" /></button>
+            <h2 className="text-lg font-semibold text-gray-900">{label}</h2>
+          </div>
+          <div className="flex items-center gap-1 text-xs text-gray-600">
+            <span className="mr-2">{index + 1} / {sectionOrder.length}</span>
+            <button type="button" onClick={() => moveByOne(key, -1)} disabled={index === 0} aria-label={`${label} alanını yukarı taşı`} title="Yukarı taşı" className="rounded-md border border-gray-200 p-2 hover:bg-gray-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-900 disabled:cursor-not-allowed disabled:opacity-40"><ArrowUp size={16} aria-hidden="true" /></button>
+            <button type="button" onClick={() => moveByOne(key, 1)} disabled={index === sectionOrder.length - 1} aria-label={`${label} alanını aşağı taşı`} title="Aşağı taşı" className="rounded-md border border-gray-200 p-2 hover:bg-gray-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-900 disabled:cursor-not-allowed disabled:opacity-40"><ArrowDown size={16} aria-hidden="true" /></button>
+          </div>
         </div>
         <div className="mt-5 grid gap-5 md:grid-cols-2">
           <label className="block text-sm font-medium text-gray-800">Görünen başlık
@@ -160,11 +260,11 @@ export default function StorefrontPage() {
           </div>
           {overLimit && <p className="mt-2 text-xs text-gray-700">Tüm görünenleri seçmek 40 ürün sınırını aşar. Aramayı daraltın.</p>}
           <div className="mt-2 max-h-64 overflow-y-auto rounded-lg border border-gray-200 p-2">
-            {matchingProducts.map((product) => <label key={product._id} className="flex cursor-pointer items-center gap-3 rounded-md px-2 py-2 text-sm hover:bg-gray-50">
-              <input type="checkbox" checked={section.productIds.includes(product._id)} onChange={() => toggleProduct(key, product._id)} />
-              {product.media?.images?.[0] || product.images?.[0] ? <img src={product.media?.images?.[0] || product.images[0]} alt="" className="h-12 w-10 shrink-0 rounded object-cover" loading="lazy" /> : <span className="h-12 w-10 shrink-0 rounded bg-gray-100" />}
-              <span className="min-w-0"><span className="block truncate font-medium">{product.name}</span><span className="block text-xs text-gray-600">{product.color || "Renk belirtilmemiş"} · ₺{Number(product.price).toLocaleString("tr-TR", { minimumFractionDigits: 2 })}</span></span>
-            </label>)}
+            {matchingProducts.map((product) => <div key={product._id} className="flex items-center gap-3 rounded-md px-2 py-2 text-sm hover:bg-gray-50">
+              <input id={`storefront-${key}-${product._id}`} type="checkbox" checked={section.productIds.includes(product._id)} onChange={() => toggleProduct(key, product._id)} aria-label={`${product.name} ürününü seç`} />
+              <ProductThumbnail product={product} />
+              <label htmlFor={`storefront-${key}-${product._id}`} className="min-w-0 flex-1 cursor-pointer"><span className="block truncate font-medium">{product.name}</span><span className="block text-xs text-gray-600">{product.color || "Renk belirtilmemiş"} · ₺{Number(product.price).toLocaleString("tr-TR", { minimumFractionDigits: 2 })}</span></label>
+            </div>)}
             {!matchingProducts.length && <p className="p-3 text-sm text-gray-600">Ürün bulunamadı.</p>}
           </div>
           <p className="mt-2 text-xs text-gray-600">Rastgele gösterim kapalıysa ilk seçilen dört ürün görünür.</p>

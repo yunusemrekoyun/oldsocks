@@ -8,6 +8,7 @@ const { timedCache } = require("../services/timedCache");
 const defaults = Object.freeze({
   fontPreset: "classic",
   heroButtonOpacity: 30,
+  sectionOrder: ["new", "featured", "popular"],
   sections: {
     new: { heading: "Yeni Eklenen Ürünler", source: "latest", categoryId: null, productIds: [], shuffle: true },
     featured: { heading: "Öne Çıkan Ürünler", source: "random", categoryId: null, productIds: [], shuffle: true },
@@ -15,6 +16,10 @@ const defaults = Object.freeze({
   },
 });
 const sectionKeys = ["new", "featured", "popular"];
+const validSectionOrder = (order) => Array.isArray(order)
+  && order.length === sectionKeys.length
+  && sectionKeys.every((key) => order.includes(key))
+  && new Set(order).size === sectionKeys.length;
 const sources = new Set(["latest", "best_selling", "category", "manual", "random"]);
 const fonts = new Set(["classic", "modern", "fashion"]);
 const settingsCache = timedCache(30_000);
@@ -26,6 +31,7 @@ function publicSettings(doc) {
   return {
     fontPreset: value.fontPreset,
     heroButtonOpacity: value.heroButtonOpacity ?? defaults.heroButtonOpacity,
+    sectionOrder: validSectionOrder(value.sectionOrder) ? value.sectionOrder : defaults.sectionOrder,
     sections: Object.fromEntries(sectionKeys.map((key) => {
       const section = value.sections[key];
       return [key, {
@@ -82,6 +88,10 @@ exports.update = async (req, res) => {
   if (!Number.isInteger(heroButtonOpacity) || heroButtonOpacity < 0 || heroButtonOpacity > 100) {
     return res.status(400).json({ message: "Hero buton opaklığı 0–100 arasında olmalıdır." });
   }
+  const sectionOrder = input.sectionOrder ?? (await loadSettings()).sectionOrder;
+  if (!validSectionOrder(sectionOrder)) {
+    return res.status(400).json({ message: "Ürün alanlarının sırası geçersiz." });
+  }
   const sections = {};
   for (const key of sectionKeys) {
     const row = input.sections?.[key];
@@ -125,7 +135,7 @@ exports.update = async (req, res) => {
 
   const doc = await StorefrontSettings.findOneAndUpdate(
     { key: "main" },
-    { $set: { fontPreset: input.fontPreset, heroButtonOpacity, sections } },
+    { $set: { fontPreset: input.fontPreset, heroButtonOpacity, sectionOrder, sections } },
     { upsert: true, new: true, runValidators: true, setDefaultsOnInsert: true }
   );
   settingsCache.invalidate();
