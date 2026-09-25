@@ -7,6 +7,20 @@ import { AuthProvider } from "./context/AuthContext.jsx";
 import CartProvider from "./context/CartContext.jsx";
 import UploadQueueOverlay from "./components/ui/UploadQueueOverlay.jsx";
 import { UploadQueueProvider } from "./context/UploadQueueContext.jsx";
+import AppErrorBoundary from "./components/common/AppErrorBoundary.jsx";
+
+// Açık kalan sekmeler bir dağıtımdan sonra eski parça dosyasını isteyebilir.
+// Yeni index.html'i bir kez al; sorun sürerse hata sınırı kullanıcıya yenileme sunar.
+window.addEventListener("vite:preloadError", (event) => {
+  const url = new URL(window.location.href);
+  const lastRetry = Number(url.searchParams.get("_chunkRetry")) || 0;
+  const now = Date.now();
+  if (now - lastRetry < 60_000) return;
+
+  event.preventDefault();
+  url.searchParams.set("_chunkRetry", String(now));
+  window.location.replace(url.toString());
+});
 
 const RootWrapper =
   import.meta.env.MODE === "production"
@@ -18,8 +32,10 @@ createRoot(document.getElementById("root")).render(
     <AuthProvider>
       <CartProvider>
         <UploadQueueProvider>
-          <App />
-          <UploadQueueOverlay />
+          <AppErrorBoundary>
+            <App />
+            <UploadQueueOverlay />
+          </AppErrorBoundary>
         </UploadQueueProvider>
       </CartProvider>
     </AuthProvider>
