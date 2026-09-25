@@ -9,8 +9,10 @@ import SimilarProducts from "../components/products/product-details/SimilarProdu
 import AddToCart from "../components/products/product-details/AddToCart";
 import Campaigns from "../components/campaigns/Campaigns";
 import Services from "../components/services/Services";
+import { useStorefrontSettings } from "../context/storefrontSettings";
 
 export default function ProductDetailsPage() {
+  const { similarProductsVisible } = useStorefrontSettings();
   const { id } = useParams();
   const [product, setProduct] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -64,10 +66,10 @@ export default function ProductDetailsPage() {
             productName={product.name}
             image={product.images?.[0]}
           />
-          <SimilarProducts
+          {similarProductsVisible !== false && <SimilarProducts
             categoryId={rootCategoryId}
             currentProductId={product._id}
-          />
+          />}
         </aside>
       </main>
 

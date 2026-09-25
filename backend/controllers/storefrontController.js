@@ -14,6 +14,12 @@ const defaults = Object.freeze({
     featured: { heading: "Öne Çıkan Ürünler", source: "random", categoryId: null, productIds: [], shuffle: true, visible: true },
     popular: { heading: "Çok Satan Ürünler", source: "best_selling", categoryId: null, productIds: [], shuffle: false, visible: true },
   },
+  cartRecommendations: {
+    visible: true,
+    heading: "Sepetinize yakışabilecek ürünler",
+    productIds: [],
+  },
+  similarProductsVisible: true,
 });
 const sectionKeys = ["new", "featured", "popular"];
 const validSectionOrder = (order) => Array.isArray(order)
@@ -32,6 +38,12 @@ function publicSettings(doc) {
     fontPreset: value.fontPreset,
     heroButtonOpacity: value.heroButtonOpacity ?? defaults.heroButtonOpacity,
     sectionOrder: validSectionOrder(value.sectionOrder) ? value.sectionOrder : defaults.sectionOrder,
+    cartRecommendations: {
+      visible: value.cartRecommendations?.visible !== false,
+      heading: value.cartRecommendations?.heading || defaults.cartRecommendations.heading,
+      productIds: (value.cartRecommendations?.productIds || []).map(String),
+    },
+    similarProductsVisible: value.similarProductsVisible !== false,
     sections: Object.fromEntries(sectionKeys.map((key) => {
       const section = value.sections[key];
       return [key, {
@@ -95,6 +107,21 @@ exports.update = async (req, res) => {
     return res.status(400).json({ message: "Ürün alanlarının sırası geçersiz." });
   }
   const sections = {};
+  const recommendationsInput = input.cartRecommendations ?? currentSettings.cartRecommendations;
+  const similarProductsVisible = input.similarProductsVisible ?? currentSettings.similarProductsVisible;
+  if (typeof similarProductsVisible !== "boolean") {
+    return res.status(400).json({ message: "Benzer ürünler görünürlük ayarı geçersiz." });
+  }
+  const recommendationsVisible = recommendationsInput?.visible;
+  const recommendationsHeading = String(recommendationsInput?.heading || "").trim();
+  const recommendationProductIds = recommendationsInput?.productIds;
+  if (typeof recommendationsVisible !== "boolean"
+    || !recommendationsHeading || recommendationsHeading.length > 80
+    || !Array.isArray(recommendationProductIds) || recommendationProductIds.length > 12
+    || recommendationProductIds.some((id) => !mongoose.isValidObjectId(id))
+    || new Set(recommendationProductIds.map(String)).size !== recommendationProductIds.length) {
+    return res.status(400).json({ message: "Sepet önerisi ayarları geçersiz." });
+  }
   for (const key of sectionKeys) {
     const row = input.sections?.[key];
     const heading = String(row?.heading || "").trim();
@@ -140,9 +167,17 @@ exports.update = async (req, res) => {
     }
   }
 
+  if (recommendationsVisible && recommendationProductIds.length) {
+    const count = await Product.countDocuments({ _id: { $in: recommendationProductIds }, archivedAt: null });
+    if (count !== recommendationProductIds.length) {
+      return res.status(400).json({ message: "Sepet önerilerindeki ürünlerden biri bulunamadı." });
+    }
+  }
+
   const doc = await StorefrontSettings.findOneAndUpdate(
     { key: "main" },
-    { $set: { fontPreset: input.fontPreset, heroButtonOpacity, sectionOrder, sections } },
+    { $set: { fontPreset: input.fontPreset, heroButtonOpacity, sectionOrder, sections, similarProductsVisible,
+      cartRecommendations: { visible: recommendationsVisible, heading: recommendationsHeading, productIds: recommendationProductIds } } },
     { upsert: true, new: true, runValidators: true, setDefaultsOnInsert: true }
   );
   settingsCache.invalidate();

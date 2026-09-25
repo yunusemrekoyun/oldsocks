@@ -34,6 +34,19 @@ const storefrontSettingsSchema = new mongoose.Schema({
     featured: { type: sectionSchema, required: true },
     popular: { type: sectionSchema, required: true },
   },
+  cartRecommendations: {
+    visible: { type: Boolean, default: true },
+    heading: { type: String, trim: true, maxlength: 80, default: "Sepetinize yakışabilecek ürünler" },
+    productIds: {
+      type: [{ type: mongoose.Schema.Types.ObjectId, ref: "Product" }],
+      default: [],
+      validate: {
+        validator: (value) => Array.isArray(value) && value.length <= 12,
+        message: "Sepet önerilerinde en fazla 12 ürün seçilebilir.",
+      },
+    },
+  },
+  similarProductsVisible: { type: Boolean, default: true },
 }, { timestamps: true });
 
 module.exports = mongoose.model("StorefrontSettings", storefrontSettingsSchema);

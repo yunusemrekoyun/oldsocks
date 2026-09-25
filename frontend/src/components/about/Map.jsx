@@ -1,8 +1,7 @@
 // src/components/Map.jsx
 import React from "react";
 
-const Map = () => {
-  const address = "Alipaşa, Üçbey Sk. No:7, 43020 Kütahya Merkez/Kütahya";
+const Map = ({ address = "Alipaşa, Üçbey Sk. No:7, 43020 Kütahya Merkez/Kütahya" }) => {
   const src = `https://maps.google.com/maps?q=${encodeURIComponent(
     address
   )}&t=&z=15&ie=UTF8&iwloc=&output=embed`;

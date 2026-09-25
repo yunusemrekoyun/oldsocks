@@ -9,6 +9,7 @@ import AuthRequiredModal from "../auth/AuthRequireModal";
 import api from "../../../api";
 import { formatTry } from "../../utils/currency";
 import ConfirmDialog from "../ui/ConfirmDialog";
+import CartRecommendations from "./CartRecommendations";
 
 export default function Cart() {
   const {
@@ -513,6 +514,8 @@ export default function Cart() {
           </div>
         </aside>
       </div>
+
+      <CartRecommendations />
 
       {showLoginModal && (
         <AuthRequiredModal

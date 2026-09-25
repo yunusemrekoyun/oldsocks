@@ -6,15 +6,20 @@ import OurMission from "../components/about/OurMission";
 import History from "../components/about/History";
 import Categories from "../components/categories/Categories";
 import Services from "../components/services/Services";
-const AboutPage = () => (
+import { useSiteContent } from "../context/siteContent";
+
+const AboutPage = () => {
+  const content = useSiteContent();
+  return (
   <>
     <BreadCrumb />
-    <OurVision />
-    <OurMission />
-    <History />
+    <OurVision content={content?.about?.vision} />
+    <OurMission content={content?.about?.mission} />
+    <History content={content?.about?.history} />
     <Categories />
     <Services />
   </>
-);
+  );
+};
 
 export default AboutPage;

@@ -17,6 +17,8 @@ const PURPOSES = Object.freeze({
   hero_image: { kind: "image", maxBytes: 15 * MIB },
   hero_video: { kind: "video", maxBytes: 200 * MIB },
   profile_image: { kind: "image", maxBytes: 5 * MIB },
+  site_logo: { kind: "image", maxBytes: 15 * MIB },
+  about_image: { kind: "image", maxBytes: 15 * MIB },
 });
 
 const IMAGE_EXTENSIONS = new Set(["jpg", "jpeg", "png", "webp", "heic", "heif"]);

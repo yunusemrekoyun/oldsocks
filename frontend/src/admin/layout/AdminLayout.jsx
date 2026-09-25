@@ -35,6 +35,7 @@ import {
   PhotoIcon,
   SparklesIcon,
   BoltIcon,
+  DocumentTextIcon,
 } from "@heroicons/react/24/solid";
 
 /* --------- Küçük yardımcı --------- */
@@ -146,6 +147,11 @@ export default function AdminLayout({ children }) {
             label: "Ana Sayfa Düzeni",
             icon: <HomeIcon className="w-5 h-5" />,
             path: "/admin/storefront",
+          },
+          {
+            label: "Site İçeriği",
+            icon: <DocumentTextIcon className="w-5 h-5" />,
+            path: "/admin/site-content",
           },
           {
             label: "Kampanyalar",

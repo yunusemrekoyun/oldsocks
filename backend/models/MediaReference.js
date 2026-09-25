@@ -8,6 +8,7 @@ const OWNER_TYPES = Object.freeze([
   "Blog",
   "HeroVideo",
   "User",
+  "SiteContent",
 ]);
 
 const MediaReferenceSchema = new mongoose.Schema(

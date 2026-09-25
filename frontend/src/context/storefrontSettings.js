@@ -15,6 +15,8 @@ export const defaultStorefrontSettings = {
   fontPreset: "classic",
   heroButtonOpacity: 30,
   sectionOrder: [...defaultSectionOrder],
+  cartRecommendations: { visible: true, heading: "Sepetinize yakışabilecek ürünler", productIds: [] },
+  similarProductsVisible: true,
   sections: {
     new: { heading: "Yeni Eklenen Ürünler", source: "latest", categoryId: null, productIds: [], shuffle: true, visible: true },
     featured: { heading: "Öne Çıkan Ürünler", source: "random", categoryId: null, productIds: [], shuffle: true, visible: true },

@@ -29,6 +29,7 @@ router.use("/auth", require("./auth"));
 router.use("/users", require("./users"));
 router.use("/products", require("./products"));
 router.use("/storefront", require("./storefront"));
+router.use("/site-content", require("./siteContent"));
 router.use("/categories", require("./categories"));
 router.use("/campaigns", require("./campaign"));
 router.use("/mini-campaigns", require("./miniCampaigns"));

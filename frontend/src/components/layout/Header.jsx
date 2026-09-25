@@ -18,12 +18,22 @@ import SearchModal from "../search/SearchModal";
 import useCategoriesCache from "../../hooks/useCategoriesCache";
 import logo from "../../assets/logo/logo.webp";
 import publicApi from "../../../publicApi";
+import { useSiteContent } from "../../context/siteContent";
+import { getResponsiveImageProps } from "../../utils/media";
 
 const DISCOUNT_HOVER_KEY = "__discount_campaigns__";
+const fallbackLogo = (event) => {
+  event.currentTarget.removeAttribute("srcset");
+  if (!event.currentTarget.src.endsWith(logo)) event.currentTarget.src = logo;
+};
 
 const Header = () => {
   const { isLoggedIn } = useContext(AuthContext);
   const { items } = useCart();
+  const siteContent = useSiteContent();
+  const siteLogo = getResponsiveImageProps(siteContent?.logo || logo, {
+    widths: [256, 512, 640], defaultWidth: 640, sizes: "64px",
+  });
 
   const [showSearch, setShowSearch] = useState(false);
 
@@ -166,7 +176,10 @@ const Header = () => {
 
             <Link to="/" className="flex items-center">
               <img
-                src={logo}
+                src={siteLogo.src}
+                srcSet={siteLogo.srcSet}
+                sizes={siteLogo.sizes}
+                onError={fallbackLogo}
                 alt="Oldsocks Logo"
                 width="256"
                 height="256"
@@ -432,7 +445,10 @@ const Header = () => {
                 className="flex items-center"
               >
                 <img
-                  src={logo}
+                  src={siteLogo.src}
+                  srcSet={siteLogo.srcSet}
+                  sizes={siteLogo.sizes}
+                  onError={fallbackLogo}
                   alt="Oldsocks Logo"
                   width="256"
                   height="256"

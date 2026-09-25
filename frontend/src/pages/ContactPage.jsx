@@ -6,8 +6,10 @@ import Map from "../components/about/Map";
 import ContactInput from "../components/contact/ContactInput";
 import ContactInfo from "../components/contact/ContactInfo";
 import api from "../../api";
+import { useSiteContent } from "../context/siteContent";
 
 const ContactPage = () => {
+  const siteContent = useSiteContent();
   const [form, setForm] = useState({
     name: "",
     email: "",
@@ -45,7 +47,7 @@ const ContactPage = () => {
     }
   };
 
-  const address = "Alipaşa, Üçbey Sk. No:7, 43020 Kütahya Merkez/Kütahya";
+  const address = siteContent?.contact?.address ?? "Alipaşa, Üçbey Sk. No:7, 43020 Kütahya Merkez/Kütahya";
 
   return (
     <>
@@ -53,7 +55,7 @@ const ContactPage = () => {
 
       <main className="container mx-auto px-4 py-16 space-y-12">
         {/* 1) Map */}
-        <Map />
+        <Map address={address} />
 
         {/* 2) Get in Touch + Form + Info */}
         <section className="grid grid-cols-1 lg:grid-cols-2 gap-12">
@@ -151,12 +153,12 @@ const ContactPage = () => {
             />
             <ContactInfo
               Icon={FaPhoneAlt}
-              title="+90 541 428 29 89"
-              subtitle="Pazartesi-Cumartesi 09:00-20:00"
+              title={siteContent?.contact?.phone ?? "+90 541 428 29 89"}
+              subtitle={siteContent?.contact?.hours ?? "Pazartesi-Cumartesi 09:00-20:00"}
             />
             <ContactInfo
               Icon={FaEnvelope}
-              title="oldscks@gmail.com"
+              title={siteContent?.contact?.email ?? "oldscks@gmail.com"}
               subtitle="Dilediğiniz zaman bize ulaşabilirsiniz"
             />
           </aside>

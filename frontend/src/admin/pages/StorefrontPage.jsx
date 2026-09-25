@@ -42,6 +42,7 @@ export default function StorefrontPage() {
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
   const [search, setSearch] = useState("");
+  const [recommendationSearch, setRecommendationSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState(null);
@@ -67,6 +68,12 @@ export default function StorefrontPage() {
     const query = search.trim().toLocaleLowerCase("tr-TR");
     return products.filter((product) => product.name.toLocaleLowerCase("tr-TR").includes(query));
   }, [products, search]);
+  const matchingRecommendationProducts = useMemo(() => {
+    const query = recommendationSearch.trim().toLocaleLowerCase("tr-TR");
+    return products.filter((product) => product.name.toLocaleLowerCase("tr-TR").includes(query));
+  }, [products, recommendationSearch]);
+  const recommendationProductIds = settings?.cartRecommendations?.productIds || [];
+  const recommendationSelected = recommendationProductIds.map((id) => products.find((product) => product._id === id)).filter(Boolean);
 
   const setSection = (key, patch) => setSettings((current) => ({
     ...current,
@@ -112,8 +119,32 @@ export default function StorefrontPage() {
     }
     setSection(key, { productIds: exists ? current.filter((item) => item !== id) : [...current, id] });
   };
+  const setRecommendationIds = (productIds) => setSettings((current) => ({
+    ...current,
+    cartRecommendations: { ...current.cartRecommendations, productIds },
+  }));
+  const toggleRecommendation = (id) => {
+    if (recommendationProductIds.includes(id)) {
+      setRecommendationIds(recommendationProductIds.filter((productId) => productId !== id));
+    } else if (recommendationProductIds.length < 12) {
+      setRecommendationIds([...recommendationProductIds, id]);
+    } else {
+      setNotice({ type: "error", text: "Sepet için en fazla 12 öncelikli ürün seçilebilir." });
+    }
+  };
+  const moveRecommendation = (index, direction) => {
+    const next = [...recommendationProductIds];
+    const other = index + direction;
+    if (other < 0 || other >= next.length) return;
+    [next[index], next[other]] = [next[other], next[index]];
+    setRecommendationIds(next);
+  };
 
   const save = async () => {
+    if (!settings.cartRecommendations?.heading?.trim()) {
+      setNotice({ type: "error", text: "Sepet önerileri için başlık girin." });
+      return;
+    }
     for (const [index, key] of normalizeSectionOrder(settings.sectionOrder).entries()) {
       const section = settings.sections[key];
       if (!section.heading.trim()) {
@@ -175,6 +206,59 @@ export default function StorefrontPage() {
           <span className="mt-1 block text-sm text-gray-700" style={{ fontFamily: font.body }}>{font.detail}</span>
         </label>)}
       </div>
+    </section>
+
+    <section className="rounded-xl border border-gray-200 bg-white p-5 sm:p-6">
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h2 className="text-lg font-semibold text-gray-900">Sepette önerilen ürünler</h2>
+          <p className="mt-1 max-w-2xl text-sm leading-6 text-gray-600">Seçtikleriniz önce gösterilir. Boş kalan yerler sepetteki ürünlerle ilgili, stokta bulunan ürünlerle otomatik tamamlanır. Sepette dört öneri görünür.</p>
+        </div>
+        <label className="flex cursor-pointer items-center gap-2 text-sm font-medium text-gray-800">
+          <input type="checkbox" checked={settings.cartRecommendations?.visible !== false} onChange={(event) => setSettings((current) => ({ ...current, cartRecommendations: { ...current.cartRecommendations, visible: event.target.checked } }))} className="h-4 w-4 accent-gray-900" />
+          Sepette göster
+        </label>
+      </div>
+      <label className="mt-5 block text-sm font-medium text-gray-800">Görünen başlık
+        <input value={settings.cartRecommendations?.heading || ""} maxLength={80} onChange={(event) => setSettings((current) => ({ ...current, cartRecommendations: { ...current.cartRecommendations, heading: event.target.value } }))} className="mt-2 w-full rounded-lg border border-gray-300 px-3 py-2.5 text-base outline-none focus:border-gray-900" />
+      </label>
+      {recommendationSelected.length > 0 && <div className="mt-5">
+        <h3 className="text-sm font-medium text-gray-800">Öncelik sırası ({recommendationSelected.length}/12)</h3>
+        <div className="mt-2 space-y-2">
+          {recommendationSelected.map((product, index) => <div key={product._id} className="flex items-center gap-2 rounded-lg border border-gray-200 px-3 py-2 text-sm">
+            <span className="w-5 shrink-0 text-gray-500">{index + 1}.</span>
+            <ProductThumbnail product={product} />
+            <span className="min-w-0 flex-1 truncate font-medium">{product.name}</span>
+            <button type="button" onClick={() => moveRecommendation(index, -1)} disabled={index === 0} aria-label={`${product.name} ürününü yukarı taşı`} className="rounded p-1 hover:bg-gray-100 disabled:opacity-40"><ArrowUp size={16} /></button>
+            <button type="button" onClick={() => moveRecommendation(index, 1)} disabled={index === recommendationSelected.length - 1} aria-label={`${product.name} ürününü aşağı taşı`} className="rounded p-1 hover:bg-gray-100 disabled:opacity-40"><ArrowDown size={16} /></button>
+            <button type="button" onClick={() => toggleRecommendation(product._id)} className="rounded px-2 py-1 text-xs text-red-700 hover:bg-red-50">Kaldır</button>
+          </div>)}
+        </div>
+      </div>}
+      <label className="mt-5 block text-sm font-medium text-gray-800">Öncelikli ürün ekle
+        <input type="search" value={recommendationSearch} onChange={(event) => setRecommendationSearch(event.target.value)} placeholder="Ürün ara" className="mt-2 w-full rounded-lg border border-gray-300 px-3 py-2.5 text-base outline-none focus:border-gray-900" />
+      </label>
+      <div className="mt-2 flex flex-wrap gap-2">
+        <button type="button" disabled={!matchingRecommendationProducts.some((product) => !recommendationProductIds.includes(product._id)) || recommendationProductIds.length >= 12} onClick={() => setRecommendationIds([...recommendationProductIds, ...matchingRecommendationProducts.filter((product) => !recommendationProductIds.includes(product._id)).slice(0, 12 - recommendationProductIds.length).map((product) => product._id)])} className="rounded-md border border-gray-300 px-3 py-1.5 text-xs font-medium hover:bg-gray-50 disabled:opacity-50">Görünenlerden seç</button>
+        <button type="button" disabled={!recommendationProductIds.length} onClick={() => setRecommendationIds([])} className="rounded-md border border-gray-300 px-3 py-1.5 text-xs font-medium hover:bg-gray-50 disabled:opacity-50">Seçimleri temizle</button>
+      </div>
+      <div className="mt-2 max-h-56 overflow-y-auto rounded-lg border border-gray-200 p-2">
+        {matchingRecommendationProducts.map((product) => <div key={product._id} className="flex items-center gap-3 rounded-md px-2 py-2 text-sm hover:bg-gray-50">
+          <input id={`cart-recommend-${product._id}`} type="checkbox" checked={recommendationProductIds.includes(product._id)} onChange={() => toggleRecommendation(product._id)} disabled={!recommendationProductIds.includes(product._id) && recommendationProductIds.length >= 12} />
+          <ProductThumbnail product={product} />
+          <label htmlFor={`cart-recommend-${product._id}`} className="min-w-0 flex-1 cursor-pointer"><span className="block truncate font-medium">{product.name}</span><span className="block text-xs text-gray-600">{product.color || "Renk belirtilmemiş"} · ₺{Number(product.price).toLocaleString("tr-TR", { minimumFractionDigits: 2 })}</span></label>
+        </div>)}
+        {!matchingRecommendationProducts.length && <p className="p-3 text-sm text-gray-600">Ürün bulunamadı.</p>}
+      </div>
+    </section>
+
+    <section className="rounded-xl border border-gray-200 bg-white p-5 sm:p-6">
+      <h2 className="text-lg font-semibold text-gray-900">Ürün detayında benzer ürünler</h2>
+      <p className="mt-1 text-sm text-gray-600">Ürün sayfasının sağ tarafındaki “Benzer Ürünler” alanını kontrol eder.</p>
+      <label className="mt-4 flex cursor-pointer items-center gap-2 text-sm font-medium text-gray-800">
+        <input type="checkbox" checked={settings.similarProductsVisible !== false} onChange={(event) => setSettings((current) => ({ ...current, similarProductsVisible: event.target.checked }))} className="h-4 w-4 accent-gray-900" />
+        Ürün sayfasında göster
+      </label>
     </section>
 
     <div>

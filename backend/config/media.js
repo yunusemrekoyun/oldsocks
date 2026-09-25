@@ -18,6 +18,8 @@ const PURPOSES = Object.freeze({
   HERO_IMAGE: "hero_image",
   HERO_VIDEO: "hero_video",
   PROFILE_IMAGE: "profile_image",
+  SITE_LOGO: "site_logo",
+  ABOUT_IMAGE: "about_image",
 });
 
 const IMAGE_MIME_TYPES = Object.freeze([
@@ -143,6 +145,16 @@ const PURPOSE_POLICIES = Object.freeze({
     kind: MEDIA_KINDS.IMAGE,
     maxBytes: 5 * MIB,
     profile: IMAGE_PROFILES.profile,
+  },
+  [PURPOSES.SITE_LOGO]: {
+    kind: MEDIA_KINDS.IMAGE,
+    maxBytes: 15 * MIB,
+    profile: IMAGE_PROFILES.content,
+  },
+  [PURPOSES.ABOUT_IMAGE]: {
+    kind: MEDIA_KINDS.IMAGE,
+    maxBytes: 15 * MIB,
+    profile: IMAGE_PROFILES.content,
   },
 });
 
