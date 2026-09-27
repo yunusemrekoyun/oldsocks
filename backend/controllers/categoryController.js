@@ -2,6 +2,7 @@ const Category = require("../models/Category");
 const Product = require("../models/Product");
 const { MediaError } = require("../services/media/errors");
 const { timedCache } = require("../services/timedCache");
+const { invalidateCatalog } = require("../services/catalogCache");
 const {
   legacyAssetUrl,
   publicAsset,
@@ -14,6 +15,8 @@ const categoriesCache = timedCache(60 * 1000);
 
 function invalidateCategoriesCache() {
   categoriesCache.invalidate();
+  // Ürün yanıtları kategori adını ve görselini gömer.
+  invalidateCatalog();
 }
 
 function parseChildren(value) {

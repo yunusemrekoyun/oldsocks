@@ -1,3 +1,4 @@
+const { invalidateCatalog } = require("../services/catalogCache");
 const Product = require("../models/Product");
 const Order = require("../models/Order");
 
@@ -85,6 +86,8 @@ async function finalizeOrderPayment(orderId) {
       order.adminSeenAt = null;
       await order.save({ session });
     });
+    // İşlem kaydedildikten sonra: vitrin stoğu hemen güncel görünsün.
+    invalidateCatalog();
   } finally {
     await session.endSession();
   }

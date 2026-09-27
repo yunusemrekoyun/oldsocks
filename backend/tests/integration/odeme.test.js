@@ -167,3 +167,17 @@ test("sipariş onay ve mock ödeme uçları yalnız metin sipariş kimliği kabu
     assert.equal(res.status, 400, `${path} → ${res.status} ${JSON.stringify(res.data)}`);
   }
 });
+
+test("ürün detayı önbellekten gelir ama ödeme sonrası stok hemen güncellenir", async () => {
+  const productId = await seedProduct({ stock: 3 });
+  const detail = async () => (await fetch(`${server.base}/api/v1/products/${productId}`)).json();
+  assert.equal((await detail()).sizes[0].stock, 3); // önbelleği doldur
+  const { conversationId, order } = await startGuestOrder(productId, 2);
+  await paytrCallback(server.base, { merchantOid: conversationId, totalAmount: Math.round(order.totalPrice * 100) });
+  assert.equal((await detail()).sizes[0].stock, 1);
+});
+
+test("geçersiz ürün kimlikleri 500 yerine 404/400 döner", async () => {
+  assert.equal((await fetch(`${server.base}/api/v1/products/gecersiz`)).status, 404);
+  assert.equal((await fetch(`${server.base}/api/v1/products?varyantsOf=gecersiz`)).status, 400);
+});

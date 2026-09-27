@@ -75,6 +75,8 @@ async function findConflicts(discountId, targetProductIds) {
 
 /* ================== Uygula / Geri Al ================== */
 
+const { invalidateCatalog } = require("../services/catalogCache");
+
 async function applyDiscount(discount) {
   const rate = Number(discount.discountRate || 0) || 0;
   const productIds = await getAffectedProductIds(discount);
@@ -147,6 +149,7 @@ async function unapplyDiscount(discount) {
   const reverted = applied.length;
   discount.appliedProducts = [];
   await discount.save();
+  invalidateCatalog();
   return { reverted };
 }
 

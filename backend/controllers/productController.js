@@ -1,7 +1,7 @@
+const mongoose = require("mongoose");
 const Product = require("../models/Product");
 const Category = require("../models/Category");
 const { MediaError } = require("../services/media/errors");
-const { timedCache } = require("../services/timedCache");
 const { compactProductListItem } = require("../services/catalogResponses");
 const {
   CatalogValidationError,
@@ -18,12 +18,12 @@ const {
   syncOwnerMediaReferences,
 } = require("../services/media/assets");
 
-const productsCache = timedCache(60 * 1000);
+const { productsCache, cachedDetail, invalidateCatalog } = require("../services/catalogCache");
 const { prepareJson, sendPreparedJson } = require("../services/preparedJson");
 const { stripPrivateAssetFields } = require("../middleware/publicAssetFilter");
 
 function invalidateProductsCache() {
-  productsCache.invalidate();
+  invalidateCatalog();
 }
 
 function escapeRegex(value) {
@@ -115,10 +115,18 @@ exports.getProducts = async (req, res) => {
   try {
     if (req.query.varyantsOf) {
       const baseId = req.query.varyantsOf;
-      const products = await Product.find({
-        archivedAt: null,
-        $or: [{ _id: baseId }, { parentProductId: baseId }],
-      }).select("color _id name");
+      if (!mongoose.isValidObjectId(baseId)) {
+        return res.status(400).json({ message: "Geçersiz ürün kimliği." });
+      }
+      const products = await cachedDetail(`variants:${baseId}`, () =>
+        Product.find({
+          archivedAt: null,
+          $or: [{ _id: baseId }, { parentProductId: baseId }],
+        })
+          .select("color _id name")
+          .lean()
+      );
+      res.set("Cache-Control", "public, max-age=5, s-maxage=5");
       return res.json(products);
     }
     const result = await productsCache.get(async () => {
@@ -149,13 +157,19 @@ exports.getProducts = async (req, res) => {
 
 exports.getProduct = async (req, res) => {
   try {
-    const product = await populateProductMedia(
-      Product.findOne({ _id: req.params.id, archivedAt: null }).select(
-        "video images videoAsset imageAssets price originalPrice discount category sizes description color name parentProductId"
-      )
-    );
-    if (!product) return res.status(404).json({ message: "Ürün bulunamadı." });
-    res.json(applyProductMedia(product, "detail"));
+    if (!mongoose.isValidObjectId(req.params.id)) {
+      return res.status(404).json({ message: "Ürün bulunamadı." });
+    }
+    const prepared = await cachedDetail(`product:${req.params.id}`, async () => {
+      const product = await populateProductMedia(
+        Product.findOne({ _id: req.params.id, archivedAt: null }).select(
+          "video images videoAsset imageAssets price originalPrice discount category sizes description color name parentProductId"
+        )
+      );
+      return product ? prepareJson(stripPrivateAssetFields(applyProductMedia(product, "detail"))) : null;
+    });
+    if (!prepared) return res.status(404).json({ message: "Ürün bulunamadı." });
+    return sendPreparedJson(req, res, prepared, { cacheControl: "public, max-age=5, s-maxage=5" });
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: "Ürün getirilirken hata oluştu." });
