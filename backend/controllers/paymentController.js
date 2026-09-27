@@ -1,6 +1,6 @@
 // backend/controllers/paymentController.js
 const crypto = require("crypto");
-const net = require("node:net");
+const { getClientIp } = require("../utils/clientIp");
 const { v4: uuidv4 } = require("uuid");
 const User = require("../models/User");
 const Order = require("../models/Order");
@@ -43,17 +43,6 @@ function escapeHtml(value) {
 }
 function round2(n) {
   return Math.round(Number(n || 0) * 100) / 100;
-}
-function getClientIp(req) {
-  const xff = (req.headers["x-forwarded-for"] || "").split(",")[0].trim();
-  let ip = xff || req.ip || req.connection?.remoteAddress || "127.0.0.1";
-  if (ip === "::1") return "127.0.0.1";
-  if (ip.startsWith("::ffff:")) ip = ip.slice(7);
-
-  // IPv6 adresini iki noktadan bölmek geçersiz bir PayTR user_ip üretir.
-  // Zone kimliği sağlayıcıya gönderilmez.
-  ip = ip.split("%")[0];
-  return net.isIP(ip) ? ip : "127.0.0.1";
 }
 
 function normalizeEmail(value) {
