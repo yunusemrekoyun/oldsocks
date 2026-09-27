@@ -5,6 +5,7 @@
 **/dist
 **/build
 /storage/media/
+/storage/dev-*/
 *.local
 
 # === Log dosyaları ===
