@@ -304,6 +304,11 @@ Promise.all([databaseReady, mediaStorageReady])
   .then(() => {
     if (inlineWorkerEnabled) mediaWorker = startMediaWorker();
     orderMailSweeper = startOrderMailSweeper();
+    // Fiyat geçmişi olmayan ürünlere başlangıç kaydı (ilk açılışta bir kez iş yapar).
+    require("./services/priceHistory")
+      .ensureInitialPriceHistory()
+      .then((count) => count && console.log(`[price-history] ${count} ürün için başlangıç fiyatı kaydedildi.`))
+      .catch((error) => console.warn("[price-history] başlangıç kaydı yapılamadı:", error?.message || error));
     // Üretimde yalnız Nginx'in eriştiği yerel adreste dinle; güvenlik duvarı tek katman kalmasın.
     const HOST = process.env.HOST || (process.env.NODE_ENV === "production" ? "127.0.0.1" : undefined);
     server = app.listen(PORT, HOST, () => {
