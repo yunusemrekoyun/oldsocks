@@ -10,6 +10,7 @@ import AddToCart from "../components/products/product-details/AddToCart";
 import Campaigns from "../components/campaigns/Campaigns";
 import Services from "../components/services/Services";
 import { useStorefrontSettings } from "../context/storefrontSettings";
+import PageLoading from "../components/common/PageLoading";
 
 export default function ProductDetailsPage() {
   const { similarProductsVisible } = useStorefrontSettings();
@@ -32,7 +33,7 @@ export default function ProductDetailsPage() {
       .finally(() => setLoading(false));
   }, [id]);
 
-  if (loading) return <div className="text-center py-10">Ürün yükleniyor…</div>;
+  if (loading) return <PageLoading text="Ürün yükleniyor…" />;
   if (error)
     return <div className="text-center py-10 text-red-600">{error}</div>;
   if (!product)

@@ -9,6 +9,7 @@ import useProductsCache from "../hooks/useProductsCache";
 import useCategoriesCache from "../hooks/useCategoriesCache";
 import { buildVariantColorMap } from "../utils/productVariants";
 import { searchProducts } from "../utils/productSearch";
+import PageLoading from "../components/common/PageLoading";
 
 const SORT_OPTIONS = [
   { value: "newest", label: "Tarihe Göre: En Yeni" },
@@ -236,7 +237,7 @@ export default function ShopPage() {
     navigate("/shop", { replace: true, state: {} });
   };
 
-  if (pageLoading) return <div className="py-10 text-center">Yükleniyor…</div>;
+  if (pageLoading) return <PageLoading />;
 
   if (productsError && !(campaignItems || miniItems)) {
     return (

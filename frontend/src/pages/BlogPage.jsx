@@ -12,6 +12,7 @@ import SocialMedia from "../components/blog/SocialMedia";
 import NewsLetter from "../components/blog/NewsLetter";
 import { formatTurkishDate } from "../utils/date";
 import BlogPagination from "../components/blog/BlogPagination";
+import PageLoading from "../components/common/PageLoading";
 
 export default function BlogPage() {
   const [posts, setPosts] = useState([]);
@@ -50,7 +51,7 @@ export default function BlogPage() {
   const startIndex = (currentPage - 1) * postsPerPage;
   const pagedPosts = filteredPosts.slice(startIndex, startIndex + postsPerPage);
 
-  if (loading) return <div className="py-10 text-center">Yükleniyor…</div>;
+  if (loading) return <PageLoading />;
 
   // Başlık mesajı
   let headerMsg = null;

@@ -17,6 +17,7 @@ import Tags from "../components/blog/Tags";
 import SocialMedia from "../components/blog/SocialMedia";
 import NewsLetter from "../components/blog/NewsLetter";
 import { formatTurkishDate } from "../utils/date";
+import PageLoading from "../components/common/PageLoading";
 
 export default function BlogDetailsPage() {
   const { slug } = useParams();
@@ -54,7 +55,7 @@ export default function BlogDetailsPage() {
     if (blog) fetchComments();
   }, [blog, fetchComments]);
 
-  if (loading) return <div className="py-10 text-center">Yükleniyor…</div>;
+  if (loading) return <PageLoading />;
   if (!blog)
     return (
       <div className="py-10 text-center text-red-500">Blog bulunamadı.</div>

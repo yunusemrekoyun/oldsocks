@@ -8,6 +8,7 @@ import AuthRequiredModal from "../components/auth/AuthRequireModal";
 import ToastAlert from "../components/ui/ToastAlert";
 import api from "../../api";
 import { formatTry } from "../utils/currency";
+import PageLoading from "../components/common/PageLoading";
 
 function getPhoneDigits(value) {
   return String(value || "")
@@ -200,7 +201,7 @@ export default function CheckoutPage() {
     };
   }, [isLoggedIn]);
 
-  if (authLoading) return <div className="p-4">Yükleniyor…</div>;
+  if (authLoading) return <PageLoading />;
 
   if (!isLoggedIn) {
     return (
