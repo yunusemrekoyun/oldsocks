@@ -1,5 +1,6 @@
 // backend/controllers/orderController.js
 const Order = require("../models/Order");
+const User = require("../models/User");
 const {
   finalizeOrderPayment,
   StockUnavailableError,
@@ -17,8 +18,60 @@ async function persistCouponUsage(order) {
   }
 }
 
+function escapeRegex(value) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+const ORDER_STATUSES = ["pending", "payment_review", "paid", "shipped", "completed", "cancelled"];
+
+// Admin listesi: ?page verilirse sunucu tarafında sayfalanır, filtrelenir ve aranır.
+// Parametresiz çağrı eski davranışı (tüm siparişler, dizi) korur.
+async function getOrdersPage(req, res) {
+  const page = Math.max(1, Number.parseInt(req.query.page, 10) || 1);
+  const pageSize = Math.min(100, Math.max(5, Number.parseInt(req.query.pageSize, 10) || 20));
+  const mode = req.query.mode === "pending" ? "pending" : "active";
+  const status = ORDER_STATUSES.includes(req.query.status) ? req.query.status : "";
+  const sort = req.query.sort === "asc" ? { createdAt: 1 } : { createdAt: -1 };
+  const q = typeof req.query.q === "string" ? req.query.q.trim().slice(0, 80) : "";
+
+  const filter = mode === "pending" ? { status: "pending" } : { status: { $ne: "pending" } };
+  if (status && mode === "active" && status !== "pending") filter.status = status;
+  if (q) {
+    const pattern = new RegExp(escapeRegex(q), "i");
+    const digits = q.replace(/\D/g, "");
+    const users = await User.find({
+      $or: [{ email: pattern }, { firstName: pattern }, { lastName: pattern }, ...(digits.length >= 4 ? [{ phone: new RegExp(escapeRegex(digits)) }] : [])],
+    })
+      .select("_id")
+      .limit(200)
+      .lean();
+    filter.$or = [
+      { orderNumber: pattern },
+      { "guest.email": pattern },
+      { "guest.firstName": pattern },
+      { "guest.lastName": pattern },
+      ...(digits.length >= 4 ? [{ "guest.phone": new RegExp(escapeRegex(digits)) }] : []),
+      ...(users.length ? [{ user: { $in: users.map((u) => u._id) } }] : []),
+    ];
+  }
+
+  const [items, total, pendingCount, activeCount] = await Promise.all([
+    Order.find(filter)
+      .sort(sort)
+      .skip((page - 1) * pageSize)
+      .limit(pageSize)
+      .populate("user", "firstName lastName email")
+      .populate("items.productId", "images name"),
+    Order.countDocuments(filter),
+    Order.countDocuments({ status: "pending" }),
+    Order.countDocuments({ status: { $ne: "pending" } }),
+  ]);
+  res.json({ items, total, page, pageSize, pendingCount, activeCount });
+}
+
 exports.getAllOrders = async (req, res) => {
   try {
+    if (req.query.page !== undefined) return await getOrdersPage(req, res);
     const orders = await Order.find()
       .sort("-createdAt")
       .populate("user", "firstName lastName email")

@@ -18,6 +18,8 @@ import ToastAlert from "../../components/ui/ToastAlert";
 import ConfirmDialog from "../../components/ui/ConfirmDialog";
 import OrderDetailsModal from "../modals/OrderDetailsModal";
 
+const PAGE_SIZE = 20;
+
 const STATUS_LABELS = {
   pending: "Sipariş oluşturuldu",
   payment_review: "Ödeme incelemede",
@@ -49,8 +51,13 @@ const STATUS_ICON = {
 
 export default function OrdersPage() {
   const [orders, setOrders] = useState([]);
-  const [filteredOrders, setFilteredOrders] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [loadError, setLoadError] = useState("");
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
+  const [counts, setCounts] = useState({ pending: 0, active: 0 });
+  const [reloadKey, setReloadKey] = useState(0);
   const [updatingId, setUpdatingId] = useState(null);
   const [imageViewer, setImageViewer] = useState(null);
   const [detailOrderId, setDetailOrderId] = useState(null);
@@ -67,40 +74,55 @@ export default function OrdersPage() {
   const [statusFilter, setStatusFilter] = useState("");
   const [listMode, setListMode] = useState("active");
 
+  // Arama yazılırken her tuşta istek atılmasın.
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   useEffect(() => {
+    const id = setTimeout(() => setDebouncedSearch(searchTerm.trim()), 300);
+    return () => clearTimeout(id);
+  }, [searchTerm]);
+
+  // Filtre değişince ilk sayfaya dön.
+  useEffect(() => {
+    setPage(1);
+  }, [listMode, statusFilter, sortOrder, debouncedSearch]);
+
+  useEffect(() => {
+    let alive = true;
+    setRefreshing(true);
+    setLoadError("");
     api
-      .get("/orders/all")
-      .then((res) => {
-        const withSelect = res.data.map((o) => ({
-          ...o,
-          selectedStatus: o.status,
-        }));
-        setOrders(withSelect);
+      .get("/orders/all", {
+        params: {
+          page,
+          pageSize: PAGE_SIZE,
+          mode: listMode,
+          status: statusFilter || undefined,
+          sort: sortOrder,
+          q: debouncedSearch || undefined,
+        },
       })
-      .catch((err) => console.error(err))
-      .finally(() => setLoading(false));
-  }, []);
+      .then(({ data }) => {
+        if (!alive) return;
+        setOrders(data.items.map((o) => ({ ...o, selectedStatus: o.status })));
+        setTotal(data.total);
+        setCounts({ pending: data.pendingCount, active: data.activeCount });
+      })
+      .catch((err) => {
+        if (!alive) return;
+        setLoadError(err?.response?.data?.message || "Siparişler yüklenemedi. Bağlantınızı kontrol edip tekrar deneyin.");
+      })
+      .finally(() => {
+        if (!alive) return;
+        setLoading(false);
+        setRefreshing(false);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [page, listMode, statusFilter, sortOrder, debouncedSearch, reloadKey]);
 
-  useEffect(() => {
-    let result =
-      listMode === "pending"
-        ? orders.filter((o) => o.status === "pending")
-        : orders.filter((o) => o.status !== "pending");
-    if (searchTerm) {
-      const s = searchTerm.toLowerCase();
-      result = result.filter((o) => o.orderNumber?.toLowerCase().includes(s));
-    }
-    if (statusFilter) {
-      result = result.filter((o) => o.status === statusFilter);
-    }
-    result.sort((a, b) =>
-      sortOrder === "asc"
-        ? new Date(a.createdAt) - new Date(b.createdAt)
-        : new Date(b.createdAt) - new Date(a.createdAt)
-    );
-
-    setFilteredOrders(result);
-  }, [listMode, orders, searchTerm, sortOrder, statusFilter]);
+  const filteredOrders = orders;
+  const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   const handleStatusChange = (id, newStatus) => {
     setOrders((prev) =>
@@ -146,6 +168,8 @@ export default function OrdersPage() {
           o._id === id ? { ...o, status: order.selectedStatus } : o
         )
       );
+      // Bekleyen → ödendi gibi geçişlerde liste ve sayılar değişir.
+      setReloadKey((k) => k + 1);
     } catch (err) {
       console.error("Status update failed", err);
       setToast({
@@ -202,8 +226,8 @@ export default function OrdersPage() {
       maximumFractionDigits: 2,
     })}`;
 
-  const pendingCount = orders.filter((o) => o.status === "pending").length;
-  const activeCount = orders.filter((o) => o.status !== "pending").length;
+  const pendingCount = counts.pending;
+  const activeCount = counts.active;
 
   const getProductMeta = (item) => {
     const populatedProduct =
@@ -271,8 +295,9 @@ export default function OrdersPage() {
               {listMode === "pending" ? "Bekleyen Siparişler" : "Siparişler"}
             </h1>
             <span className="text-xs bg-light1 text-dark2 px-2 py-0.5 rounded shrink-0">
-              {filteredOrders.length}
+              {total}
             </span>
+            {refreshing && <span className="text-xs text-dark2">Yükleniyor…</span>}
           </div>
 
           <div className="flex w-full md:w-auto flex-col sm:flex-row gap-3">
@@ -309,11 +334,11 @@ export default function OrdersPage() {
 
             <input
               type="text"
-              placeholder="Sipariş no ara…"
+              placeholder="Sipariş no, müşteri, e-posta, telefon…"
               className="border border-light2 rounded-lg px-3 py-2 bg-white text-sm w-full sm:w-64 focus:outline-none focus:ring-2 focus:ring-dark1"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              aria-label="Sipariş numarası ara"
+              aria-label="Siparişlerde ara"
             />
 
             <select
@@ -344,7 +369,18 @@ export default function OrdersPage() {
       </div>
 
       {/* --- Siparişler --- */}
-      {filteredOrders.length === 0 ? (
+      {loadError ? (
+        <div role="alert" className="text-center bg-red-50 border border-red-200 text-red-800 rounded-xl p-8 space-y-3">
+          <p>{loadError}</p>
+          <button
+            type="button"
+            onClick={() => setReloadKey((k) => k + 1)}
+            className="rounded-lg bg-dark1 px-4 py-2 text-sm font-medium text-white hover:bg-dark2"
+          >
+            Tekrar dene
+          </button>
+        </div>
+      ) : filteredOrders.length === 0 ? (
         <div className="text-center text-dark2 bg-white border border-light2 rounded-xl p-10">
           Kriterlere uygun sipariş bulunamadı.
         </div>
@@ -663,6 +699,30 @@ export default function OrdersPage() {
             );
           })}
         </div>
+      )}
+
+      {!loadError && pageCount > 1 && (
+        <nav className="flex items-center justify-between gap-3" aria-label="Sayfalar">
+          <button
+            type="button"
+            onClick={() => setPage((p) => Math.max(1, p - 1))}
+            disabled={page <= 1 || refreshing}
+            className="rounded-lg border border-light2 px-4 py-2 text-sm font-medium text-dark1 hover:bg-light1 disabled:opacity-50"
+          >
+            ← Önceki
+          </button>
+          <span className="text-sm text-dark2">
+            Sayfa {page} / {pageCount}
+          </span>
+          <button
+            type="button"
+            onClick={() => setPage((p) => Math.min(pageCount, p + 1))}
+            disabled={page >= pageCount || refreshing}
+            className="rounded-lg border border-light2 px-4 py-2 text-sm font-medium text-dark1 hover:bg-light1 disabled:opacity-50"
+          >
+            Sonraki →
+          </button>
+        </nav>
       )}
 
       {toast && (

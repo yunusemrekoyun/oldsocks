@@ -122,4 +122,6 @@ OrderSchema.pre("validate", function (next) {
 });
 
 OrderSchema.index({ status: 1, adminSeenAt: 1, createdAt: -1 });
+OrderSchema.index({ createdAt: -1 });
+OrderSchema.index({ user: 1, createdAt: -1 });
 module.exports = mongoose.model("Order", OrderSchema);

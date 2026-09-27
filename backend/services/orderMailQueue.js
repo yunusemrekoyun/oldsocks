@@ -68,6 +68,7 @@ async function alertPaymentReview(orderId) {
   const reasons = {
     amount_mismatch_after_payment: "PayTR'den gelen tutar sipariş tutarından düşük.",
     stock_unavailable_after_payment: "Ödeme alındı ama ürün stokta kalmadı.",
+    paid_after_cancel: "İptal edilmiş bir siparişe ödeme geldi.",
   };
   try {
     await sendAdminAlertMail({
@@ -92,7 +93,19 @@ function queuePaymentReviewAlert(orderId) {
   });
 }
 
+// 24 saati geçen ödenmemiş siparişler terk edilmiş sayılır ve kapatılır. Sonradan
+// ödeme gelirse PayTR bildirimi siparişi incelemeye alır, yönetici uyarılır.
+const ABANDON_AFTER_MS = 24 * 60 * 60 * 1000;
+async function closeAbandonedOrders() {
+  const result = await Order.updateMany(
+    { status: "pending", createdAt: { $lt: new Date(Date.now() - ABANDON_AFTER_MS) } },
+    { $set: { status: "cancelled", cancelReason: "payment_abandoned", cancelledAt: new Date() } }
+  );
+  if (result.modifiedCount) console.log(`[orders] ${result.modifiedCount} terk edilmiş sipariş kapatıldı.`);
+}
+
 async function sweep() {
+  await closeAbandonedOrders();
   const cutoff = new Date(Date.now() - SWEEP_GRACE_MS);
   const pending = await Order.find({
     status: { $in: PAID_STATUSES },

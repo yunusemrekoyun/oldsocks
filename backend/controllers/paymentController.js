@@ -769,11 +769,18 @@ exports.paytrCallback = async (req, res) => {
     if (status === "success") {
       let order = await Order.findOne({ conversationId: merchant_oid });
       if (!order) return res.send("OK");
-      if (
-        ["payment_review", "cancelled", "shipped", "completed"].includes(
-          order.status
-        )
-      ) {
+      if (["payment_review", "shipped", "completed"].includes(order.status)) {
+        return res.send("OK");
+      }
+      // İptal edilmiş (ör. terk edildiği için kapatılmış) siparişe ödeme geldiyse
+      // sessizce yok sayma: para alındı, yönetici bilmeli.
+      if (order.status === "cancelled") {
+        order.status = "payment_review";
+        order.paymentId = merchant_oid;
+        order.paymentReceivedAt = new Date();
+        order.cancelReason = "paid_after_cancel";
+        await order.save();
+        queuePaymentReviewAlert(order._id);
         return res.send("OK");
       }
 
