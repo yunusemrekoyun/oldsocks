@@ -116,8 +116,9 @@ exports.createBlog = async (req, res) => {
     });
     await syncBlogMedia(blog);
 
-    // Yalnız published içerikler bültene çıkar.
-    if (status === "published") {
+    // Bülten e-postası abonelikten çıkma ve onay akışı tamamlanana kadar kapalı.
+    // Açmak için NEWSLETTER_ON_BLOG_PUBLISH=true.
+    if (status === "published" && process.env.NEWSLETTER_ON_BLOG_PUBLISH === "true") {
       sendNewsletterNewBlog(blog, process.env.FRONTEND_ORIGIN).catch(() => {});
     }
 

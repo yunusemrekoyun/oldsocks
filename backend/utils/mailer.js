@@ -804,9 +804,10 @@ async function sendNewsletterNewBlog(post, providedFrontendOrigin, pathTemplate 
   const link = `${base}${path}`;
   const html = buildNewsletterNewBlogHtml({ post, link });
 
+  // Aboneler birbirinin adresini görmesin: Kime alanı işletme adresi, aboneler gizli alıcı.
   await safeSend({
-    to: recipients[0],
-    bcc: recipients.slice(1),
+    to: from,
+    bcc: recipients,
     subject: `Yeni Blog: ${sanitizeHeaderValue(post?.title || "Yeni Yazı", 140)}`,
     html,
     text: `${post?.title || "Yeni Yazı"}\n\n${clampText(stripHtml(post?.content || ""), 260)}\n\n${link}`,
