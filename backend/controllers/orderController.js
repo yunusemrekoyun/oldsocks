@@ -433,21 +433,31 @@ exports.confirmOrderPayment = async (req, res) => {
   const order = await Order.findOne({ conversationId });
   if (!order) return res.status(404).json({ message: "Sipariş bulunamadı." });
 
-  if (order.status !== "paid") {
+  // Yanıttaki "state" sonuç sayfasının tek bilgi kaynağıdır. Durum kodları eski
+  // arayüzle uyum için korunur: yalnız ödenmiş sipariş 200 döner.
+  if (!["paid", "shipped", "completed"].includes(order.status)) {
     if (order.status === "payment_review") {
       return res.status(409).json({
         code: "PAYMENT_REVIEW",
+        state: "review",
         orderNumber: order.orderNumber,
         message:
           "Ödemeniz alındı; siparişiniz stok veya tutar kontrolü için incelemeye alındı. Ekibimiz sizinle iletişime geçecek.",
       });
     }
-    return res.status(409).json({ message: "Ödeme henüz onaylanmadı." });
+    if (order.status === "cancelled") {
+      return res.status(409).json({
+        code: "PAYMENT_FAILED",
+        state: "failed",
+        message: "Ödeme onaylanmadı. Kartınızdan çekim yapıldıysa bizimle iletişime geçin.",
+      });
+    }
+    return res.status(409).json({ state: "pending", message: "Ödeme henüz onaylanmadı." });
   }
 
   // Bildirim yolu henüz göndermediyse (ör. yarıda kaldıysa) arka planda dene;
   // sahiplik işareti çift e-postayı önler.
   if (!order.orderMailSentAt) queueOrderMails(order._id);
 
-  return res.json({ orderNumber: order.orderNumber });
+  return res.json({ state: "paid", orderNumber: order.orderNumber });
 };

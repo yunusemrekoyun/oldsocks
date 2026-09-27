@@ -169,6 +169,29 @@ test("sipariş onay ve mock ödeme uçları yalnız metin sipariş kimliği kabu
   }
 });
 
+test("sonuç sayfası için onay ucu durumu açıkça döner: bekliyor, ödendi, başarısız", async () => {
+  const productId = await seedProduct({ stock: 3 });
+  const paid = await startGuestOrder(productId);
+  const pending = await postJson(server.base, "/api/v1/orders/confirm", { conversationId: paid.conversationId });
+  assert.equal(pending.status, 409);
+  assert.equal(pending.data.state, "pending");
+
+  await paytrCallback(server.base, {
+    merchantOid: paid.conversationId,
+    totalAmount: Math.round(paid.order.totalPrice * 100),
+  });
+  const ok = await postJson(server.base, "/api/v1/orders/confirm", { conversationId: paid.conversationId });
+  assert.equal(ok.status, 200);
+  assert.equal(ok.data.state, "paid");
+  assert.equal(ok.data.orderNumber, paid.order.orderNumber);
+
+  const failed = await startGuestOrder(productId);
+  await paytrCallback(server.base, { merchantOid: failed.conversationId, status: "failed", totalAmount: 0 });
+  const res = await postJson(server.base, "/api/v1/orders/confirm", { conversationId: failed.conversationId });
+  assert.equal(res.status, 409);
+  assert.equal(res.data.state, "failed");
+});
+
 test("ürün detayı önbellekten gelir ama ödeme sonrası stok hemen güncellenir", async () => {
   const productId = await seedProduct({ stock: 3 });
   const detail = async () => (await fetch(`${server.base}/api/v1/products/${productId}`)).json();

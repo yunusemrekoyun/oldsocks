@@ -1,266 +1,245 @@
-/* eslint-disable no-empty */
 // src/pages/PaymentResultPage.jsx
-import React, { useEffect, useState, useRef } from "react";
-import { useSearchParams, useNavigate } from "react-router-dom";
+// Ödeme sonucunu yalnız sunucudan öğrenir; adresteki "status" yalnız hangi kontrolün
+// yapılacağını belirler, adresteki metinler ekranda gösterilmez.
+import React, { useCallback, useEffect, useRef, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useCart } from "../context/useCart";
 import { useAuth } from "../context/AuthContext";
 import api from "../../api";
 import {
   CheckCircleIcon,
+  ClockIcon,
   ExclamationTriangleIcon,
   XCircleIcon,
 } from "@heroicons/react/24/solid";
 
-const PAYMENT_REVIEW_MESSAGE =
+const POLL_INTERVAL_MS = 2000;
+const POLL_LIMIT_MS = 30000;
+
+const REVIEW_MESSAGE =
   "Ödemeniz alındı; siparişiniz stok veya tutar kontrolü için incelemeye alındı. Ekibimiz sizinle iletişime geçecek.";
+
+// Sunucu yanıtını tek bir duruma çevirir: paid | review | failed | invalid | pending
+async function fetchPaymentState(conversationId) {
+  try {
+    const { data } = await api.post("/orders/confirm", { conversationId }, { timeout: 10000 });
+    return { state: data?.state || "paid", orderNumber: data?.orderNumber || "" };
+  } catch (err) {
+    const data = err?.response?.data || {};
+    if (data.state === "review" || data.code === "PAYMENT_REVIEW") {
+      return { state: "review", orderNumber: data.orderNumber || "", message: data.message };
+    }
+    if (data.state === "failed") return { state: "failed" };
+    if (err?.response?.status === 404) return { state: "failed" };
+    if (err?.response?.status === 400) return { state: "invalid" };
+    // Bekliyor, ağ hatası veya zaman aşımı: tekrar denenir.
+    return { state: "pending" };
+  }
+}
 
 export default function PaymentResultPage() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const { clearCart } = useCart();
-
-  const status = searchParams.get("status"); // "success" | "failure"
-  const merchantOid = searchParams.get("merchant_oid");
-  const conversationId =
-    merchantOid ||
-    searchParams.get("conversationId") ||
-    searchParams.get("conversation_id");
-
-  const paymentId = searchParams.get("paymentId");
-  const failureMessage = searchParams.get("message");
-
-  const [loaded, setLoaded] = useState(false);
-  const [message, setMessage] = useState("");
-  const [orderNumber, setOrderNumber] = useState("");
   const { isLoggedIn } = useAuth();
-  const [reviewing, setReviewing] = useState(false);
 
-  // guard & timers
-  const timers = useRef([]);
-  const doneRef = useRef(false);
-  const attemptsRef = useRef(0);
+  const urlStatus = searchParams.get("status");
+  const conversationId =
+    searchParams.get("merchant_oid") ||
+    searchParams.get("conversationId") ||
+    searchParams.get("conversation_id") ||
+    "";
+  const paymentId = searchParams.get("paymentId") || "";
+
+  const [phase, setPhase] = useState(conversationId ? "checking" : "invalid");
+  const [orderNumber, setOrderNumber] = useState("");
+  const [reviewMessage, setReviewMessage] = useState(REVIEW_MESSAGE);
+  const [attempt, setAttempt] = useState(0);
   const clearCartRef = useRef(clearCart);
 
   useEffect(() => {
     clearCartRef.current = clearCart;
   }, [clearCart]);
 
-  const clearAllTimers = () => {
-    timers.current.forEach(clearTimeout);
-    timers.current = [];
-  };
+  // Sepet her ödeme için yalnız bir kez temizlenir; sonuç sayfası yenilenince
+  // sonradan eklenen ürünler silinmez.
+  const clearCartOnce = useCallback(() => {
+    const key = `payment-cart-cleared:${conversationId}`;
+    try {
+      if (sessionStorage.getItem(key)) return;
+      sessionStorage.setItem(key, "1");
+    } catch {
+      // Depolama kapalıysa yine de temizle.
+    }
+    try {
+      clearCartRef.current();
+    } catch {
+      // Sepet temizlenemezse sonuç ekranı yine gösterilir.
+    }
+  }, [conversationId]);
 
   useEffect(() => {
+    if (!conversationId) return undefined;
+    let active = true;
+    let timer = null;
+    const startedAt = Date.now();
+
+    const finish = (result) => {
+      if (!active) return;
+      if (result.orderNumber) setOrderNumber(result.orderNumber);
+      if (result.state === "paid" || result.state === "review") clearCartOnce();
+      if (result.state === "review" && result.message) setReviewMessage(result.message);
+      setPhase(result.state);
+    };
+
+    const poll = async () => {
+      const result = await fetchPaymentState(conversationId);
+      if (!active) return;
+      if (result.state !== "pending") return finish(result);
+      // PayTR "başarısız" dönüşünde beklemeye gerek yok.
+      if (urlStatus === "failure") return finish({ state: "failed" });
+      if (Date.now() - startedAt >= POLL_LIMIT_MS) return setPhase("slow");
+      timer = setTimeout(poll, POLL_INTERVAL_MS);
+    };
+
+    (async () => {
+      setPhase("checking");
+      if (urlStatus === "success" && paymentId.startsWith("mock_") && attempt === 0) {
+        await api.post("/payment/mock-complete", { conversationId }).catch(() => {});
+      }
+      poll();
+    })();
+
     return () => {
-      doneRef.current = true;
-      clearAllTimers();
+      active = false;
+      clearTimeout(timer);
     };
-  }, []);
+  }, [conversationId, urlStatus, paymentId, attempt, clearCartOnce]);
 
-  useEffect(() => {
-    const decode = (s) => {
-      try {
-        return decodeURIComponent(s || "");
-      } catch {
-        return s || "";
+  const ordersButton = (
+    <button
+      type="button"
+      onClick={() =>
+        isLoggedIn
+          ? navigate("/profile", { state: { tab: "orders" } })
+          : navigate("/siparis-takip")
       }
-    };
+      className="flex-1 py-3 border border-gray-300 rounded-lg shadow-sm hover:bg-gray-50 transition"
+    >
+      {isLoggedIn ? "Siparişlerim" : "Sipariş Takibi"}
+    </button>
+  );
+  const homeButton = (
+    <button
+      type="button"
+      onClick={() => navigate("/")}
+      className="flex-1 py-3 bg-dark1 text-white rounded-lg shadow-md hover:bg-dark2 transition"
+    >
+      Ana Sayfa
+    </button>
+  );
 
-    if (status === "failure") {
-      const rawMsg = failureMessage || "Ödeme başarısız.";
-      setMessage(decode(rawMsg));
-      setLoaded(true);
-      return;
-    }
-
-    if (status === "success" && conversationId) {
-      const onceKey = `confirm:${conversationId}`;
-      const lockKey = `__CONFIRM_LOCK__:${conversationId}`;
-      const state = sessionStorage.getItem(onceKey);
-      if (state === "done") {
-        setMessage("Siparişiniz başarıyla kaydedildi.");
-        setLoaded(true);
-        return;
-      }
-      if (state === "review") {
-        setReviewing(true);
-        setMessage(PAYMENT_REVIEW_MESSAGE);
-        setLoaded(true);
-        return;
-      }
-
-      if (window[lockKey]) {
-        setLoaded(false);
-        return;
-      }
-      window[lockKey] = true;
-      if (state !== "started") sessionStorage.setItem(onceKey, "started");
-
-      doneRef.current = false;
-      attemptsRef.current = 0;
-
-      const finishAsSuccess = (maybeOrderNo) => {
-        if (doneRef.current) return;
-        doneRef.current = true;
-        if (maybeOrderNo) setOrderNumber(maybeOrderNo);
-        setMessage("Siparişiniz başarıyla kaydedildi.");
-        try {
-          clearCartRef.current();
-        } catch {}
-        sessionStorage.setItem(onceKey, "done");
-        clearAllTimers();
-        setLoaded(true);
-      };
-
-      const finishAsError = (msg) => {
-        if (doneRef.current) return;
-        doneRef.current = true;
-        setMessage(msg || "Sipariş kaydı sırasında bir hata oluştu.");
-        clearAllTimers();
-        setLoaded(true);
-      };
-
-      const finishAsReview = (maybeOrderNo, msg) => {
-        if (doneRef.current) return;
-        doneRef.current = true;
-        if (maybeOrderNo) setOrderNumber(maybeOrderNo);
-        setReviewing(true);
-        setMessage(msg || PAYMENT_REVIEW_MESSAGE);
-        try {
-          clearCartRef.current();
-        } catch {}
-        sessionStorage.setItem(onceKey, "review");
-        clearAllTimers();
-        setLoaded(true);
-      };
-
-      const tryConfirm = async () => {
-        if (doneRef.current) return;
-        try {
-          const res = await api.post("/orders/confirm", { conversationId });
-          const no = res?.data?.orderNumber;
-          finishAsSuccess(no);
-        } catch (err) {
-          if (doneRef.current) return;
-          const code = err?.response?.status;
-          if (
-            code === 409 &&
-            err?.response?.data?.code === "PAYMENT_REVIEW"
-          ) {
-            finishAsReview(
-              err?.response?.data?.orderNumber,
-              err?.response?.data?.message
-            );
-            return;
-          }
-          const attempt = attemptsRef.current;
-          const maxAttempts = 7;
-          if (code === 409 && attempt < maxAttempts) {
-            attemptsRef.current = attempt + 1;
-            const delayMs = 1500 + attempt * 500;
-            const t = setTimeout(tryConfirm, delayMs);
-            timers.current.push(t);
-            return;
-          }
-          finishAsError(
-            code === 409
-              ? "Onay beklenenden uzun sürdü. Siparişiniz oluşturulduysa 'Hesabım → Siparişlerim'den görebilirsiniz."
-              : undefined
-          );
-        }
-      };
-
-      (async () => {
-        if (paymentId && paymentId.startsWith("mock_")) {
-          try {
-            await api.post("/payment/mock-complete", { conversationId });
-          } catch {}
-        }
-        const watchdog = setTimeout(() => {
-          finishAsError(
-            "Onay beklenenden uzun sürdü. Siparişiniz oluşturulduysa 'Hesabım → Siparişlerim'den görebilirsiniz."
-          );
-        }, 12000);
-        timers.current.push(watchdog);
-        tryConfirm();
-      })();
-
-      return;
-    }
-
-    setMessage("Geçersiz geri dönüş parametreleri.");
-    setLoaded(true);
-  }, [conversationId, failureMessage, paymentId, status]);
-
-  if (!loaded) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-100 to-gray-200">
-        <p className="text-lg font-medium text-gray-700 animate-pulse">
-          Sonuç alınıyor…
-        </p>
-      </div>
-    );
-  }
-
-  const isSuccess = status === "success";
+  const screens = {
+    checking: {
+      icon: <ClockIcon className="w-20 h-20 text-gray-400 mx-auto mb-6 animate-pulse" />,
+      title: "Ödemeniz doğrulanıyor",
+      titleClass: "text-dark1",
+      body: "Bu birkaç saniye sürebilir. Lütfen sayfayı kapatmayın.",
+      actions: null,
+    },
+    paid: {
+      icon: <CheckCircleIcon className="w-20 h-20 text-green-500 mx-auto mb-6 drop-shadow" />,
+      title: "Siparişiniz alındı",
+      titleClass: "text-green-600",
+      body: "Ödemeniz onaylandı. Sipariş özetini e-posta adresinize gönderdik.",
+      actions: (
+        <>
+          {homeButton}
+          {ordersButton}
+        </>
+      ),
+    },
+    review: {
+      icon: <ExclamationTriangleIcon className="w-20 h-20 text-orange-500 mx-auto mb-6 drop-shadow" />,
+      title: "Ödeme alındı, sipariş incelemede",
+      titleClass: "text-orange-600",
+      body: reviewMessage,
+      actions: (
+        <>
+          {homeButton}
+          {ordersButton}
+        </>
+      ),
+    },
+    failed: {
+      icon: <XCircleIcon className="w-20 h-20 text-red-500 mx-auto mb-6 drop-shadow" />,
+      title: "Ödeme tamamlanamadı",
+      titleClass: "text-red-600",
+      body: "Kartınızdan çekim yapılmadıysa sepetinizdeki ürünlerle tekrar deneyebilirsiniz. Çekim yapıldığını görüyorsanız bizimle iletişime geçin.",
+      actions: (
+        <>
+          <button
+            type="button"
+            onClick={() => navigate("/cart")}
+            className="flex-1 py-3 bg-dark1 text-white rounded-lg shadow-md hover:bg-dark2 transition"
+          >
+            Sepete Dön
+          </button>
+          <button
+            type="button"
+            onClick={() => navigate("/contact")}
+            className="flex-1 py-3 border border-gray-300 rounded-lg shadow-sm hover:bg-gray-50 transition"
+          >
+            İletişim
+          </button>
+        </>
+      ),
+    },
+    slow: {
+      icon: <ClockIcon className="w-20 h-20 text-amber-500 mx-auto mb-6" />,
+      title: "Onay gecikiyor",
+      titleClass: "text-amber-600",
+      body: "Ödeme sağlayıcısından onay henüz gelmedi. Kartınızdan çekim yapıldıysa siparişiniz birkaç dakika içinde onaylanır ve e-posta alırsınız. Sepetiniz korunuyor; tekrar ödeme yapmadan önce e-postanızı kontrol edin.",
+      actions: (
+        <>
+          <button
+            type="button"
+            onClick={() => setAttempt((n) => n + 1)}
+            className="flex-1 py-3 bg-dark1 text-white rounded-lg shadow-md hover:bg-dark2 transition"
+          >
+            Tekrar Kontrol Et
+          </button>
+          {ordersButton}
+        </>
+      ),
+    },
+    invalid: {
+      icon: <XCircleIcon className="w-20 h-20 text-gray-400 mx-auto mb-6" />,
+      title: "Geçersiz bağlantı",
+      titleClass: "text-dark1",
+      body: "Bu bağlantıda sipariş bilgisi yok. Siparişinizi sipariş takibi sayfasından sorgulayabilirsiniz.",
+      actions: (
+        <>
+          {homeButton}
+          {ordersButton}
+        </>
+      ),
+    },
+  };
+  const screen = screens[phase] || screens.checking;
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-50 to-gray-200 px-4 py-10">
-      <div className="w-full max-w-lg bg-white shadow-2xl rounded-2xl p-8 text-center">
-        {reviewing ? (
-          <ExclamationTriangleIcon className="w-20 h-20 text-orange-500 mx-auto mb-6 drop-shadow" />
-        ) : isSuccess ? (
-          <CheckCircleIcon className="w-20 h-20 text-green-500 mx-auto mb-6 drop-shadow" />
-        ) : (
-          <XCircleIcon className="w-20 h-20 text-red-500 mx-auto mb-6 drop-shadow" />
-        )}
-
-        <h2
-          className={`text-3xl font-bold mb-3 ${
-            reviewing
-              ? "text-orange-600"
-              : isSuccess
-                ? "text-green-600"
-                : "text-red-600"
-          }`}
-        >
-          {reviewing
-            ? "Ödeme Alındı"
-            : isSuccess
-              ? "Ödeme Başarılı"
-              : "Ödeme Başarısız"}
-        </h2>
-
-        {paymentId && (
-          <p className="text-sm text-gray-500 mb-1">Ödeme No: {paymentId}</p>
-        )}
+      <div className="w-full max-w-lg bg-white shadow-2xl rounded-2xl p-8 text-center" aria-live="polite">
+        {screen.icon}
+        <h1 className={`text-3xl font-bold mb-3 ${screen.titleClass}`}>{screen.title}</h1>
         {orderNumber && (
           <p className="text-sm text-gray-500 mb-3">
             Sipariş No: <strong>{orderNumber}</strong>
           </p>
         )}
-        {message && <p className="text-gray-700 mb-6">{message}</p>}
-
-        <div className="flex flex-col sm:flex-row gap-3">
-          <button
-            onClick={() => navigate("/")}
-            className="flex-1 py-3 bg-dark1 text-white rounded-lg shadow-md hover:bg-dark2 transition"
-          >
-            Ana Sayfa
-          </button>
-          {isSuccess && (
-            <button
-              onClick={() =>
-                isLoggedIn
-                  ? navigate("/profile", { state: { tab: "orders" } })
-                  : navigate("/siparis-takip")
-              }
-              className="flex-1 py-3 border border-gray-300 rounded-lg shadow-sm hover:bg-gray-50 transition"
-            >
-              {isLoggedIn ? "Siparişlerim" : "Sipariş Takibi"}
-            </button>
-          )}
-        </div>
+        <p className="text-gray-700 mb-6">{screen.body}</p>
+        {screen.actions && <div className="flex flex-col sm:flex-row gap-3">{screen.actions}</div>}
       </div>
     </div>
   );
