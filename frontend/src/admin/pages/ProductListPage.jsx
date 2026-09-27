@@ -13,6 +13,7 @@ import api from "../../../api";
 import ToastAlert from "../../components/ui/ToastAlert";
 import ProductFormModal from "../modals/ProductFormModal";
 import Window from "../../components/ui/Window";
+import ConfirmDialog from "../../components/ui/ConfirmDialog";
 import EditProductForm from "../forms/EditProductForm";
 import AddNewColorForm from "../forms/AddNewColorForm";
 
@@ -60,6 +61,9 @@ export default function ProductListPage() {
 
   const [activeProduct, setActiveProduct] = useState(null); // edit / new-color / new
   const [isFormOpen, setIsFormOpen] = useState(false);
+  // Formda herhangi bir giriş yapıldıysa kapatmadan önce onay istenir.
+  const [formDirty, setFormDirty] = useState(false);
+  const [closeConfirmOpen, setCloseConfirmOpen] = useState(false);
   const [formMode, setFormMode] = useState("new"); // new | edit | new-color
 
   const [deleteId, setDeleteId] = useState(null);
@@ -126,22 +130,39 @@ export default function ProductListPage() {
   const openNewForm = () => {
     setFormMode("new");
     setActiveProduct(null);
+    setFormDirty(false);
     setIsFormOpen(true);
   };
 
   const openEditForm = (prod) => {
     setFormMode("edit");
     setActiveProduct(prod);
+    setFormDirty(false);
     setIsFormOpen(true);
   };
 
   const openNewColorForm = (baseProd) => {
     setFormMode("new-color");
     setActiveProduct({ ...baseProd });
+    setFormDirty(false);
     setIsFormOpen(true);
   };
 
-  const closeForm = () => setIsFormOpen(false);
+  const closeForm = () => {
+    setIsFormOpen(false);
+    setFormDirty(false);
+    setCloseConfirmOpen(false);
+  };
+  const requestCloseForm = () => {
+    if (formDirty) {
+      setCloseConfirmOpen(true);
+      return;
+    }
+    closeForm();
+  };
+  const markFormDirty = () => {
+    if (!formDirty) setFormDirty(true);
+  };
   const onSaved = () => {
     fetchProducts();
     closeForm();
@@ -565,25 +586,38 @@ export default function ProductListPage() {
               ? "Ürünü Güncelle"
               : "Yeni Ürün"
           }
-          onClose={closeForm}
+          onClose={requestCloseForm}
         >
+          <div onInputCapture={markFormDirty} onChangeCapture={markFormDirty}>
           {formMode === "new-color" ? (
             <AddNewColorForm
               product={activeProduct}
-              onClose={closeForm}
+              onClose={requestCloseForm}
               onSaved={onSaved}
             />
           ) : formMode === "edit" ? (
             <EditProductForm
               product={activeProduct}
-              onClose={closeForm}
+              onClose={requestCloseForm}
               onSaved={onSaved}
             />
           ) : (
-            <ProductFormModal onClose={closeForm} onSaved={onSaved} />
+            <ProductFormModal onClose={requestCloseForm} onSaved={onSaved} />
           )}
+          </div>
         </Window>
       )}
+
+      <ConfirmDialog
+        open={closeConfirmOpen}
+        title="Değişiklikleri kapat"
+        message="Kaydedilmemiş değişiklikler var. Form kapatılırsa girdikleriniz kaybolur."
+        confirmLabel="Kaydetmeden kapat"
+        cancelLabel="Forma dön"
+        tone="warning"
+        onCancel={() => setCloseConfirmOpen(false)}
+        onConfirm={closeForm}
+      />
 
       {/* Toast */}
       {toast && (
