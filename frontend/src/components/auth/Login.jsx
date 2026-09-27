@@ -2,8 +2,6 @@ import React, { useState, useContext } from "react";
 import { useNavigate } from "react-router-dom";
 import { AuthContext } from "../../context/AuthContext";
 import api from "../../../api";
-// eslint-disable-next-line no-unused-vars
-import { motion } from "framer-motion";
 
 const Login = ({ onSwitch, onForgotPassword, redirectTo }) => {
   const [form, setForm] = useState({ email: "", password: "" });
@@ -74,12 +72,8 @@ const Login = ({ onSwitch, onForgotPassword, redirectTo }) => {
   };
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 30 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -30 }}
-      transition={{ duration: 0.4 }}
-      className="w-full max-w-md mx-auto bg-white border border-light2 rounded-2xl shadow-lg p-8 text-dark1"
+    <div
+      className="auth-enter w-full max-w-md mx-auto bg-white border border-light2 rounded-2xl shadow-lg p-8 text-dark1"
     >
       <h2 className="text-3xl font-bold text-center mb-6">Giriş Yap</h2>
 
@@ -153,7 +147,7 @@ const Login = ({ onSwitch, onForgotPassword, redirectTo }) => {
           Kayıt olun
         </button>
       </p>
-    </motion.div>
+    </div>
   );
 };
 

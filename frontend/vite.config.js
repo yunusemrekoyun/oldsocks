@@ -33,5 +33,19 @@ export default defineConfig(({ mode }) => {
   return {
     plugins: [react(), preconnectOrigins(env)],
     base: "/",
+    build: {
+      rollupOptions: {
+        output: {
+          // Nadiren değişen kütüphaneler ayrı dosyada: her dağıtımda yeniden indirilmez.
+          manualChunks(id) {
+            if (/[\\/]node_modules[\\/](react|react-dom|scheduler|react-router|react-router-dom)[\\/]/.test(id)) {
+              return "vendor-react";
+            }
+            if (/[\\/]node_modules[\\/]axios[\\/]/.test(id)) return "vendor-axios";
+            return undefined;
+          },
+        },
+      },
+    },
   };
 });

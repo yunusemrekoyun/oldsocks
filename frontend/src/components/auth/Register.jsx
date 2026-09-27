@@ -1,8 +1,6 @@
 // src/components/auth/Register.jsx
 import React, { useState, useMemo } from "react";
 import api from "../../../api";
-// eslint-disable-next-line no-unused-vars
-import { motion } from "framer-motion";
 import { IMaskInput } from "react-imask";
 import { getPasswordValidation } from "../../utils/passwordRules";
 import HoneypotField from "../ui/HoneypotField";
@@ -91,12 +89,8 @@ const Register = ({ onSwitch }) => {
   };
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 30 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -30 }}
-      transition={{ duration: 0.4 }}
-      className="w-full max-w-md mx-auto bg-white border border-light2 rounded-2xl shadow-lg p-8 text-dark1"
+    <div
+      className="auth-enter w-full max-w-md mx-auto bg-white border border-light2 rounded-2xl shadow-lg p-8 text-dark1"
     >
       <h2 className="text-3xl font-bold text-center mb-6">Kayıt Ol</h2>
 
@@ -234,7 +228,7 @@ const Register = ({ onSwitch }) => {
           Giriş Yapın
         </button>
       </p>
-    </motion.div>
+    </div>
   );
 };
 

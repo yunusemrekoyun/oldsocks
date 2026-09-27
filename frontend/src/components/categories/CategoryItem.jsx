@@ -2,26 +2,27 @@ import React from "react";
 import PropTypes from "prop-types";
 
 const CategoryItem = ({ image, alt, onClick }) => (
-  <div
+  <button
+    type="button"
     onClick={onClick}
-    className="group overflow-hidden rounded-xl cursor-pointer border border-light2 bg-white shadow hover:shadow-lg transition duration-300 flex flex-col"
+    className="group w-full overflow-hidden rounded-xl cursor-pointer border border-light2 bg-white text-left shadow hover:shadow-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-dark1 transition duration-300 flex flex-col"
   >
-    {/* Görsel */}
-    <div className="h-72 w-full overflow-hidden">
+    {/* Görsel: ad aşağıda yazdığı için alt metin boş */}
+    <span className="block h-72 w-full overflow-hidden">
       <img
         src={image}
-        alt={alt}
+        alt=""
+        loading="lazy"
+        decoding="async"
         className="w-full h-full object-cover transform group-hover:scale-105 transition duration-300"
       />
-    </div>
+    </span>
 
     {/* Başlık */}
-    <div className="py-3 px-4 text-center bg-light1">
-      <h3 className="text-dark1 font-semibold text-sm uppercase tracking-wide group-hover:underline">
-        {alt}
-      </h3>
-    </div>
-  </div>
+    <span className="block w-full py-3 px-4 text-center bg-light1 text-dark1 font-semibold text-sm uppercase tracking-wide group-hover:underline">
+      {alt}
+    </span>
+  </button>
 );
 
 CategoryItem.propTypes = {

@@ -1,5 +1,4 @@
 import React, { useState } from "react";
-import { motion as Motion } from "framer-motion";
 import api from "../../../api";
 import HoneypotField from "../ui/HoneypotField";
 
@@ -38,12 +37,8 @@ const ForgotPassword = ({ onBackToLogin }) => {
   };
 
   return (
-    <Motion.div
-      initial={{ opacity: 0, y: 30 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -30 }}
-      transition={{ duration: 0.4 }}
-      className="w-full max-w-md mx-auto bg-white border border-light2 rounded-2xl shadow-lg p-8 text-dark1"
+    <div
+      className="auth-enter w-full max-w-md mx-auto bg-white border border-light2 rounded-2xl shadow-lg p-8 text-dark1"
     >
       <h2 className="text-3xl font-bold text-center mb-3">Şifremi Unuttum</h2>
       <p className="text-sm text-center text-dark2 mb-6 leading-6">
@@ -99,7 +94,7 @@ const ForgotPassword = ({ onBackToLogin }) => {
         </button>
         .
       </p>
-    </Motion.div>
+    </div>
   );
 };
 
