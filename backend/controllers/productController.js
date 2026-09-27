@@ -19,6 +19,8 @@ const {
 } = require("../services/media/assets");
 
 const productsCache = timedCache(60 * 1000);
+const { prepareJson, sendPreparedJson } = require("../services/preparedJson");
+const { stripPrivateAssetFields } = require("../middleware/publicAssetFilter");
 
 function invalidateProductsCache() {
   productsCache.invalidate();
@@ -127,14 +129,18 @@ exports.getProducts = async (req, res) => {
             "name video images videoAsset imageAssets price originalPrice discount sizes color category parentProductId createdAt"
           )
       ).lean();
-      const full = products.map((product) => applyProductMedia(product, "list"));
-      return { full, compact: full.map(compactProductListItem) };
+      const full = stripPrivateAssetFields(products.map((product) => applyProductMedia(product, "list")));
+      return {
+        full: prepareJson(full),
+        compact: prepareJson(full.map(compactProductListItem)),
+      };
     });
     if (req.query.view === "compact") {
-      res.set("Cache-Control", "public, max-age=5, s-maxage=5");
-      return res.json(result.compact);
+      return sendPreparedJson(req, res, result.compact, {
+        cacheControl: "public, max-age=5, s-maxage=5",
+      });
     }
-    res.json(result.full);
+    return sendPreparedJson(req, res, result.full, { cacheControl: "private, no-cache" });
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: "Ürünler getirilirken hata oluştu." });
