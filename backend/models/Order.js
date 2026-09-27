@@ -65,6 +65,16 @@ const OrderSchema = new mongoose.Schema(
     shippedMailSentAt: { type: Date, default: null },
     deliveredMailSentAt: { type: Date, default: null },
     statusMailAttemptAt: { type: Date, default: null },
+    // Yöneticinin iptal / iade kaydı. Para PayTR panelinden iade edilir; burada kaydı tutulur.
+    refund: {
+      amount: { type: Number, default: null, min: 0 },
+      note: { type: String, default: null, trim: true, maxlength: 500 },
+      at: { type: Date, default: null },
+      by: { type: mongoose.Types.ObjectId, ref: "User", default: null },
+      restocked: { type: Boolean, default: false },
+      notifyCustomer: { type: Boolean, default: false },
+    },
+    cancelledMailSentAt: { type: Date, default: null },
 
     campaign: {
       campaignId: { type: mongoose.Types.ObjectId, ref: "CartCampaign", default: null },

@@ -56,6 +56,24 @@ async function applyStockChanges(order, options = {}) {
   }
 }
 
+// İptal edilen siparişin adetlerini stoğa geri ekler. Silinmiş ürün veya kaldırılmış
+// beden atlanır; atlanan kalemler döndürülür.
+async function restoreStock(order, options = {}) {
+  const items = Array.isArray(order?.items) ? order.items : [];
+  const skipped = [];
+  for (const item of items) {
+    const quantity = Number(item.qty);
+    if (!item.productId || !Number.isFinite(quantity) || quantity <= 0) continue;
+    const result = await Product.updateOne(
+      { _id: item.productId, "sizes.size": item.size ? String(item.size) : "" },
+      { $inc: { "sizes.$.stock": quantity } },
+      { session: options.session }
+    );
+    if (!result.modifiedCount) skipped.push({ name: item.name, size: item.size || "", qty: quantity });
+  }
+  return { skipped };
+}
+
 /**
  * Stok düşümü ile siparişin paid işaretlenmesini tek Mongo işlemi içinde yapar.
  * Aynı PayTR bildirimi eşzamanlı gelse bile transaction yeniden denendiğinde ikinci
@@ -97,6 +115,7 @@ async function finalizeOrderPayment(orderId) {
 
 module.exports = {
   applyStockChanges,
+  restoreStock,
   finalizeOrderPayment,
   StockUnavailableError,
   OrderPaymentStateError,

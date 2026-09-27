@@ -19,9 +19,18 @@ function fmtDate(value) {
 function StatusSteps({ order }) {
   if (order.status === "cancelled") {
     return (
-      <p className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
-        Bu sipariş iptal edildi. Sorunuz varsa bizimle iletişime geçin.
-      </p>
+      <div className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
+        <p>
+          Bu sipariş {order.cancelledAt ? `${fmtDate(order.cancelledAt)} tarihinde ` : ""}iptal edildi.
+        </p>
+        {Number(order.refundAmount) > 0 && (
+          <p className="mt-1">
+            İade tutarı: <b>{formatTry(order.refundAmount)}</b>. İade ödemede kullandığınız karta yapılır;
+            bankanıza bağlı olarak birkaç iş günü içinde yansır.
+          </p>
+        )}
+        <p className="mt-1">Sorunuz varsa bizimle iletişime geçin.</p>
+      </div>
     );
   }
   const current = STEP_INDEX[order.status] ?? 0;

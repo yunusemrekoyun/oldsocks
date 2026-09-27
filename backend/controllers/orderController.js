@@ -1,11 +1,15 @@
 // backend/controllers/orderController.js
+const mongoose = require("mongoose");
 const Order = require("../models/Order");
 const User = require("../models/User");
 const {
   finalizeOrderPayment,
+  restoreStock,
   StockUnavailableError,
   OrderPaymentStateError,
 } = require("../utils/updateStock");
+const CouponUsage = require("../models/CouponUsage");
+const { invalidateCatalog } = require("../services/catalogCache");
 const { queueOrderMails, queueStatusMail } = require("../services/orderMailQueue");
 const { recordCouponUsageForOrder } = require("../utils/couponUsageService");
 const { normalizeEmailAddress } = require("../utils/email");
@@ -227,6 +231,80 @@ exports.updateOrderStatus = async (req, res) => {
   }
 };
 
+// Ödemesi alınmış siparişin iptali ve iade kaydı. Para PayTR panelinden iade edilir;
+// burada tutar, açıklama, stok iadesi ve müşteri bildirimi kaydedilir.
+const CANCELLABLE_STATUSES = ["payment_review", "paid", "shipped", "completed"];
+
+exports.cancelOrder = async (req, res) => {
+  const note = String(req.body?.note ?? "").trim();
+  const restock = req.body?.restock !== false;
+  const notifyCustomer = req.body?.notifyCustomer !== false;
+  const refundAmount = Math.round(Number(req.body?.refundAmount) * 100) / 100;
+  if (!mongoose.isValidObjectId(req.params.id)) {
+    return res.status(404).json({ message: "Sipariş bulunamadı." });
+  }
+  if (note.length < 3 || note.length > 500) {
+    return res.status(400).json({ message: "İptal / iade açıklaması girin (3-500 karakter)." });
+  }
+  if (!Number.isFinite(refundAmount) || refundAmount < 0) {
+    return res.status(400).json({ message: "İade tutarı 0 veya daha büyük olmalıdır." });
+  }
+
+  const session = await Order.startSession();
+  let outcome = null;
+  try {
+    await session.withTransaction(async () => {
+      outcome = null;
+      const order = await Order.findById(req.params.id).session(session);
+      if (!order) {
+        outcome = { status: 404, body: { message: "Sipariş bulunamadı." } };
+        return;
+      }
+      if (!CANCELLABLE_STATUSES.includes(order.status)) {
+        outcome = { status: 409, body: { message: "Bu sipariş iptal / iade için uygun durumda değil." } };
+        return;
+      }
+      if (refundAmount > Number(order.totalPrice || 0)) {
+        outcome = { status: 400, body: { message: "İade tutarı sipariş toplamını aşamaz." } };
+        return;
+      }
+
+      let skipped = [];
+      const restocked = restock && order.stockUpdated;
+      if (restocked) {
+        ({ skipped } = await restoreStock(order, { session }));
+        order.stockUpdated = false;
+      }
+      order.status = "cancelled";
+      order.cancelReason = "admin_cancelled";
+      order.cancelledAt = new Date();
+      order.refund = {
+        amount: refundAmount,
+        note,
+        at: new Date(),
+        by: req.user?.userId || null,
+        restocked,
+        notifyCustomer,
+      };
+      await order.save({ session });
+      // İptal edilen siparişin kupon hakkı müşteriye geri verilir.
+      await CouponUsage.deleteMany({ orderId: order._id }, { session });
+      outcome = { status: 200, body: { message: "Sipariş iptal edildi.", order, skipped } };
+    });
+  } catch (err) {
+    console.error("cancelOrder error:", err);
+    return res.status(500).json({ message: "Sipariş iptal edilemedi." });
+  } finally {
+    await session.endSession();
+  }
+
+  if (outcome.status === 200) {
+    if (outcome.body.order.refund.restocked) invalidateCatalog();
+    if (notifyCustomer) queueStatusMail(outcome.body.order._id, "cancelled");
+  }
+  return res.status(outcome.status).json(outcome.body);
+};
+
 // Siparişe kargo bilgisini sonradan düzeltmek için; e-posta göndermez.
 exports.updateOrderTracking = async (req, res) => {
   try {
@@ -254,9 +332,13 @@ exports.getMyOrders = async (req, res) => {
   const userId = req.user.userId;
   const orders = await Order.find({
     user: userId,
-    status: { $in: ["payment_review", "paid", "shipped", "completed"] },
+    $or: [
+      { status: { $in: ["payment_review", "paid", "shipped", "completed"] } },
+      // Ödemesi alınıp iptal edilen siparişler de görünür (iade bilgisiyle).
+      { status: "cancelled", paymentReceivedAt: { $ne: null } },
+    ],
   })
-    .select(CUSTOMER_HIDDEN_FIELDS)
+    .select(`${CUSTOMER_HIDDEN_FIELDS} -refund.note -refund.by -refund.notifyCustomer -cancelledMailSentAt`)
     .sort("-createdAt");
 
   res.json(orders);
@@ -301,6 +383,8 @@ exports.lookupOrder = async (req, res) => {
         price: item.price,
       })),
       totalPrice: order.totalPrice,
+      cancelledAt: order.status === "cancelled" ? order.cancelledAt : null,
+      refundAmount: order.status === "cancelled" ? order.refund?.amount ?? null : null,
       city: order.address?.city || "",
     });
   } catch (err) {

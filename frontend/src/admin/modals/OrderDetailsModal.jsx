@@ -30,6 +30,7 @@ const REASON_LABELS = {
   payment_abandoned: "Ödeme 24 saat içinde tamamlanmadığı için kapatıldı.",
   paid_after_cancel:
     "İptal edilmiş siparişe ödeme geldi; PayTR panelinden kontrol edip tamamlayın ya da iade edin.",
+  admin_cancelled: "Yönetici iptal etti (iade kaydı girildi).",
   coupon_session_replaced:
     "Müşteri aynı kuponla yeni bir ödeme başlattığı için bu oturum kapatıldı.",
 };
@@ -248,6 +249,17 @@ export default function OrderDetailsModal({
       { label: "Kargoya Verilme", value: fmtDate(order.shippedAt) },
       { label: "Tamamlanma", value: fmtDate(order.deliveredAt) },
       { label: "Kargo Maili", value: fmtDate(order.shippedMailSentAt) },
+      {
+        label: "İade Tutarı",
+        value: order.refund?.at ? fmtPrice(order.refund.amount) : "-",
+      },
+      { label: "İade Kaydı", value: fmtDate(order.refund?.at) },
+      { label: "İade Açıklaması", value: valueOrDash(order.refund?.note) },
+      {
+        label: "Stoğa Geri Eklendi",
+        value: order.refund?.at ? fmtBool(order.refund.restocked) : "-",
+      },
+      { label: "İptal Maili", value: fmtDate(order.cancelledMailSentAt) },
       { label: "Müşteri Mail", value: fmtDate(order.customerMailSentAt) },
       { label: "Admin Mail", value: fmtDate(order.adminMailSentAt) },
       { label: "Order Mail", value: fmtDate(order.orderMailSentAt) },

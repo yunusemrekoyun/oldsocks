@@ -99,6 +99,14 @@ const STATUS_MAIL_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 const STATUS_MAIL = {
   shipped: { status: "shipped", at: "shippedAt", sent: "shippedMailSentAt" },
   delivered: { status: "completed", at: "deliveredAt", sent: "deliveredMailSentAt" },
+  // Yalnız yöneticinin "müşteriye bildir" dediği iptaller; terk edilen ödeme
+  // oturumlarının kapatılması e-posta göndermez.
+  cancelled: {
+    status: "cancelled",
+    at: "cancelledAt",
+    sent: "cancelledMailSentAt",
+    filter: { "refund.notifyCustomer": true },
+  },
 };
 
 async function sendStatusMail(orderId, kind) {
@@ -110,6 +118,7 @@ async function sendStatusMail(orderId, kind) {
       status: spec.status,
       [spec.at]: { $ne: null },
       [spec.sent]: null,
+      ...spec.filter,
       $or: [{ statusMailAttemptAt: null }, { statusMailAttemptAt: { $lt: new Date(now.getTime() - CLAIM_TTL_MS) } }],
     },
     { $set: { statusMailAttemptAt: now } },
@@ -175,6 +184,7 @@ async function sweep() {
       // Bir haftadan eski olanlar için tekrar denenmez.
       [spec.at]: { $gte: new Date(Date.now() - STATUS_MAIL_MAX_AGE_MS), $lt: cutoff },
       [spec.sent]: null,
+      ...spec.filter,
       $or: [{ statusMailAttemptAt: null }, { statusMailAttemptAt: { $lt: new Date(Date.now() - CLAIM_TTL_MS) } }],
     })
       .select("_id")

@@ -22,6 +22,12 @@ router.put(
   allowRoles("admin"),
   orderCtrl.updateOrderStatus
 );
+router.post(
+  "/:id/cancel",
+  verifyToken,
+  allowRoles("admin"),
+  orderCtrl.cancelOrder
+);
 router.put(
   "/:id/tracking",
   verifyToken,

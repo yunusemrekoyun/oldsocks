@@ -879,6 +879,12 @@ const STATUS_MAILS = {
     title: "Siparişiniz Tamamlandı",
     intro: "Siparişiniz tamamlandı. Bizi tercih ettiğiniz için teşekkür ederiz.",
   },
+  cancelled: {
+    subject: (no) => `Siparişiniz iptal edildi: #${no}`,
+    eyebrow: "Sipariş İptali",
+    title: "Siparişiniz İptal Edildi",
+    intro: "Siparişiniz iptal edildi.",
+  },
 };
 
 // Kargo ve teslim bildirimi: yalnız müşteriye. kind: "shipped" | "delivered".
@@ -891,6 +897,10 @@ async function sendOrderStatusMail(order, kind) {
   const carrier = clampText(String(order?.shipping?.carrier || ""), 60);
   const trackingNumber = clampText(String(order?.shipping?.trackingNumber || ""), 60);
   const lines = [template.intro];
+  if (kind === "cancelled" && Number(order?.refund?.amount) > 0) {
+    lines.push(`İade tutarı: ${formatMoney(order.refund.amount)}`);
+    lines.push("İade ödemede kullandığınız karta yapılır. Bankanıza bağlı olarak hesabınıza yansıması birkaç iş günü sürebilir.");
+  }
   if (kind === "shipped") {
     if (carrier) lines.push(`Kargo firması: ${carrier}`);
     if (trackingNumber) {

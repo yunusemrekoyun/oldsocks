@@ -30,6 +30,7 @@ const CARRIERS = [
   "DHL",
   "UPS",
 ];
+const CANCELLABLE = ["payment_review", "paid", "shipped", "completed"];
 const withDrafts = (o) => ({
   ...o,
   selectedStatus: o.status,
@@ -193,11 +194,70 @@ export default function OrdersPage() {
   }, [markSeen]);
 
   const [paidConfirmId, setPaidConfirmId] = useState(null);
+  const [cancelTarget, setCancelTarget] = useState(null);
+  const [cancelForm, setCancelForm] = useState(null);
+  const [cancelling, setCancelling] = useState(false);
+
+  const openCancel = (order) => {
+    setCancelTarget(order);
+    setCancelForm({
+      refundAmount: String(order.totalPrice ?? ""),
+      note: "",
+      restock: Boolean(order.stockUpdated),
+      notifyCustomer: true,
+    });
+  };
+
+  const closeCancel = () => {
+    if (cancelling) return;
+    setCancelTarget(null);
+    setCancelForm(null);
+  };
+
+  const submitCancel = async () => {
+    if (!cancelTarget || !cancelForm) return;
+    const amount = Number(String(cancelForm.refundAmount).replace(",", "."));
+    if (!Number.isFinite(amount) || amount < 0 || amount > Number(cancelTarget.totalPrice || 0)) {
+      setToast({ type: "error", msg: "İade tutarı 0 ile sipariş toplamı arasında olmalı." });
+      return;
+    }
+    if (cancelForm.note.trim().length < 3) {
+      setToast({ type: "error", msg: "İptal / iade açıklaması girin." });
+      return;
+    }
+    setCancelling(true);
+    try {
+      const { data } = await api.post(`/orders/${cancelTarget._id}/cancel`, {
+        refundAmount: amount,
+        note: cancelForm.note.trim(),
+        restock: cancelForm.restock,
+        notifyCustomer: cancelForm.notifyCustomer,
+      });
+      const skipped = data?.skipped || [];
+      setToast({
+        type: skipped.length ? "info" : "success",
+        msg: skipped.length
+          ? `Sipariş iptal edildi. Stoğa eklenemeyen kalem: ${skipped.map((s) => `${s.name} (${s.size || "-"})`).join(", ")}`
+          : "Sipariş iptal edildi.",
+      });
+      setCancelTarget(null);
+      setCancelForm(null);
+      setReloadKey((k) => k + 1);
+    } catch (err) {
+      setToast({ type: "error", msg: err?.response?.data?.message || "Sipariş iptal edilemedi." });
+    } finally {
+      setCancelling(false);
+    }
+  };
 
   // Elle "Ödeme alındı" yapmak stoğu düşer ve geri alınamaz; PayTR kaydı olmadan yapılmamalı.
   const requestStatusUpdate = (id) => {
     const order = orders.find((o) => o._id === id);
     if (!order) return;
+    if (order.selectedStatus === "cancelled" && CANCELLABLE.includes(order.status)) {
+      openCancel(order);
+      return;
+    }
     if (order.selectedStatus === "shipped" && order.carrierDraft.trim().length < 2) {
       setToast({ type: "error", msg: "Kargoya vermek için kargo firmasını girin." });
       return;
@@ -804,6 +864,15 @@ export default function OrdersPage() {
                     </div>
 
                     <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                      {CANCELLABLE.includes(order.status) && (
+                        <button
+                          type="button"
+                          onClick={() => openCancel(order)}
+                          className="rounded-lg border border-red-200 px-4 py-2 text-sm font-medium text-red-700 transition hover:bg-red-50"
+                        >
+                          İptal / İade
+                        </button>
+                      )}
                       <button
                         type="button"
                         onClick={() => openOrderDetails(order._id)}
@@ -880,6 +949,77 @@ export default function OrdersPage() {
           onClose={() => setToast(null)}
         />
       )}
+
+      <ConfirmDialog
+        open={Boolean(cancelTarget && cancelForm)}
+        title={`Sipariş #${cancelTarget?.orderNumber || ""}: iptal / iade`}
+        confirmLabel="Siparişi iptal et"
+        tone="danger"
+        loading={cancelling}
+        onConfirm={submitCancel}
+        onCancel={closeCancel}
+        message={
+          cancelForm && (
+            <div className="space-y-4">
+              <p className="rounded-lg bg-amber-50 px-3 py-2 text-amber-900">
+                Bu işlem parayı iade etmez. İadeyi PayTR panelinden yapın; burada kaydını tutun.
+              </p>
+              <div>
+                <label htmlFor="refund-amount" className="mb-1 block font-medium text-dark1">
+                  İade tutarı (TL)
+                </label>
+                <input
+                  id="refund-amount"
+                  inputMode="decimal"
+                  value={cancelForm.refundAmount}
+                  onChange={(e) => setCancelForm((f) => ({ ...f, refundAmount: e.target.value }))}
+                  className="w-full rounded-lg border border-light2 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-dark1"
+                />
+                <p className="mt-1 text-xs text-dark2">
+                  Sipariş toplamı: {fmtPrice(cancelTarget?.totalPrice)}. Kısmi iade için daha düşük tutar girin.
+                </p>
+              </div>
+              <div>
+                <label htmlFor="refund-note" className="mb-1 block font-medium text-dark1">
+                  Açıklama
+                </label>
+                <textarea
+                  id="refund-note"
+                  rows={2}
+                  maxLength={500}
+                  value={cancelForm.note}
+                  onChange={(e) => setCancelForm((f) => ({ ...f, note: e.target.value }))}
+                  placeholder="Örn. Müşteri cayma hakkını kullandı"
+                  className="w-full rounded-lg border border-light2 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-dark1"
+                />
+                <p className="mt-1 text-xs text-dark2">Yalnız yönetim panelinde görünür.</p>
+              </div>
+              <label className={`flex items-start gap-2 ${cancelTarget?.stockUpdated ? "" : "opacity-60"}`}>
+                <input
+                  type="checkbox"
+                  className="mt-0.5"
+                  checked={cancelForm.restock}
+                  disabled={!cancelTarget?.stockUpdated}
+                  onChange={(e) => setCancelForm((f) => ({ ...f, restock: e.target.checked }))}
+                />
+                <span>
+                  Ürünleri stoğa geri ekle
+                  {!cancelTarget?.stockUpdated && " (bu siparişte stok düşülmemiş)"}
+                </span>
+              </label>
+              <label className="flex items-start gap-2">
+                <input
+                  type="checkbox"
+                  className="mt-0.5"
+                  checked={cancelForm.notifyCustomer}
+                  onChange={(e) => setCancelForm((f) => ({ ...f, notifyCustomer: e.target.checked }))}
+                />
+                <span>Müşteriye iptal e-postası gönder (iade tutarı yazılır)</span>
+              </label>
+            </div>
+          )
+        }
+      />
 
       <ConfirmDialog
         open={Boolean(paidConfirmId)}

@@ -232,6 +232,13 @@ export default function OrdersList() {
                 </div>
               </div>
 
+              {order.status === "cancelled" && Number(order.refund?.amount) > 0 && (
+                <div className="mx-5 mb-4 rounded-xl bg-rose-50 px-4 py-3 text-sm text-rose-900 sm:mx-6">
+                  İade tutarı: <b>{formatTry(order.refund.amount)}</b>. İade ödemede kullandığınız karta yapılır;
+                  bankanıza bağlı olarak birkaç iş günü içinde yansır.
+                </div>
+              )}
+
               {order.shipping?.carrier && ["shipped", "completed"].includes(order.status) && (
                 <div className="mx-5 mb-4 flex flex-wrap items-center gap-x-4 gap-y-1 rounded-xl bg-blue-50 px-4 py-3 text-sm text-blue-900 sm:mx-6">
                   <TruckIcon className="h-5 w-5 shrink-0" />
