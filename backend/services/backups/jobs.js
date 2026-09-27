@@ -12,6 +12,34 @@ const { ensureRepository, restic, withRuntime } = require("./commands");
 const { SETTINGS_SELECT } = require("./googleOAuth");
 const { verifyMediaInStage, verifyMediaTree } = require("./media");
 const { applyCatalog, copyMissingMedia, getSnapshot, impactReport } = require("./restore");
+const { sendAdminAlertMail } = require("../../utils/mailer");
+
+const JOB_LABELS = { backup: "Yedekleme", preview: "Geri dönüş raporu", restore: "Geri dönüş" };
+const STALE_ALERT_AFTER_MS = 26 * 60 * 60 * 1000;
+const ALERT_INTERVAL_MS = 24 * 60 * 60 * 1000;
+
+function alertAdmins(subject, lines) {
+  return sendAdminAlertMail({ subject, lines }).catch((error) =>
+    console.error("Backup alert mail failed:", error?.code || error?.message || "Error")
+  );
+}
+
+// Günlük takvim açıkken son başarılı yedek 26 saatten eskiyse günde en fazla bir uyarı.
+async function alertIfBackupStale() {
+  const settings = await BackupSettings.findOne({ key: "primary" }).select("enabled lastSuccessAt lastAlertAt connectedAt");
+  if (!settings?.enabled) return;
+  const now = Date.now();
+  const lastSuccess = settings.lastSuccessAt?.getTime() || settings.connectedAt?.getTime() || 0;
+  if (!lastSuccess || now - lastSuccess < STALE_ALERT_AFTER_MS) return;
+  if (settings.lastAlertAt && now - settings.lastAlertAt.getTime() < ALERT_INTERVAL_MS) return;
+  await BackupSettings.updateOne({ key: "primary" }, { $set: { lastAlertAt: new Date(now) } });
+  await alertAdmins("Yedek güncel değil", [
+    settings.lastSuccessAt
+      ? `Son başarılı yedek: ${settings.lastSuccessAt.toISOString()}`
+      : "Henüz başarılı bir yedek alınmadı.",
+    "Yönetim panelindeki Yedekler sayfasından durumu kontrol edin.",
+  ]);
+}
 
 const POLL_MS = 60 * 1000;
 const STALE_MS = 2 * 60 * 60 * 1000;
@@ -283,6 +311,7 @@ function startBackupWorker() {
         { $set: { status: "failed", completedAt: new Date(), lockedAt: null, errorCode: "INTERRUPTED_RESTORE" } }
       );
       await queueScheduledBackup();
+      await alertIfBackupStale();
       const job = await claimJob(workerId);
       if (job) {
         const heartbeat = setInterval(() => {
@@ -295,6 +324,12 @@ function startBackupWorker() {
           else if (job.kind === "restore") await runRestore(job);
         } catch (error) {
           console.error("Backup job failed:", error?.code || error?.name || "Error");
+          const errorCode = String(error?.code || "BACKUP_FAILED").slice(0, 80);
+          alertAdmins(`${JOB_LABELS[job.kind] || "Yedek işi"} başarısız oldu`, [
+            `İş: ${job.kind} (${String(job._id)})`,
+            `Hata kodu: ${errorCode}`,
+            "Yönetim panelindeki Yedekler sayfasından ayrıntıya bakın.",
+          ]);
           await Promise.all([
             BackupJob.updateOne(
               { _id: job._id, workerId },
@@ -309,7 +344,7 @@ function startBackupWorker() {
             ),
             ...(job.kind === "backup" ? [BackupSettings.updateOne(
               { key: "primary" },
-              { $set: { lastErrorAt: new Date(), lastError: "Yedekleme başarısız oldu." } }
+              { $set: { lastErrorAt: new Date(), lastError: `Yedekleme başarısız oldu (${String(error?.code || "BACKUP_FAILED").slice(0, 80)}).` } }
             )] : []),
           ]);
         } finally {
@@ -326,4 +361,4 @@ function startBackupWorker() {
   return { async stop() { stopped = true; clearTimeout(timer); await runningPromise; } };
 }
 
-module.exports = { istanbulDateParts, queueBackup, queuePreview, queueRestore, startBackupWorker };
+module.exports = { alertIfBackupStale, istanbulDateParts, queueBackup, queuePreview, queueRestore, startBackupWorker };

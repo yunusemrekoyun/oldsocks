@@ -15,7 +15,8 @@ async function run(binary, args, options = {}) {
   const result = await execFileAsync(binary, args, {
     env: options.env || process.env,
     timeout: options.timeoutMs || 30 * 60 * 1000,
-    maxBuffer: 8 * 1024 * 1024,
+    // restic --json uzun işlerde çok satır üretebilir; tampon dolarsa iş öldürülür.
+    maxBuffer: 64 * 1024 * 1024,
     windowsHide: true,
     cwd: options.cwd,
   });
@@ -79,6 +80,8 @@ async function withRuntime(settings, action) {
       RCLONE_CONFIG: configPath,
       RESTIC_PASSWORD_FILE: passwordPath,
       RESTIC_CACHE_DIR: path.resolve(runtime, "cache"),
+      // --json ilerleme durumunu dakikada bir yazsın (varsayılan saniyede 60).
+      RESTIC_PROGRESS_FPS: "0.016",
     };
     return await action({ env, repository: REPOSITORY, values });
   } finally {

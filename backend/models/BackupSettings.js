@@ -16,6 +16,7 @@ const BackupSettingsSchema = new mongoose.Schema(
     lastSnapshotId: { type: String, default: "" },
     lastErrorAt: { type: Date, default: null },
     lastError: { type: String, default: "" },
+    lastAlertAt: { type: Date, default: null },
   },
   { timestamps: true }
 );

@@ -814,8 +814,31 @@ async function sendNewsletterNewBlog(post, providedFrontendOrigin, pathTemplate 
   });
 }
 
+// Sistem uyarısı (ör. yedek başarısız): yalnız yöneticilere, düz ve kısa.
+async function sendAdminAlertMail({ subject, lines = [] }) {
+  const recipients = getAdminRecipients();
+  if (!recipients.length) return;
+  const safeLines = lines.map((line) => clampText(String(line || ""), 400));
+  const html = baseEmailLayout({
+    preheader: subject,
+    eyebrow: "Oldsocks Sistem Uyarısı",
+    title: subject,
+    subtitle: "Bu e-posta sistem tarafından otomatik gönderildi.",
+    bodyHtml: `<ul style="padding-left:18px;font-size:15px;line-height:1.8;color:#374151;">${safeLines
+      .map((line) => `<li>${escapeHtml(line)}</li>`)
+      .join("")}</ul>`,
+  });
+  await safeSend({
+    to: recipients,
+    subject: sanitizeHeaderValue(subject, 160),
+    html,
+    text: `${subject}\n\n${safeLines.join("\n")}`,
+  });
+}
+
 module.exports = {
   applyOrderMailResult,
+  sendAdminAlertMail,
   getAdminRecipients,
   sendContactMail,
   sendNewsletterNewBlog,
