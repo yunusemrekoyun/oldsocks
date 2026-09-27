@@ -1,5 +1,6 @@
 // src/pages/CheckoutPage.jsx
 import React, { useState, useMemo, useEffect } from "react";
+import { IMaskInput } from "react-imask";
 import { Navigate, useNavigate } from "react-router-dom";
 import { useCart } from "../context/useCart";
 import { useAuth } from "../context/AuthContext";
@@ -7,6 +8,12 @@ import AuthRequiredModal from "../components/auth/AuthRequireModal";
 import ToastAlert from "../components/ui/ToastAlert";
 import api from "../../api";
 import { formatTry } from "../utils/currency";
+
+function getPhoneDigits(value) {
+  return String(value || "")
+    .replace(/\D/g, "")
+    .slice(-10);
+}
 
 export default function CheckoutPage() {
   const {
@@ -36,6 +43,10 @@ export default function CheckoutPage() {
   // kargo state
   const [shipping, setShipping] = useState(null);
   const [shipLoading, setShipLoading] = useState(true);
+  // null: henüz bilinmiyor, "": profilde telefon yok
+  const [profilePhone, setProfilePhone] = useState(null);
+  const [phoneInput, setPhoneInput] = useState("");
+  const [phoneError, setPhoneError] = useState("");
 
   // ürün ara toplamı
   const subTotal = useMemo(
@@ -172,6 +183,23 @@ export default function CheckoutPage() {
     };
   }, [addressReloadKey]);
 
+  useEffect(() => {
+    if (!isLoggedIn) return undefined;
+    let alive = true;
+    api
+      .get("/users/me")
+      .then(({ data }) => {
+        if (alive) setProfilePhone(String(data?.phone || ""));
+      })
+      .catch(() => {
+        // Bilinmiyorsa alanı gösterme; sunucu eksik bilgiyi zaten bildirir.
+        if (alive) setProfilePhone(null);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [isLoggedIn]);
+
   if (authLoading) return <div className="p-4">Yükleniyor…</div>;
 
   if (!isLoggedIn) {
@@ -226,8 +254,25 @@ export default function CheckoutPage() {
       setToast({ type: "error", msg: "Lütfen bir adres seçin." });
       return;
     }
+    const needsPhone = profilePhone === "";
+    if (needsPhone && getPhoneDigits(phoneInput).length !== 10) {
+      setPhoneError("Telefon numarasını 10 haneli girin.");
+      return;
+    }
     setLoading(true);
     try {
+      if (needsPhone) {
+        const phone = `+90${getPhoneDigits(phoneInput)}`;
+        try {
+          await api.put("/users/me", { phone });
+        } catch (err) {
+          setPhoneError(err.response?.data?.message || "Telefon kaydedilemedi.");
+          return;
+        }
+        setProfilePhone(phone);
+        setPhoneError("");
+      }
+
       const { data } = await api.post("/payment/start", {
         cartItems: items,
         addressId: selectedAddress,
@@ -429,6 +474,44 @@ export default function CheckoutPage() {
               </p>
             )}
             {pricingError && <p className="text-red-600">{pricingError}</p>}
+          </div>
+        )}
+
+        {profilePhone === "" && (
+          <div className="mt-6">
+            <label htmlFor="checkout-phone" className="block text-sm mb-1">
+              Telefon
+            </label>
+            <div
+              className={[
+                "flex items-center overflow-hidden rounded transition",
+                phoneError ? "border border-red-500 bg-red-50" : "border border-light2",
+              ].join(" ")}
+            >
+              <span className="px-3 py-2 bg-light1 text-dark2 border-r border-light2">
+                +90
+              </span>
+              <IMaskInput
+                id="checkout-phone"
+                mask="500 000 00 00"
+                definitions={{ 0: /[0-9]/ }}
+                value={phoneInput}
+                onAccept={(value) => {
+                  setPhoneInput(value);
+                  if (phoneError) setPhoneError("");
+                }}
+                unmask={false}
+                inputMode="tel"
+                autoComplete="tel-national"
+                placeholder="5__ ___ __ __"
+                aria-invalid={Boolean(phoneError)}
+                aria-describedby="checkout-phone-help"
+                className="w-full px-3 py-2 bg-white outline-none"
+              />
+            </div>
+            <p id="checkout-phone-help" className={`mt-1 text-xs ${phoneError ? "text-red-600" : "text-dark2"}`}>
+              {phoneError || "Kargo ve ödeme için gerekli; hesabınıza kaydedilir."}
+            </p>
           </div>
         )}
 
