@@ -6,8 +6,22 @@ const {
   StockUnavailableError,
   OrderPaymentStateError,
 } = require("../utils/updateStock");
-const { queueOrderMails } = require("../services/orderMailQueue");
+const { queueOrderMails, queueStatusMail } = require("../services/orderMailQueue");
 const { recordCouponUsageForOrder } = require("../utils/couponUsageService");
+const { normalizeEmailAddress } = require("../utils/email");
+
+// Kargo firması zorunlu, takip numarası isteğe bağlı.
+function parseTracking(body) {
+  const carrier = String(body?.carrier ?? "").trim().replace(/\s+/g, " ");
+  const trackingNumber = String(body?.trackingNumber ?? "").trim().replace(/\s+/g, "");
+  if (carrier.length < 2 || carrier.length > 60) {
+    return { error: "Kargo firmasını girin." };
+  }
+  if (trackingNumber.length > 60 || (trackingNumber && !/^[A-Za-z0-9-]+$/.test(trackingNumber))) {
+    return { error: "Takip numarası yalnız harf, rakam ve tire içerebilir (en fazla 60 karakter)." };
+  }
+  return { carrier, trackingNumber: trackingNumber || null };
+}
 
 async function persistCouponUsage(order) {
   try {
@@ -128,10 +142,17 @@ exports.updateOrderStatus = async (req, res) => {
       return res.status(400).json({ message: "Geçersiz status değeri." });
     }
 
+    let tracking = null;
+    if (status === "shipped") {
+      tracking = parseTracking(req.body);
+      if (tracking.error) return res.status(400).json({ message: tracking.error });
+    }
+
     let order = await Order.findById(req.params.id);
     if (!order) {
       return res.status(404).json({ message: "Sipariş bulunamadı." });
     }
+    const previousStatus = order.status;
 
     if (status === "payment_review" && order.status !== "payment_review") {
       return res.status(409).json({
@@ -184,10 +205,19 @@ exports.updateOrderStatus = async (req, res) => {
       await persistCouponUsage(order);
     } else {
       order.status = status;
+      if (status === "shipped") {
+        order.shipping.carrier = tracking.carrier;
+        order.shipping.trackingNumber = tracking.trackingNumber;
+        if (!order.shippedAt) order.shippedAt = new Date();
+      }
+      if (status === "completed" && !order.deliveredAt) order.deliveredAt = new Date();
     }
 
     await order.save();
     if (status === "paid") queueOrderMails(order._id);
+    // Her durum e-postası sipariş başına bir kez gider (shippedMailSentAt / deliveredMailSentAt).
+    if (status === "shipped" && previousStatus !== "shipped") queueStatusMail(order._id, "shipped");
+    if (status === "completed" && previousStatus !== "completed") queueStatusMail(order._id, "delivered");
     res.json({ message: "Sipariş durumu güncellendi.", order });
   } catch (err) {
     console.error("updateOrderStatus error:", err);
@@ -197,14 +227,86 @@ exports.updateOrderStatus = async (req, res) => {
   }
 };
 
+// Siparişe kargo bilgisini sonradan düzeltmek için; e-posta göndermez.
+exports.updateOrderTracking = async (req, res) => {
+  try {
+    const tracking = parseTracking(req.body);
+    if (tracking.error) return res.status(400).json({ message: tracking.error });
+    const order = await Order.findOneAndUpdate(
+      { _id: req.params.id, status: { $in: ["shipped", "completed"] } },
+      { $set: { "shipping.carrier": tracking.carrier, "shipping.trackingNumber": tracking.trackingNumber } },
+      { new: true }
+    );
+    if (!order) {
+      return res.status(409).json({ message: "Kargo bilgisi yalnız kargoya verilmiş siparişte düzenlenebilir." });
+    }
+    res.json({ message: "Kargo bilgisi güncellendi.", order });
+  } catch (err) {
+    console.error("updateOrderTracking error:", err);
+    res.status(500).json({ message: "Kargo bilgisi güncellenemedi." });
+  }
+};
+
+const CUSTOMER_HIDDEN_FIELDS =
+  "-paytrInit -iyzInit -mailAttemptAt -statusMailAttemptAt -reviewAlertSentAt -adminSeenAt -customerMailSentAt -adminMailSentAt -orderMailSentAt -shippedMailSentAt -deliveredMailSentAt";
+
 exports.getMyOrders = async (req, res) => {
   const userId = req.user.userId;
   const orders = await Order.find({
     user: userId,
     status: { $in: ["payment_review", "paid", "shipped", "completed"] },
-  }).sort("-createdAt");
+  })
+    .select(CUSTOMER_HIDDEN_FIELDS)
+    .sort("-createdAt");
 
   res.json(orders);
+};
+
+// Misafir ve üye için sipariş sorgulama: sipariş no + e-posta. Yanıt adres ve
+// telefon içermez; eşleşmeyen her durumda aynı mesaj döner.
+exports.lookupOrder = async (req, res) => {
+  const notFound = () =>
+    res.status(404).json({ message: "Sipariş bulunamadı. Sipariş numarasını ve e-posta adresini kontrol edin." });
+  try {
+    const orderNumber = String(req.body?.orderNumber || "").replace(/[\s#]/g, "");
+    const email = normalizeEmailAddress(req.body?.email);
+    if (!/^\d{6,20}$/.test(orderNumber) || !email || email.length > 254) return notFound();
+
+    const order = await Order.findOne({ orderNumber }).populate("user", "email").lean();
+    const ownerEmail = normalizeEmailAddress(order?.guest?.email || order?.user?.email || "");
+    const visible =
+      order &&
+      order.status !== "pending" &&
+      (order.status !== "cancelled" || order.paymentReceivedAt);
+    if (!visible || ownerEmail !== email) return notFound();
+
+    res.set("Cache-Control", "private, no-store");
+    res.json({
+      orderNumber: order.orderNumber,
+      status: order.status,
+      createdAt: order.createdAt,
+      paymentReceivedAt: order.paymentReceivedAt,
+      shippedAt: order.shippedAt,
+      deliveredAt: order.deliveredAt,
+      shipping: {
+        name: order.shipping?.name || null,
+        carrier: order.shipping?.carrier || null,
+        trackingNumber: order.shipping?.trackingNumber || null,
+      },
+      items: (order.items || []).map((item) => ({
+        name: item.name,
+        size: item.size || "",
+        color: item.color || "",
+        qty: item.qty,
+        price: item.price,
+      })),
+      totalPrice: order.totalPrice,
+      city: order.address?.city || "",
+    });
+  } catch (err) {
+    console.error("lookupOrder error:", err);
+    res.status(500).json({ message: "Sipariş sorgulanamadı." });
+  }
 };
 
 exports.getOrderById = async (req, res) => {

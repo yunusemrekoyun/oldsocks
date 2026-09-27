@@ -19,6 +19,26 @@ import ConfirmDialog from "../../components/ui/ConfirmDialog";
 import OrderDetailsModal from "../modals/OrderDetailsModal";
 
 const PAGE_SIZE = 20;
+const CARRIERS = [
+  "Yurtiçi Kargo",
+  "Aras Kargo",
+  "MNG Kargo",
+  "PTT Kargo",
+  "Sürat Kargo",
+  "HepsiJet",
+  "Kolay Gelsin",
+  "DHL",
+  "UPS",
+];
+const withDrafts = (o) => ({
+  ...o,
+  selectedStatus: o.status,
+  carrierDraft: o.shipping?.carrier || "",
+  trackingDraft: o.shipping?.trackingNumber || "",
+});
+const trackingChanged = (o) =>
+  o.carrierDraft.trim() !== (o.shipping?.carrier || "") ||
+  o.trackingDraft.replace(/\s+/g, "") !== (o.shipping?.trackingNumber || "");
 
 const STATUS_LABELS = {
   pending: "Sipariş oluşturuldu",
@@ -103,7 +123,7 @@ export default function OrdersPage() {
       })
       .then(({ data }) => {
         if (!alive) return;
-        setOrders(data.items.map((o) => ({ ...o, selectedStatus: o.status })));
+        setOrders(data.items.map(withDrafts));
         setTotal(data.total);
         setCounts({ pending: data.pendingCount, active: data.activeCount });
       })
@@ -130,6 +150,34 @@ export default function OrdersPage() {
     );
   };
 
+  const handleDraftChange = (id, field, value) => {
+    setOrders((prev) => prev.map((o) => (o._id === id ? { ...o, [field]: value } : o)));
+  };
+
+  // Kargoya verilmiş siparişin firma / takip numarası düzeltmesi (müşteriye e-posta gitmez).
+  const saveTracking = async (id) => {
+    const order = orders.find((o) => o._id === id);
+    if (!order) return;
+    setUpdatingId(id);
+    try {
+      const { data } = await api.put(`/orders/${id}/tracking`, {
+        carrier: order.carrierDraft,
+        trackingNumber: order.trackingDraft,
+      });
+      setOrders((prev) =>
+        prev.map((o) => (o._id === id ? withDrafts({ ...o, ...data.order, editingTracking: false }) : o))
+      );
+      setToast({ type: "success", msg: "Kargo bilgisi güncellendi." });
+    } catch (err) {
+      setToast({
+        type: "error",
+        msg: err?.response?.data?.message || "Kargo bilgisi güncellenemedi.",
+      });
+    } finally {
+      setUpdatingId(null);
+    }
+  };
+
   useEffect(() => {
     return () => {
       mountedRef.current = false;
@@ -150,6 +198,10 @@ export default function OrdersPage() {
   const requestStatusUpdate = (id) => {
     const order = orders.find((o) => o._id === id);
     if (!order) return;
+    if (order.selectedStatus === "shipped" && order.carrierDraft.trim().length < 2) {
+      setToast({ type: "error", msg: "Kargoya vermek için kargo firmasını girin." });
+      return;
+    }
     if (order.selectedStatus === "paid" && order.status !== "paid") {
       setPaidConfirmId(id);
       return;
@@ -162,10 +214,15 @@ export default function OrdersPage() {
     if (!order) return;
     setUpdatingId(id);
     try {
-      await api.put(`/orders/${id}/status`, { status: order.selectedStatus });
+      const payload = { status: order.selectedStatus };
+      if (order.selectedStatus === "shipped") {
+        payload.carrier = order.carrierDraft;
+        payload.trackingNumber = order.trackingDraft;
+      }
+      const { data } = await api.put(`/orders/${id}/status`, payload);
       setOrders((prev) =>
         prev.map((o) =>
-          o._id === id ? { ...o, status: order.selectedStatus } : o
+          o._id === id ? withDrafts({ ...o, ...(data?.order || {}), status: order.selectedStatus }) : o
         )
       );
       // Bekleyen → ödendi gibi geçişlerde liste ve sayılar değişir.
@@ -406,7 +463,13 @@ export default function OrdersPage() {
             const pricingShippingFee = Number(
               order.pricing?.shippingFee ?? order.shipping?.fee ?? 0
             );
-            const changed = order.selectedStatus !== order.status;
+            const statusChanged = order.selectedStatus !== order.status;
+            const hasShipment = !statusChanged && ["shipped", "completed"].includes(order.status);
+            const showTracking =
+              (statusChanged && order.selectedStatus === "shipped") ||
+              (hasShipment && order.editingTracking);
+            const trackingDirty = hasShipment && order.editingTracking && trackingChanged(order);
+            const changed = statusChanged || trackingDirty;
             const statusClass =
               STATUS_STYLES[order.status] || "bg-light1 text-dark1";
             const selectedClass =
@@ -603,6 +666,81 @@ export default function OrdersPage() {
                     </div>
                   )}
 
+                  {hasShipment && !order.editingTracking && (
+                    <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-dark2">
+                      <FaTruck className="text-indigo-700" />
+                      {order.shipping?.carrier ? (
+                        <span>
+                          <b className="text-dark1">{order.shipping.carrier}</b>
+                          {order.shipping.trackingNumber ? ` · ${order.shipping.trackingNumber}` : " · takip no yok"}
+                        </span>
+                      ) : (
+                        <span>Kargo bilgisi girilmemiş.</span>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => handleDraftChange(order._id, "editingTracking", true)}
+                        className="font-medium text-dark1 underline underline-offset-2 hover:text-dark2"
+                      >
+                        {order.shipping?.carrier ? "Düzenle" : "Kargo bilgisi ekle"}
+                      </button>
+                    </div>
+                  )}
+
+                  {showTracking && (
+                    <div className="mt-4 grid gap-3 rounded-xl border border-indigo-100 bg-indigo-50/40 p-3 sm:grid-cols-2">
+                      <div>
+                        <label htmlFor={`carrier-${order._id}`} className="mb-1 block text-xs font-medium text-dark2">
+                          Kargo firması
+                        </label>
+                        <input
+                          id={`carrier-${order._id}`}
+                          list="kargo-firmalari"
+                          value={order.carrierDraft}
+                          onChange={(e) => handleDraftChange(order._id, "carrierDraft", e.target.value)}
+                          maxLength={60}
+                          placeholder="Örn. Yurtiçi Kargo"
+                          className="w-full rounded-lg border border-light2 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-dark1"
+                        />
+                      </div>
+                      <div>
+                        <label htmlFor={`tracking-${order._id}`} className="mb-1 block text-xs font-medium text-dark2">
+                          Takip numarası
+                        </label>
+                        <input
+                          id={`tracking-${order._id}`}
+                          value={order.trackingDraft}
+                          onChange={(e) => handleDraftChange(order._id, "trackingDraft", e.target.value)}
+                          maxLength={60}
+                          placeholder="Kargo fişindeki numara"
+                          className="w-full rounded-lg border border-light2 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-dark1"
+                        />
+                      </div>
+                      {statusChanged ? (
+                        <p className="text-xs text-dark2 sm:col-span-2">
+                          Kaydedince müşteriye kargo firması ve takip numarasıyla e-posta gider.
+                        </p>
+                      ) : (
+                        <p className="flex items-center justify-between gap-3 text-xs text-dark2 sm:col-span-2">
+                          <span>Düzeltme müşteriye e-posta göndermez.</span>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setOrders((prev) =>
+                                prev.map((o) =>
+                                  o._id === order._id ? withDrafts({ ...o, editingTracking: false }) : o
+                                )
+                              )
+                            }
+                            className="font-medium text-dark1 underline underline-offset-2"
+                          >
+                            Vazgeç
+                          </button>
+                        </p>
+                      )}
+                    </div>
+                  )}
+
                   {/* Alt satır: durum değiştir + kaydet */}
                   <div className="mt-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                     <div className="flex items-center gap-2">
@@ -679,13 +817,17 @@ export default function OrdersPage() {
 
                       {changed ? (
                         <button
-                          onClick={() => requestStatusUpdate(order._id)}
+                          onClick={() =>
+                            statusChanged ? requestStatusUpdate(order._id) : saveTracking(order._id)
+                          }
                           disabled={updatingId === order._id}
                           className="px-4 py-2 rounded-lg bg-dark1 text-white hover:bg-dark2 transition disabled:opacity-60 w-full sm:w-auto"
                         >
                           {updatingId === order._id
                             ? "Kaydediliyor..."
-                            : "Güncelle"}
+                            : statusChanged
+                              ? "Güncelle"
+                              : "Kargo bilgisini kaydet"}
                         </button>
                       ) : (
                         <span className="text-xs text-dark2">
@@ -724,6 +866,12 @@ export default function OrdersPage() {
           </button>
         </nav>
       )}
+
+      <datalist id="kargo-firmalari">
+        {CARRIERS.map((name) => (
+          <option key={name} value={name} />
+        ))}
+      </datalist>
 
       {toast && (
         <ToastAlert

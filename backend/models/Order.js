@@ -55,7 +55,16 @@ const OrderSchema = new mongoose.Schema(
     shipping: {
       name: { type: String, default: null },
       fee: { type: Number, default: 0 },
+      carrier: { type: String, default: null, trim: true, maxlength: 60 },
+      trackingNumber: { type: String, default: null, trim: true, maxlength: 60 },
     },
+    // Yönetici "Kargoya verildi" / "Tamamlandı" işaretlediği an. Bu alanlar yalnız
+    // yeni akışla dolar; eski siparişlere geriye dönük e-posta gitmez.
+    shippedAt: { type: Date, default: null },
+    deliveredAt: { type: Date, default: null },
+    shippedMailSentAt: { type: Date, default: null },
+    deliveredMailSentAt: { type: Date, default: null },
+    statusMailAttemptAt: { type: Date, default: null },
 
     campaign: {
       campaignId: { type: mongoose.Types.ObjectId, ref: "CartCampaign", default: null },

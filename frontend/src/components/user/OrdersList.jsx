@@ -232,6 +232,25 @@ export default function OrdersList() {
                 </div>
               </div>
 
+              {order.shipping?.carrier && ["shipped", "completed"].includes(order.status) && (
+                <div className="mx-5 mb-4 flex flex-wrap items-center gap-x-4 gap-y-1 rounded-xl bg-blue-50 px-4 py-3 text-sm text-blue-900 sm:mx-6">
+                  <TruckIcon className="h-5 w-5 shrink-0" />
+                  <span>
+                    Kargo firması: <b>{order.shipping.carrier}</b>
+                  </span>
+                  {order.shipping.trackingNumber && (
+                    <span>
+                      Takip no: <b className="select-all tracking-wide">{order.shipping.trackingNumber}</b>
+                    </span>
+                  )}
+                  {order.shippedAt && (
+                    <span className="text-blue-800/80">
+                      {new Date(order.shippedAt).toLocaleDateString("tr-TR")} tarihinde kargoya verildi
+                    </span>
+                  )}
+                </div>
+              )}
+
               {/* Ayracı */}
               <div className="border-t border-gray-100" />
 

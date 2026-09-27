@@ -27,6 +27,7 @@ const PaymentResultPage = lazy(() => import("./pages/PaymentResultPage"));
 const NotFoundPage = lazy(() => import("./pages/NotFoundPage"));
 const PaymentPage = lazy(() => import("./pages/PaymentPage"));
 const ResetPasswordPage = lazy(() => import("./pages/ResetPasswordPage"));
+const OrderTrackingPage = lazy(() => import("./pages/OrderTrackingPage"));
 const AgreementPage = lazy(() => import("./pages/AgreementPage"));
 const KvkkPage = lazy(() => import("./pages/KvkkPage"));
 const CookiePolicyPage = lazy(() => import("./pages/CookiePolicyPage"));
@@ -94,6 +95,7 @@ export default function App() {
             <Route path="/payment-result" element={<PaymentResultPage />} />
             <Route path="/auth" element={<AuthPage />} />
             <Route path="/reset-password" element={<ResetPasswordPage />} />
+            <Route path="/siparis-takip" element={<OrderTrackingPage />} />
             <Route path="/profile" element={<AuthPage />} />
             <Route path="*" element={<NotFoundPage />} />
           </Route>

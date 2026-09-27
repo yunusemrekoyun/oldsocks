@@ -5,7 +5,7 @@
 // sayfası) engellenir.
 const Order = require("../models/Order");
 const { dispatchOrderPlacedMail } = require("../utils/orderMailDispatch");
-const { sendAdminAlertMail } = require("../utils/mailer");
+const { sendAdminAlertMail, sendOrderStatusMail } = require("../utils/mailer");
 
 const PAID_STATUSES = ["paid", "shipped", "completed"];
 const CLAIM_TTL_MS = 5 * 60 * 1000;
@@ -93,6 +93,51 @@ function queuePaymentReviewAlert(orderId) {
   });
 }
 
+// Kargo ve teslim e-postaları. Durum hâlâ aynıysa ve e-posta gitmediyse gönderilir;
+// yönetici durumu geri aldıysa gönderilmez.
+const STATUS_MAIL_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+const STATUS_MAIL = {
+  shipped: { status: "shipped", at: "shippedAt", sent: "shippedMailSentAt" },
+  delivered: { status: "completed", at: "deliveredAt", sent: "deliveredMailSentAt" },
+};
+
+async function sendStatusMail(orderId, kind) {
+  const spec = STATUS_MAIL[kind];
+  const now = new Date();
+  const order = await Order.findOneAndUpdate(
+    {
+      _id: orderId,
+      status: spec.status,
+      [spec.at]: { $ne: null },
+      [spec.sent]: null,
+      $or: [{ statusMailAttemptAt: null }, { statusMailAttemptAt: { $lt: new Date(now.getTime() - CLAIM_TTL_MS) } }],
+    },
+    { $set: { statusMailAttemptAt: now } },
+    { new: true }
+  );
+  if (!order) return false;
+  let sent = false;
+  try {
+    await sendOrderStatusMail(order, kind);
+    sent = true;
+  } catch (error) {
+    console.warn(`[order-mail] ${kind} e-postası gönderilemedi:`, error?.message || error);
+  }
+  await Order.updateOne(
+    { _id: order._id },
+    { $set: { statusMailAttemptAt: null, ...(sent ? { [spec.sent]: new Date() } : {}) } }
+  );
+  return sent;
+}
+
+function queueStatusMail(orderId, kind) {
+  setImmediate(() => {
+    sendStatusMail(orderId, kind).catch((error) =>
+      console.error("[order-mail] durum e-postası kuyruk hatası:", error?.message || error)
+    );
+  });
+}
+
 // 24 saati geçen ödenmemiş siparişler terk edilmiş sayılır ve kapatılır. Sonradan
 // ödeme gelirse PayTR bildirimi siparişi incelemeye alır, yönetici uyarılır.
 const ABANDON_AFTER_MS = 24 * 60 * 60 * 1000;
@@ -123,6 +168,20 @@ async function sweep() {
     .limit(20)
     .lean();
   for (const { _id } of reviews) await alertPaymentReview(_id).catch(() => {});
+
+  for (const [kind, spec] of Object.entries(STATUS_MAIL)) {
+    const due = await Order.find({
+      status: spec.status,
+      // Bir haftadan eski olanlar için tekrar denenmez.
+      [spec.at]: { $gte: new Date(Date.now() - STATUS_MAIL_MAX_AGE_MS), $lt: cutoff },
+      [spec.sent]: null,
+      $or: [{ statusMailAttemptAt: null }, { statusMailAttemptAt: { $lt: new Date(Date.now() - CLAIM_TTL_MS) } }],
+    })
+      .select("_id")
+      .limit(20)
+      .lean();
+    for (const { _id } of due) await sendStatusMail(_id, kind);
+  }
 }
 
 function startOrderMailSweeper() {
@@ -142,4 +201,11 @@ function startOrderMailSweeper() {
   return { stop() { stopped = true; clearTimeout(timer); } };
 }
 
-module.exports = { queueOrderMails, queuePaymentReviewAlert, sendOrderMails, startOrderMailSweeper };
+module.exports = {
+  queueOrderMails,
+  queuePaymentReviewAlert,
+  queueStatusMail,
+  sendOrderMails,
+  sendStatusMail,
+  startOrderMailSweeper,
+};

@@ -22,6 +22,12 @@ router.put(
   allowRoles("admin"),
   orderCtrl.updateOrderStatus
 );
+router.put(
+  "/:id/tracking",
+  verifyToken,
+  allowRoles("admin"),
+  orderCtrl.updateOrderTracking
+);
 router.get(
   "/unseen-count",
   verifyToken,
@@ -37,6 +43,17 @@ router.put(
 // Tüm endpoint’ler korumalı
 
 router.post("/confirm", confirmLimiter, orderCtrl.confirmOrderPayment);
+
+// Sipariş takibi: sipariş no + e-posta. Tahmin denemelerine karşı sıkı sınır.
+const lookupLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => ipKeyGenerator(req.ip),
+  message: { message: "Çok fazla deneme yapıldı. Lütfen 15 dakika sonra tekrar deneyin." },
+});
+router.post("/lookup", lookupLimiter, orderCtrl.lookupOrder);
 
 // Tüm kalan endpoint’ler korumalı
 router.use(verifyToken);

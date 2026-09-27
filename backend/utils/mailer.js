@@ -352,7 +352,9 @@ function buildOrderCustomerHtml(order, context) {
   const bodyHtml = `
     <p style="margin:0 0 20px;font-size:15px;line-height:1.8;color:#374151;">
       Merhaba <strong>${escapeHtml(context.customerName)}</strong>, siparişiniz başarıyla alındı.
-      Hazırlık süreci başladığında ve kargoya verildiğinde sizi ayrıca bilgilendireceğiz.
+      Kargoya verildiğinde takip numarasıyla birlikte ayrıca bilgilendireceğiz.
+      Siparişinizin durumunu <a href="${escapeHtml(orderTrackingLink())}" style="color:#111827;">sipariş takip sayfasından</a>
+      sipariş numaranız ve e-posta adresinizle sorgulayabilirsiniz.
     </p>
 
     <table role="presentation" cellspacing="0" cellpadding="0" style="width:100%;margin-bottom:18px;">
@@ -404,6 +406,8 @@ function buildOrderCustomerText(order, context) {
     "",
     `Merhaba ${context.customerName},`,
     `Siparişiniz başarıyla alındı.`,
+    `Kargoya verildiğinde takip numarasıyla birlikte ayrıca bilgilendireceğiz.`,
+    `Sipariş takibi: ${orderTrackingLink()}`,
     "",
     `Sipariş No: #${context.orderNumber}`,
     `Sipariş Tarihi: ${context.createdAtText}`,
@@ -858,8 +862,73 @@ async function sendAdminAlertMail({ subject, lines = [] }) {
   });
 }
 
+function orderTrackingLink() {
+  return `${frontendOrigin}/siparis-takip`;
+}
+
+const STATUS_MAILS = {
+  shipped: {
+    subject: (no) => `Siparişiniz kargoya verildi: #${no}`,
+    eyebrow: "Kargo Bilgisi",
+    title: "Siparişiniz Kargoya Verildi",
+    intro: "Siparişiniz kargoya teslim edildi.",
+  },
+  delivered: {
+    subject: (no) => `Siparişiniz tamamlandı: #${no}`,
+    eyebrow: "Sipariş Tamamlandı",
+    title: "Siparişiniz Tamamlandı",
+    intro: "Siparişiniz tamamlandı. Bizi tercih ettiğiniz için teşekkür ederiz.",
+  },
+};
+
+// Kargo ve teslim bildirimi: yalnız müşteriye. kind: "shipped" | "delivered".
+async function sendOrderStatusMail(order, kind) {
+  const template = STATUS_MAILS[kind];
+  if (!template) throw new Error(`Bilinmeyen durum e-postası: ${kind}`);
+  const context = await resolveOrderContext(order);
+  if (!isValidEmailAddress(context.customerEmail)) return false;
+
+  const carrier = clampText(String(order?.shipping?.carrier || ""), 60);
+  const trackingNumber = clampText(String(order?.shipping?.trackingNumber || ""), 60);
+  const lines = [template.intro];
+  if (kind === "shipped") {
+    if (carrier) lines.push(`Kargo firması: ${carrier}`);
+    if (trackingNumber) {
+      lines.push(`Takip numarası: ${trackingNumber}`);
+      lines.push(`Gönderinizi ${carrier || "kargo firmasının"} sitesinden bu numarayla sorgulayabilirsiniz.`);
+    }
+  }
+  const trackingLine = `Sipariş durumunu ${orderTrackingLink()} adresinden de görebilirsiniz.`;
+
+  const html = baseEmailLayout({
+    preheader: template.subject(context.orderNumber),
+    eyebrow: template.eyebrow,
+    title: template.title,
+    subtitle: `Sipariş numaranız #${context.orderNumber}.`,
+    bodyHtml: `
+      <p style="margin:0 0 16px;font-size:15px;line-height:1.8;color:#374151;">
+        Merhaba <strong>${escapeHtml(context.customerName)}</strong>,
+      </p>
+      <div style="font-size:15px;line-height:1.8;color:#374151;">${lines
+        .map((line) => `<p style="margin:0 0 8px;">${escapeHtml(line)}</p>`)
+        .join("")}
+        <p style="margin:0 0 8px;">Sipariş durumunu <a href="${escapeHtml(orderTrackingLink())}" style="color:#111827;">sipariş takip sayfasından</a> da görebilirsiniz.</p>
+      </div>
+      <div style="margin:24px 0 14px;font-size:13px;letter-spacing:0.18em;text-transform:uppercase;color:#6b7280;">Sipariş İçeriği</div>
+      ${buildItemsTable(order)}`,
+  });
+  await safeSend({
+    to: context.customerEmail,
+    subject: sanitizeHeaderValue(template.subject(context.orderNumber), 160),
+    html,
+    text: [`Merhaba ${context.customerName},`, "", ...lines, trackingLine].join("\n"),
+  });
+  return true;
+}
+
 module.exports = {
   applyOrderMailResult,
+  sendOrderStatusMail,
   sendAccountNoticeMail,
   sendAdminAlertMail,
   getAdminRecipients,

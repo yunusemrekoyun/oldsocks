@@ -3,6 +3,7 @@
 import React, { useEffect, useState, useRef } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import { useCart } from "../context/useCart";
+import { useAuth } from "../context/AuthContext";
 import api from "../../api";
 import {
   CheckCircleIcon,
@@ -31,6 +32,7 @@ export default function PaymentResultPage() {
   const [loaded, setLoaded] = useState(false);
   const [message, setMessage] = useState("");
   const [orderNumber, setOrderNumber] = useState("");
+  const { isLoggedIn } = useAuth();
   const [reviewing, setReviewing] = useState(false);
 
   // guard & timers
@@ -248,10 +250,14 @@ export default function PaymentResultPage() {
           </button>
           {isSuccess && (
             <button
-              onClick={() => navigate("/profile", { state: { tab: "orders" } })}
+              onClick={() =>
+                isLoggedIn
+                  ? navigate("/profile", { state: { tab: "orders" } })
+                  : navigate("/siparis-takip")
+              }
               className="flex-1 py-3 border border-gray-300 rounded-lg shadow-sm hover:bg-gray-50 transition"
             >
-              Siparişlerim
+              {isLoggedIn ? "Siparişlerim" : "Sipariş Takibi"}
             </button>
           )}
         </div>
