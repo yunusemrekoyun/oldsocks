@@ -158,6 +158,7 @@ const ContactPage = () => {
             />
             <ContactInfo
               Icon={FaEnvelope}
+              keepCase
               title={siteContent?.contact?.email ?? "oldscks@gmail.com"}
               subtitle="Dilediğiniz zaman bize ulaşabilirsiniz"
             />
