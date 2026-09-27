@@ -37,6 +37,10 @@ const OrderSchema = new mongoose.Schema(
     items: { type: [OrderItemSchema], required: true },
     totalPrice: { type: Number, required: true },
     orderMailSentAt: { type: Date, default: null },
+    // Arka plan gönderiminin sahiplik işareti (aynı sipariş için çift e-postayı önler).
+    mailAttemptAt: { type: Date, default: null },
+    // payment_review uyarısı yöneticiye gönderildi mi.
+    reviewAlertSentAt: { type: Date, default: null },
     customerMailSentAt: { type: Date, default: null },
     adminMailSentAt: { type: Date, default: null },
     address: {

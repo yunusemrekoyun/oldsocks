@@ -21,6 +21,7 @@ const {
   initializeMediaStorage,
 } = require("./services/media/storage");
 const { startMediaWorker } = require("./services/media/worker");
+const { startOrderMailSweeper } = require("./services/orderMailQueue");
 
 const app = express();
 
@@ -290,6 +291,7 @@ app.use((err, req, res, next) => {
 const PORT = process.env.PORT || 5000;
 let server;
 let mediaWorker;
+let orderMailSweeper;
 
 const inlineWorkerConfigured = String(process.env.MEDIA_INLINE_WORKER || "").trim();
 const inlineWorkerEnabled = inlineWorkerConfigured
@@ -299,6 +301,7 @@ const inlineWorkerEnabled = inlineWorkerConfigured
 Promise.all([databaseReady, mediaStorageReady])
   .then(() => {
     if (inlineWorkerEnabled) mediaWorker = startMediaWorker();
+    orderMailSweeper = startOrderMailSweeper();
     // Üretimde yalnız Nginx'in eriştiği yerel adreste dinle; güvenlik duvarı tek katman kalmasın.
     const HOST = process.env.HOST || (process.env.NODE_ENV === "production" ? "127.0.0.1" : undefined);
     server = app.listen(PORT, HOST, () => {
@@ -319,6 +322,7 @@ Promise.all([databaseReady, mediaStorageReady])
 
 /* 15) Graceful shutdown */
 function shutdown(signal) {
+  orderMailSweeper?.stop();
   console.log(`\n${signal} alındı. Kapanıyor...`);
   if (!server) {
     Promise.resolve(mediaWorker?.stop())

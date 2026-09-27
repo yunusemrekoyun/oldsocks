@@ -4,7 +4,7 @@ const { getClientIp } = require("../utils/clientIp");
 const { v4: uuidv4 } = require("uuid");
 const User = require("../models/User");
 const Order = require("../models/Order");
-const { dispatchOrderPlacedMail } = require("../utils/orderMailDispatch");
+const { queueOrderMails, queuePaymentReviewAlert } = require("../services/orderMailQueue");
 const {
   finalizeOrderPayment,
   StockUnavailableError,
@@ -725,17 +725,8 @@ exports.mockComplete = async (req, res) => {
     }
 
     await persistCouponUsage(order, "mock-complete");
-
-    // Opsiyonel: mock akışında mail de gönder (dev/test için faydalı)
-    if (!order.customerMailSentAt || !order.adminMailSentAt) {
-      try {
-        await dispatchOrderPlacedMail(order);
-      } catch (e) {
-        console.warn("[PAYMENT][mock-complete] mail error:", e?.message || e);
-      }
-    }
-
     await order.save();
+    queueOrderMails(order._id);
     return res.json({ ok: true });
   } catch (e) {
     console.error("[PAYMENT][mock-complete] Hata:", e);
@@ -801,6 +792,7 @@ exports.paytrCallback = async (req, res) => {
         order.cancelReason = "amount_mismatch_after_payment";
         order.cancelledAt = null;
         await order.save();
+        queuePaymentReviewAlert(order._id);
         return res.send("OK");
       }
 
@@ -819,25 +811,14 @@ exports.paytrCallback = async (req, res) => {
         order.cancelledAt = null;
         order.stockUpdated = false;
         await order.save();
+        queuePaymentReviewAlert(order._id);
         return res.send("OK");
       }
 
       await persistCouponUsage(order, "callback");
-
-      // Mail (tek sefer)
-      if (!order.customerMailSentAt || !order.adminMailSentAt) {
-        try {
-          await dispatchOrderPlacedMail(order);
-        } catch (e) {
-          console.warn(
-            "[PAYTR][callback] order mail send error:",
-            e?.message || e
-          );
-        }
-      }
-
-      // Tek sefer kayıt
       await order.save();
+      // E-posta PayTR'ye yanıt verildikten sonra arka planda gönderilir.
+      queueOrderMails(order._id);
     } else {
       await Order.updateOne(
         { conversationId: merchant_oid, status: "pending" },

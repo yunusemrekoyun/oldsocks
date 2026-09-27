@@ -1,7 +1,8 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const mongoose = require("mongoose");
-const { startTestServer, paytrCallback, postJson } = require("./helpers");
+const crypto = require("node:crypto");
+const { startTestServer, paytrCallback, postJson, mailsTo } = require("./helpers");
 
 let server;
 let Order;
@@ -57,11 +58,11 @@ async function stockOf(productId) {
   return p.sizes[0].stock;
 }
 
-async function startGuestOrder(productId, qty = 1) {
+async function startGuestOrder(productId, qty = 1, guestOverride = {}) {
   const res = await postJson(server.base, "/api/v1/payment/start-guest", {
     cartItems: [{ id: String(productId), size: "M", qty }],
     address,
-    guest,
+    guest: { ...guest, ...guestOverride },
   });
   assert.equal(res.status, 200, JSON.stringify(res.data));
   const order = await Order.findOne({ conversationId: res.data.conversationId });
@@ -180,4 +181,33 @@ test("ürün detayı önbellekten gelir ama ödeme sonrası stok hemen güncelle
 test("geçersiz ürün kimlikleri 500 yerine 404/400 döner", async () => {
   assert.equal((await fetch(`${server.base}/api/v1/products/gecersiz`)).status, 404);
   assert.equal((await fetch(`${server.base}/api/v1/products?varyantsOf=gecersiz`)).status, 400);
+});
+
+
+test("bildirim iki kez gelse ve onay sayfası da tetiklense müşteriye tek e-posta gider", async () => {
+  const email = `tek-eposta-${crypto.randomBytes(4).toString("hex")}@test.local`;
+  const productId = await seedProduct({ stock: 5 });
+  const { conversationId, order } = await startGuestOrder(productId, 1, { email });
+  const totalAmount = Math.round(order.totalPrice * 100);
+  await Promise.all([
+    paytrCallback(server.base, { merchantOid: conversationId, totalAmount }),
+    paytrCallback(server.base, { merchantOid: conversationId, totalAmount }),
+    postJson(server.base, "/api/v1/orders/confirm", { conversationId }),
+  ]);
+  await postJson(server.base, "/api/v1/orders/confirm", { conversationId });
+  await new Promise((r) => setTimeout(r, 1500));
+  const mails = await mailsTo(email);
+  assert.equal(mails.length, 1, `beklenen 1, gelen ${mails.length}`);
+  const saved = await Order.findOne({ conversationId });
+  assert.ok(saved.orderMailSentAt);
+});
+
+test("eksik tutarlı ödemede yöneticiye inceleme uyarısı gider", async () => {
+  const productId = await seedProduct({ stock: 2 });
+  const { conversationId, order } = await startGuestOrder(productId);
+  await paytrCallback(server.base, { merchantOid: conversationId, totalAmount: Math.round(order.totalPrice * 100) - 5 });
+  await new Promise((r) => setTimeout(r, 1000));
+  const alerts = (await mailsTo("yonetici@oldscks.local")).filter((m) => m.Subject.includes(order.orderNumber));
+  assert.equal(alerts.length, 1);
+  assert.match(alerts[0].Subject, /incelemede/);
 });

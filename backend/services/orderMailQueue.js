@@ -1,0 +1,132 @@
+// Sipariş e-postaları istek yolunun dışında gönderilir: PayTR bildirimi e-posta
+// sunucusunu beklemeden "OK" alır. Siparişteki *MailSentAt alanları kalıcı kuyruk
+// görevi görür; gönderilemeyenleri tarayıcı (sweeper) yeniden dener.
+// mailAttemptAt ile aynı sipariş için eşzamanlı iki gönderim (bildirim + sonuç
+// sayfası) engellenir.
+const Order = require("../models/Order");
+const { dispatchOrderPlacedMail } = require("../utils/orderMailDispatch");
+const { sendAdminAlertMail } = require("../utils/mailer");
+
+const PAID_STATUSES = ["paid", "shipped", "completed"];
+const CLAIM_TTL_MS = 5 * 60 * 1000;
+const SWEEP_MS = Number(process.env.ORDER_MAIL_SWEEP_MS || 60 * 1000);
+const SWEEP_GRACE_MS = Number(process.env.ORDER_MAIL_SWEEP_GRACE_MS || 60 * 1000);
+
+async function claim(orderId) {
+  const now = new Date();
+  return Order.findOneAndUpdate(
+    {
+      _id: orderId,
+      status: { $in: PAID_STATUSES },
+      orderMailSentAt: null,
+      $or: [{ mailAttemptAt: null }, { mailAttemptAt: { $lt: new Date(now.getTime() - CLAIM_TTL_MS) } }],
+    },
+    { $set: { mailAttemptAt: now } },
+    { new: true }
+  );
+}
+
+async function sendOrderMails(orderId) {
+  const order = await claim(orderId);
+  if (!order) return false;
+  try {
+    await dispatchOrderPlacedMail(order);
+  } catch (error) {
+    console.warn("[order-mail] gönderilemedi:", error?.message || error);
+  }
+  // Yalnız e-posta alanları yazılır; siparişin diğer alanlarını ezmez.
+  await Order.updateOne(
+    { _id: order._id },
+    {
+      $set: {
+        customerMailSentAt: order.customerMailSentAt || null,
+        adminMailSentAt: order.adminMailSentAt || null,
+        orderMailSentAt: order.orderMailSentAt || null,
+        mailAttemptAt: order.orderMailSentAt ? order.mailAttemptAt : null,
+      },
+    }
+  );
+  return Boolean(order.orderMailSentAt);
+}
+
+function queueOrderMails(orderId) {
+  setImmediate(() => {
+    sendOrderMails(orderId).catch((error) =>
+      console.error("[order-mail] kuyruk hatası:", error?.message || error)
+    );
+  });
+}
+
+// Ödeme alınıp sipariş incelemeye düştüğünde yöneticiye bir kez haber ver.
+async function alertPaymentReview(orderId) {
+  const order = await Order.findOneAndUpdate(
+    { _id: orderId, status: "payment_review", reviewAlertSentAt: null },
+    { $set: { reviewAlertSentAt: new Date() } },
+    { new: true }
+  );
+  if (!order) return;
+  const reasons = {
+    amount_mismatch_after_payment: "PayTR'den gelen tutar sipariş tutarından düşük.",
+    stock_unavailable_after_payment: "Ödeme alındı ama ürün stokta kalmadı.",
+  };
+  try {
+    await sendAdminAlertMail({
+      subject: `Sipariş #${order.orderNumber} incelemede: ödeme alındı`,
+      lines: [
+        reasons[order.cancelReason] || "Ödeme alındı ama sipariş otomatik tamamlanamadı.",
+        `Tutar: ${Number(order.totalPrice || 0).toFixed(2)} TL`,
+        "PayTR panelinden ödemeyi kontrol edip siparişi tamamlayın ya da iade edin.",
+      ],
+    });
+  } catch (error) {
+    await Order.updateOne({ _id: order._id }, { $set: { reviewAlertSentAt: null } });
+    throw error;
+  }
+}
+
+function queuePaymentReviewAlert(orderId) {
+  setImmediate(() => {
+    alertPaymentReview(orderId).catch((error) =>
+      console.error("[order-mail] inceleme uyarısı gönderilemedi:", error?.message || error)
+    );
+  });
+}
+
+async function sweep() {
+  const cutoff = new Date(Date.now() - SWEEP_GRACE_MS);
+  const pending = await Order.find({
+    status: { $in: PAID_STATUSES },
+    orderMailSentAt: null,
+    paymentReceivedAt: { $ne: null, $lt: cutoff },
+    $or: [{ mailAttemptAt: null }, { mailAttemptAt: { $lt: new Date(Date.now() - CLAIM_TTL_MS) } }],
+  })
+    .select("_id")
+    .limit(20)
+    .lean();
+  for (const { _id } of pending) await sendOrderMails(_id);
+
+  const reviews = await Order.find({ status: "payment_review", reviewAlertSentAt: null })
+    .select("_id")
+    .limit(20)
+    .lean();
+  for (const { _id } of reviews) await alertPaymentReview(_id).catch(() => {});
+}
+
+function startOrderMailSweeper() {
+  let stopped = false;
+  let timer;
+  const tick = async () => {
+    if (stopped) return;
+    try {
+      await sweep();
+    } catch (error) {
+      console.error("[order-mail] tarama hatası:", error?.message || error);
+    } finally {
+      if (!stopped) timer = setTimeout(tick, SWEEP_MS);
+    }
+  };
+  timer = setTimeout(tick, SWEEP_MS);
+  return { stop() { stopped = true; clearTimeout(timer); } };
+}
+
+module.exports = { queueOrderMails, queuePaymentReviewAlert, sendOrderMails, startOrderMailSweeper };

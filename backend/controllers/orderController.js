@@ -5,7 +5,7 @@ const {
   StockUnavailableError,
   OrderPaymentStateError,
 } = require("../utils/updateStock");
-const { dispatchOrderPlacedMail } = require("../utils/orderMailDispatch");
+const { queueOrderMails } = require("../services/orderMailQueue");
 const { recordCouponUsageForOrder } = require("../utils/couponUsageService");
 
 async function persistCouponUsage(order) {
@@ -129,19 +129,12 @@ exports.updateOrderStatus = async (req, res) => {
       }
 
       await persistCouponUsage(order);
-
-      if (!order.customerMailSentAt || !order.adminMailSentAt) {
-        try {
-          await dispatchOrderPlacedMail(order);
-        } catch (e) {
-          console.error("[OrderController] Mail gönderilemedi:", e);
-        }
-      }
     } else {
       order.status = status;
     }
 
     await order.save();
+    if (status === "paid") queueOrderMails(order._id);
     res.json({ message: "Sipariş durumu güncellendi.", order });
   } catch (err) {
     console.error("updateOrderStatus error:", err);
@@ -209,16 +202,9 @@ exports.confirmOrderPayment = async (req, res) => {
     return res.status(409).json({ message: "Ödeme henüz onaylanmadı." });
   }
 
-  if (!order.customerMailSentAt || !order.adminMailSentAt) {
-    try {
-      await dispatchOrderPlacedMail(order);
-      await order.save();
-      console.log("[OrderConfirm] Mail gönderildi (safety).");
-    } catch (e) {
-      console.error("[OrderConfirm] Mail gönderilemedi:", e?.message || e);
-      // Burada hata olsa bile sipariş numarasını döndürmeye devam ediyoruz
-    }
-  }
+  // Bildirim yolu henüz göndermediyse (ör. yarıda kaldıysa) arka planda dene;
+  // sahiplik işareti çift e-postayı önler.
+  if (!order.orderMailSentAt) queueOrderMails(order._id);
 
   return res.json({ orderNumber: order.orderNumber });
 };
