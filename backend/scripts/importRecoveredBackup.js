@@ -25,14 +25,19 @@ async function main() {
   }
   const keyFile = path.resolve(process.env.RECOVERY_BACKUP_KEY_FILE || path.join(mediaRoot, "..", "backup", "master.key"));
   if (keyFile.startsWith(`${mediaRoot}${path.sep}`)) throw new Error("Anahtar dosyası medya dizininin dışında olmalı.");
-  const key = await fs.readFile(path.join(source, "master.key"));
-  if (key.length !== 32) throw new Error("Kurtarma anahtarı geçersiz.");
+  // Mac'e elle alınan yedeklerde (deploy/scripts/yedek-al.sh) anahtar yoktur; Drive hiç
+  // bağlanmadıysa gerekmez. Varsa geri konur.
+  const key = await fs.readFile(path.join(source, "master.key")).catch((error) => {
+    if (error.code === "ENOENT") return null;
+    throw error;
+  });
+  if (key && key.length !== 32) throw new Error("Kurtarma anahtarı geçersiz.");
   const archive = await readDatabaseArchive(path.join(source, "mongodb.ejson.gz"));
   await verifyMediaTree(source);
   const verifiedMedia = await verifyMediaInStage(archive, source);
   console.log(`Medya doğrulandı: ${verifiedMedia.readyAssets} hazır kayıt, ${verifiedMedia.referencedFiles} dosya.`);
   await mustBeAbsent(mediaRoot, "Medya hedefi");
-  await mustBeAbsent(keyFile, "Yedek anahtarı hedefi");
+  if (key) await mustBeAbsent(keyFile, "Yedek anahtarı hedefi");
   const client = new mongoose.mongo.MongoClient(uri, { serverSelectionTimeoutMS: 15000 });
   await client.connect();
   try {
@@ -58,8 +63,12 @@ async function main() {
     for (const name of ["assets", "trash", "quarantine"]) {
       await fs.cp(path.join(source, "media", name), path.join(mediaRoot, name), { recursive: true, errorOnExist: true });
     }
-    await fs.mkdir(path.dirname(keyFile), { recursive: true, mode: 0o700 });
-    await fs.writeFile(keyFile, key, { mode: 0o600, flag: "wx" });
+    if (key) {
+      await fs.mkdir(path.dirname(keyFile), { recursive: true, mode: 0o700 });
+      await fs.writeFile(keyFile, key, { mode: 0o600, flag: "wx" });
+    } else {
+      console.log("Yedekte anahtar yok: Google Drive yedeği kuruluysa panelden yeniden bağlanmalı.");
+    }
     console.log(`Aktarım tamamlandı: ${databaseName}. Uygulama ayarlarında MongoDB, medya yolu ve anahtar yolu bu hedefleri göstermeli.`);
   } finally {
     await client.close();
