@@ -68,9 +68,18 @@ export default function ShopPage() {
     [preset]
   );
 
-  const { data: cachedProducts, loading: productsLoading } = useProductsCache();
-  const { data: cachedCategories, loading: categoriesLoading } =
-    useCategoriesCache();
+  const {
+    data: cachedProducts,
+    loading: productsLoading,
+    error: productsError,
+    retry: retryProducts,
+  } = useProductsCache();
+  const {
+    data: cachedCategories,
+    loading: categoriesLoading,
+    error: categoriesError,
+    retry: retryCategories,
+  } = useCategoriesCache();
 
   const filters = useMemo(() => readFilters(searchParams), [searchParams]);
   const query = (searchParams.get("q") || "").trim();
@@ -228,6 +237,28 @@ export default function ShopPage() {
   };
 
   if (pageLoading) return <div className="py-10 text-center">Yükleniyor…</div>;
+
+  if (productsError && !(campaignItems || miniItems)) {
+    return (
+      <div className="bg-white text-dark1">
+        <BreadCrumb />
+        <div className="container mx-auto px-4 py-20 text-center" role="alert">
+          <p className="text-lg font-medium">Ürünler şu an yüklenemedi.</p>
+          <p className="mt-2 text-sm text-dark2">Bağlantınızı kontrol edip tekrar deneyin.</p>
+          <button
+            type="button"
+            onClick={() => {
+              retryProducts();
+              if (categoriesError) retryCategories();
+            }}
+            className="mt-6 rounded-full border border-dark1 px-6 py-2 text-dark1 transition hover:bg-dark1 hover:text-white"
+          >
+            Tekrar Dene
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="bg-white text-dark1">

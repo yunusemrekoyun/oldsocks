@@ -160,7 +160,7 @@ export default function BackupsPage() {
     event.preventDefault();
     setBusy("kit"); setError(""); setMessage("");
     try {
-      const response = await api.post("/backups/recovery-kit", { adminPassword, passphrase }, { responseType: "blob" });
+      const response = await api.post("/backups/recovery-kit", { adminPassword, passphrase }, { responseType: "blob", timeout: 180000 });
       const url = URL.createObjectURL(response.data);
       const link = document.createElement("a");
       link.href = url;

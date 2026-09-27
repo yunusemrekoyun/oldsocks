@@ -1,9 +1,12 @@
 // src/api.js
 import axios from "axios";
 
+// Yanıt gelmeyen istek sonsuza kadar beklemesin. Dosya parçası yüklemeleri
+// kendi isteklerinde zaman aşımını kapatır (timeout: 0).
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL,
   withCredentials: true,
+  timeout: 60000,
 });
 
 let refreshPromise = null;
@@ -22,6 +25,36 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
+function requestRefresh() {
+  return api
+    .post("/auth/refresh", null, { skipAuthRefresh: true })
+    .then(({ data }) => {
+      const newToken = data.accessToken;
+      localStorage.setItem("accessToken", newToken);
+      api.defaults.headers.common["Authorization"] = `Bearer ${newToken}`;
+      return newToken;
+    });
+}
+
+// Sunucu her yenilemede refresh token'ı değiştirir. İki sekme aynı anda yenilerse
+// ikincisi eski token'la reddedilir ve oturum kapanır. Web Locks ile yenilemeler
+// sekmeler arasında sıraya girer; sıra gelen sekme başka sekmenin aldığı yeni
+// token'ı görürse tekrar yenilemez.
+function refreshAcrossTabs(failedToken) {
+  const run = async () => {
+    const current = localStorage.getItem("accessToken");
+    if (current && current !== failedToken) {
+      api.defaults.headers.common["Authorization"] = `Bearer ${current}`;
+      return current;
+    }
+    return requestRefresh();
+  };
+  if (typeof navigator !== "undefined" && navigator.locks?.request) {
+    return navigator.locks.request("oldsocks-auth-refresh", run);
+  }
+  return run();
+}
+
 api.interceptors.response.use(
   (response) => response,
   (error) => {
@@ -37,14 +70,8 @@ api.interceptors.response.use(
       config._retry = true;
 
       if (!refreshPromise) {
-        refreshPromise = api
-          .post("/auth/refresh", null, { skipAuthRefresh: true })
-          .then(({ data }) => {
-            const newToken = data.accessToken;
-            localStorage.setItem("accessToken", newToken);
-            api.defaults.headers.common["Authorization"] = `Bearer ${newToken}`;
-            return newToken;
-          })
+        const failedToken = String(config.headers?.Authorization || "").replace(/^Bearer\s+/i, "");
+        refreshPromise = refreshAcrossTabs(failedToken)
           .catch((err) => {
             // Yalnız sunucu oturumu reddederse çıkış yap; ağ veya 5xx hatası geçicidir.
             const refreshStatus = err?.response?.status;

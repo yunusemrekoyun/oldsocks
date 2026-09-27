@@ -23,6 +23,11 @@ export async function getProductsCached(force = false) {
       timestamp = Date.now();
       return cache;
     })
+    .catch((error) => {
+      // Yenileme başarısızsa (ör. 429, bağlantı kesintisi) eldeki eski liste gösterilir.
+      if (cache) return cache;
+      throw error;
+    })
     .finally(() => {
       inFlight = null;
     });

@@ -10,6 +10,7 @@ import Layout from "./components/layout/Layout";
 import RequireAdmin from "./components/auth/RequireAdmin";
 import RequireAuth from "./components/auth/RequireAuth";
 import ScrollToTop from "./components/common/ScrollToTop";
+import RouteErrorBoundary from "./components/common/RouteErrorBoundary";
 
 const AdminLayout = lazy(() => import("./admin/layout/AdminLayout"));
 const HomePage = lazy(() => import("./pages/HomePage"));
@@ -67,7 +68,11 @@ export default function App() {
           <Route
             element={
               <Layout>
-                <Outlet />
+                <RouteErrorBoundary>
+                  <Suspense fallback={<RouteFallback />}>
+                    <Outlet />
+                  </Suspense>
+                </RouteErrorBoundary>
               </Layout>
             }
           >
@@ -105,7 +110,11 @@ export default function App() {
               path="/admin"
               element={
                 <AdminLayout>
-                  <Outlet />
+                  <RouteErrorBoundary>
+                    <Suspense fallback={<RouteFallback />}>
+                      <Outlet />
+                    </Suspense>
+                  </RouteErrorBoundary>
                 </AdminLayout>
               }
             >

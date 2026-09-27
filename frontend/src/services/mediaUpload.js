@@ -192,6 +192,7 @@ async function appendChunk({ file, upload, signal, onProgress }) {
       () =>
         api.patch(`/media/uploads/${upload.id}`, chunk, {
         signal,
+        timeout: 0,
         headers: {
           "Content-Type": "application/offset+octet-stream",
           "Upload-Offset": String(offset),
