@@ -44,8 +44,16 @@ const Login = ({ onSwitch, onForgotPassword, redirectTo }) => {
       const status = err?.response?.status;
       const rawMsg = String(err?.response?.data?.message || "").toLowerCase();
 
+      // Çok fazla deneme (hesap kilidi veya IP sınırı)
+      if (status === 429) {
+        setError(
+          /dakika/.test(rawMsg)
+            ? err.response.data.message
+            : "Çok fazla deneme yapıldı. Lütfen biraz sonra tekrar deneyin."
+        );
+      }
       // Yanlış kimlik bilgileri → 401 (backend öyle ayarlı)
-      if (status === 401 || /geçersiz|invalid|credential/.test(rawMsg)) {
+      else if (status === 401 || /geçersiz|invalid|credential/.test(rawMsg)) {
         setError("E-posta veya şifre hatalı.");
       }
       // Ağ/CORS hatası (response yok)

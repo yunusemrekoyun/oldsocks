@@ -61,3 +61,30 @@ test("şifre sıfırlama bağlantısı token'ı # kısmında taşır", async () 
   assert.match(mail.Text, /\/reset-password#token=/);
   assert.doesNotMatch(mail.Text, /reset-password\?token=/);
 });
+
+test("aynı hesaba 5 hatalı denemeden sonra doğru şifre de beklemeye takılır; diğer hesaplar etkilenmez", async () => {
+  const email = `kilit-${run}@test.local`;
+  const other = `diger-${run}@test.local`;
+  await registerAndLogin(email);
+  await registerAndLogin(other);
+  for (let i = 0; i < 5; i += 1) {
+    assert.equal((await postJson(server.base, "/api/v1/auth/login", { email, password: "yanlis-sifre" })).status, 401);
+  }
+  const locked = await postJson(server.base, "/api/v1/auth/login", { email, password });
+  assert.equal(locked.status, 429);
+  assert.match(locked.data.message, /dakika sonra/);
+  assert.equal((await postJson(server.base, "/api/v1/auth/login", { email: other, password })).status, 200);
+});
+
+test("olmayan hesapta yanıt süresi var olan hesaba yakındır (hesap varlığı süreden anlaşılmaz)", async () => {
+  const email = `zaman-${run}@test.local`;
+  await registerAndLogin(email);
+  const time = async (addr) => {
+    const t = performance.now();
+    await postJson(server.base, "/api/v1/auth/login", { email: addr, password: "yanlis" });
+    return performance.now() - t;
+  };
+  const existing = await time(email);
+  const missing = await time(`yok-${run}@test.local`);
+  assert.ok(missing > existing * 0.5, `olmayan: ${missing.toFixed(1)} ms, var olan: ${existing.toFixed(1)} ms`);
+});

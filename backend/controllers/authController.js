@@ -3,6 +3,10 @@ const jwt = require("jsonwebtoken");
 const User = require("../models/User");
 const PasswordResetToken = require("../models/PasswordResetToken");
 const { sendAccountNoticeMail, sendPasswordResetMail } = require("../utils/mailer");
+const loginThrottle = require("../utils/loginThrottle");
+
+// Var olmayan hesapta da bcrypt çalışsın: yanıt süresi hesabın varlığını ele vermesin.
+const DUMMY_PASSWORD_HASH = bcrypt.hashSync("oldsocks-olmayan-hesap", 10);
 const {
   COOKIE_OPTIONS,
   createAccessToken,
@@ -144,17 +148,30 @@ exports.login = async (req, res) => {
     const normalizedEmail = sanitizeEmailOrThrow(req.body?.email);
     const { password } = req.body;
 
+    const waitMs = loginThrottle.remainingLockMs(normalizedEmail);
+    if (waitMs) {
+      const minutes = Math.max(1, Math.ceil(waitMs / 60000));
+      res.set("Retry-After", String(Math.ceil(waitMs / 1000)));
+      return res.status(429).json({
+        message: `Çok fazla hatalı deneme. ${minutes} dakika sonra tekrar deneyin.`,
+      });
+    }
+
     const user = await User.findOne({ email: normalizedEmail }).select(
       "+refreshTokens"
     );
     if (!user) {
+      await bcrypt.compare(String(password || ""), DUMMY_PASSWORD_HASH);
+      loginThrottle.recordFailure(normalizedEmail);
       return res.status(401).json({ message: "Geçersiz kimlik." });
     }
 
     const ok = await bcrypt.compare(String(password || ""), user.password);
     if (!ok) {
+      loginThrottle.recordFailure(normalizedEmail);
       return res.status(401).json({ message: "Geçersiz kimlik." });
     }
+    loginThrottle.recordSuccess(normalizedEmail);
 
     const accessToken = createAccessToken(user);
     const refreshToken = createRefreshToken(user);
