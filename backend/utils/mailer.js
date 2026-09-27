@@ -833,7 +833,9 @@ async function sendNewsletterNewBlog(post, providedFrontendOrigin, pathTemplate 
 }
 
 // Hesap güvenliği bildirimi (parola veya e-posta değişti): kullanıcının kendisine.
-async function sendAccountNoticeMail({ to, subject, lines = [] }) {
+const ACCOUNT_NOTICE_FOOTER = "Bu işlemi siz yapmadıysanız hemen şifrenizi sıfırlayın ve bize yazın.";
+
+async function sendAccountNoticeMail({ to, subject, lines = [], footer = ACCOUNT_NOTICE_FOOTER }) {
   const email = normalizeEmailAddress(to);
   if (!isValidEmailAddress(email)) return;
   const safeLines = lines.map((line) => clampText(String(line || ""), 400));
@@ -841,7 +843,7 @@ async function sendAccountNoticeMail({ to, subject, lines = [] }) {
     preheader: subject,
     eyebrow: "Oldsocks Hesap Güvenliği",
     title: subject,
-    subtitle: "Bu işlemi siz yapmadıysanız hemen şifrenizi sıfırlayın ve bize yazın.",
+    subtitle: footer,
     bodyHtml: `<div style="font-size:15px;line-height:1.8;color:#374151;">${safeLines
       .map((line) => `<p style="margin:0 0 8px;">${escapeHtml(line)}</p>`)
       .join("")}</div>`,
@@ -850,7 +852,7 @@ async function sendAccountNoticeMail({ to, subject, lines = [] }) {
     to: email,
     subject: sanitizeHeaderValue(subject, 160),
     html,
-    text: `${subject}\n\n${safeLines.join("\n")}\n\nBu işlemi siz yapmadıysanız hemen şifrenizi sıfırlayın ve bize yazın.`,
+    text: `${subject}\n\n${safeLines.join("\n")}\n\n${footer}`,
   });
 }
 

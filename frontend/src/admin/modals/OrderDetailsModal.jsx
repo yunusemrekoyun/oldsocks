@@ -208,14 +208,6 @@ export default function OrderDetailsModal({
         value: valueOrDash(order.user?._id),
       },
       {
-        label: "Kimlik No",
-        value: valueOrDash(order.guest?.identityNumber),
-      },
-      {
-        label: "Kimlik Fallback",
-        value: fmtBool(order.identityFallbackUsed),
-      },
-      {
         label: "Kayıt Adresi",
         value: valueOrDash(order.guest?.registrationAddress),
       },

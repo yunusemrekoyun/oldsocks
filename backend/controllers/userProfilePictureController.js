@@ -1,6 +1,16 @@
 const UserProfilePicture = require("../models/UserProfilePicture");
 const User = require("../models/User");
 const { MediaError } = require("../services/media/errors");
+const { trashAsset } = require("../services/media/maintenance");
+
+// Kullanılmayan profil fotoğrafı herkese açık klasörde kalmasın (KVKK).
+async function trashUnusedAvatar(assetId) {
+  if (!assetId) return;
+  await trashAsset(assetId).catch((error) => {
+    // Başka yerde kullanılıyorsa (409) veya zaten silinmişse dokunulmaz.
+    if (error?.statusCode !== 409 && error?.statusCode !== 404) console.warn("[avatar] eski fotoğraf çöpe taşınamadı:", error?.message || error);
+  });
+}
 const {
   legacyAssetUrl,
   publicAsset,
@@ -47,7 +57,8 @@ exports.createOrUpdateProfilePicture = async (req, res) => {
       max: 1,
     });
     const url = legacyAssetUrl(asset, "detail");
-    const existing = await UserProfilePicture.exists({ user: userId });
+    const existingPicture = await UserProfilePicture.findOne({ user: userId }).select("mediaAsset").lean();
+    const existing = Boolean(existingPicture);
     const picture = await UserProfilePicture.findOneAndUpdate(
       { user: userId },
       { user: userId, url, publicId: "", mediaAsset: asset._id },
@@ -61,6 +72,9 @@ exports.createOrUpdateProfilePicture = async (req, res) => {
       ownerId: userId,
       fields: { avatar: [asset._id] },
     });
+    if (existingPicture?.mediaAsset && String(existingPicture.mediaAsset) !== String(asset._id)) {
+      await trashUnusedAvatar(existingPicture.mediaAsset);
+    }
     const populated = await UserProfilePicture.findById(picture._id).populate(
       "mediaAsset"
     );
@@ -81,6 +95,7 @@ exports.deleteProfilePicture = async (req, res) => {
       $unset: { avatar: "", avatarAsset: "" },
     });
     await removeOwnerMediaReferences("User", userId);
+    await trashUnusedAvatar(picture.mediaAsset);
     res.json({ message: "Profil fotoğrafı silindi." });
   } catch (error) {
     console.error("deleteProfilePicture:", error);

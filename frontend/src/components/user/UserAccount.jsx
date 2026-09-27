@@ -4,6 +4,7 @@ import { AuthContext } from "../../context/AuthContext";
 import defaultAvatar from "../../assets/user/fallback-avatar.webp";
 import { FaTrashAlt, FaCamera, FaUpload } from "react-icons/fa";
 import UserPasswordForm from "./UserPasswordForm";
+import DeleteAccountForm from "./DeleteAccountForm";
 import {
   mediaErrorMessage,
   startMediaPreparation,
@@ -253,6 +254,7 @@ export default function UserAccount() {
       </div>
 
       <UserPasswordForm />
+      <DeleteAccountForm />
     </div>
   );
 }

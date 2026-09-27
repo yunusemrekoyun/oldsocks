@@ -15,6 +15,7 @@ const {
   getUserById,
   updateUser,
   deleteUser,
+  deleteMe,
 } = require("../controllers/userController");
 
 const changePasswordLimiter = rateLimit({
@@ -29,6 +30,7 @@ const changePasswordLimiter = rateLimit({
 router.get("/me", verifyToken, getMe); // GET    /api/v1/users/me
 router.put("/me", verifyToken, updateMe); // PUT    /api/v1/users/me
 router.post("/me/password", verifyToken, changePasswordLimiter, changePassword);
+router.delete("/me", verifyToken, changePasswordLimiter, deleteMe); // DELETE /api/v1/users/me
 
 // — Address management for logged-in user —
 router.get("/me/addresses", verifyToken, getAddresses); // GET    /api/v1/users/me/addresses

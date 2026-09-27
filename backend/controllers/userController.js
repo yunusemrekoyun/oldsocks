@@ -6,6 +6,7 @@ const bcrypt = require("bcrypt");
 const { COOKIE_OPTIONS } = require("../utils/authTokens");
 const { validatePasswordPolicy } = require("../utils/passwordPolicy");
 const { sendAccountNoticeMail } = require("../utils/mailer");
+const { deleteUserAccount } = require("../services/accountDeletion");
 const {
   isValidEmailAddress,
   normalizeEmailAddress,
@@ -311,13 +312,46 @@ exports.deleteUser = async (req, res) => {
     if (String(req.params.id) === String(req.user?.userId)) {
       return res.status(400).json({ message: "Kendi hesabınızı buradan silemezsiniz." });
     }
-    const result = await User.findByIdAndDelete(req.params.id);
+    const result = await deleteUserAccount(req.params.id);
     if (!result)
       return res.status(404).json({ message: "Kullanıcı bulunamadı." });
     res.json({ message: "Kullanıcı silindi." });
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Silme sırasında hata oluştu." });
+  }
+};
+
+// Müşterinin kendi hesabını silmesi (KVKK). Şifre ve açık onay gerekir.
+exports.deleteMe = async (req, res) => {
+  try {
+    if (req.body?.confirm !== true) {
+      return res.status(400).json({ message: "Hesabı silmek için onay kutusunu işaretleyin." });
+    }
+    const user = await User.findById(req.user.userId);
+    if (!user) return res.status(404).json({ message: "Kullanıcı bulunamadı." });
+    if (user.role === "admin") {
+      return res.status(400).json({ message: "Yönetici hesabı bu ekrandan silinemez." });
+    }
+    const matches = await bcrypt.compare(String(req.body?.password || ""), user.password);
+    if (!matches) return res.status(403).json({ message: "Şifre hatalı." });
+
+    const email = user.email;
+    await deleteUserAccount(user._id);
+    res.clearCookie("refreshToken", COOKIE_OPTIONS);
+    sendAccountNoticeMail({
+      to: email,
+      subject: "Hesabınız silindi",
+      lines: [
+        "OLDSOCKS hesabınız ve hesabınıza bağlı kişisel verileriniz silindi.",
+        "Verdiğiniz siparişlerin kayıtları yasal saklama süresi boyunca tutulur.",
+      ],
+      footer: "Bu işlemi siz yapmadıysanız bize hemen yazın.",
+    }).catch((error) => console.warn("[account-delete] bildirim gönderilemedi:", error?.message || error));
+    res.json({ message: "Hesabınız silindi." });
+  } catch (err) {
+    console.error("deleteMe error:", err);
+    res.status(500).json({ message: "Hesap silinemedi." });
   }
 };
 

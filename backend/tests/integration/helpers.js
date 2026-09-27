@@ -105,7 +105,7 @@ async function startTestServer(extraEnv = {}) {
     fs.rmSync(tmp, { recursive: true, force: true });
   }
 
-  return { base, port, stop, output: () => output };
+  return { base, port, stop, env, output: () => output };
 }
 
 function paytrHash(merchantOid, status, totalAmount) {
