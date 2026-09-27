@@ -5,6 +5,7 @@ import "@fontsource/playfair-display/700.css";
 import "@fontsource-variable/manrope";
 import "@fontsource-variable/bodoni-moda";
 import "./index.css";
+import { prefetchHero } from "./services/heroMedia";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import App from "./App.jsx";
@@ -31,6 +32,8 @@ const RootWrapper =
   import.meta.env.MODE === "production"
     ? ({ children }) => children
     : StrictMode;
+
+if (window.location.pathname === "/") prefetchHero();
 
 createRoot(document.getElementById("root")).render(
   <RootWrapper>

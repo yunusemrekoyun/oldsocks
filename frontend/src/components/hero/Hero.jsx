@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import publicApi from "../../../publicApi";
+import { HERO_IMAGE_OPTIONS, loadHeroItems, peekHeroItems } from "../../services/heroMedia";
 import { Swiper, SwiperSlide } from "swiper/react";
 import { Autoplay, Pagination } from "swiper/modules";
 import { getResponsiveImageProps } from "../../utils/media";
@@ -8,11 +8,25 @@ import { useStorefrontSettings } from "../../context/storefrontSettings";
 import "swiper/css";
 import "swiper/css/pagination";
 
-/** Ortak yükseklik limiti: videoHeight || naturalHeight üzerinden hesaplar */
-function useHeroHeightLimit(elRef) {
-  const [pxHeight, setPxHeight] = useState(null);
+// Düşük çözünürlüklü medya ekran yüksekliğine büyütülmez. Asıl yükseklik API'den
+// biliniyorsa hesap görsel inmeden yapılır; sonradan yükseklik değişip sayfa kaymaz.
+function limitFor(naturalHeight) {
+  const dpr = window.devicePixelRatio || 1;
+  const needPx = Math.round(window.innerHeight * dpr);
+  return naturalHeight > 0 && naturalHeight < needPx ? Math.round(naturalHeight / dpr) : null;
+}
+
+/** Ortak yükseklik limiti: bilinen yükseklik, yoksa videoHeight || naturalHeight */
+function useHeroHeightLimit(elRef, knownHeight) {
+  const [pxHeight, setPxHeight] = useState(() => (knownHeight ? limitFor(knownHeight) : null));
 
   useEffect(() => {
+    if (knownHeight) {
+      const compute = () => setPxHeight(limitFor(knownHeight));
+      compute();
+      window.addEventListener("resize", compute);
+      return () => window.removeEventListener("resize", compute);
+    }
     if (!elRef?.current) return;
     const el = elRef.current;
 
@@ -49,7 +63,7 @@ function useHeroHeightLimit(elRef) {
       el.removeEventListener("load", onMetaOrLoad);
       window.removeEventListener("resize", compute);
     };
-  }, [elRef]);
+  }, [elRef, knownHeight]);
 
   return pxHeight;
 }
@@ -57,26 +71,37 @@ function useHeroHeightLimit(elRef) {
 export default function Hero() {
   const { heroButtonOpacity = 30 } = useStorefrontSettings();
   const buttonOpacity = Math.max(0, Math.min(100, heroButtonOpacity)) / 100;
-  const [items, setItems] = useState([]);
+  const [items, setItems] = useState(peekHeroItems); // null: yükleniyor
   const singleRef = useRef(null);
-  const singleHeightPx = useHeroHeightLimit(singleRef);
+  const singleHeightPx = useHeroHeightLimit(
+    singleRef,
+    items?.length === 1 ? Number(items[0]?.media?.height) || 0 : 0
+  );
 
   useEffect(() => {
-    publicApi
-      .get("/hero-videos")
-      .then((res) => setItems(res.data || []))
-      .catch((err) => console.error("Hero media alınamadı:", err));
+    let alive = true;
+    loadHeroItems()
+      .then((data) => alive && setItems(data))
+      .catch((err) => {
+        console.error("Hero media alınamadı:", err);
+        if (alive) setItems([]);
+      });
+    return () => {
+      alive = false;
+    };
   }, []);
 
+  // Veri gelene kadar yer ayrılır; sonradan tam ekran bir bölüm eklenip sayfayı itmez.
+  if (items === null) {
+    return <section aria-hidden="true" className="relative w-full h-[100vh] bg-light1" />;
+  }
   if (!items.length) return null;
 
-  const renderMedia = (item, refIfSingle = null) => {
+  const renderMedia = (item, refIfSingle = null, index = 0) => {
     if (item.kind === "image") {
-      const imageProps = getResponsiveImageProps(item.media || item.url, {
-        widths: [640, 960, 1280, 1600, 1920, 2400],
-        defaultWidth: 1600,
-        sizes: "100vw",
-      });
+      const imageProps = getResponsiveImageProps(item.media || item.url, HERO_IMAGE_OPTIONS);
+      // Yalnız ilk slayt öncelikli; diğerleri sırası gelince iner.
+      const first = index === 0;
 
       return (
         <img
@@ -84,10 +109,10 @@ export default function Hero() {
           src={imageProps.src}
           srcSet={imageProps.srcSet}
           sizes={imageProps.sizes}
-          alt="Hero"
-          loading="eager"
-          fetchPriority="high"
-          decoding="async"
+          alt="OLDSOCKS"
+          loading={first ? "eager" : "lazy"}
+          fetchPriority={first ? "high" : "low"}
+          decoding={first ? "sync" : "async"}
           className="w-full h-full object-cover object-center block"
         />
       );
@@ -158,9 +183,9 @@ export default function Hero() {
         pagination={{ clickable: true }}
         className="w-full h-full"
       >
-        {items.map((it) => (
+        {items.map((it, index) => (
           <SwiperSlide key={it._id} className="!flex">
-            {renderMedia(it)}
+            {renderMedia(it, null, index)}
           </SwiperSlide>
         ))}
       </Swiper>

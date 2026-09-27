@@ -55,8 +55,10 @@ const BackupsPage = lazy(() => import("./admin/pages/BackupsPage"));
 const StorefrontPage = lazy(() => import("./admin/pages/StorefrontPage"));
 const SiteContentPage = lazy(() => import("./admin/pages/SiteContentPage"));
 
+// Sayfa parçası inerken alt bilgi ekranın altında kalsın; sayfa gelince
+// alt bilgi aşağı itilip yerleşim kaymasın (CLS).
 function RouteFallback() {
-  return <div className="min-h-[40vh] py-16 text-center">Yükleniyor…</div>;
+  return <div className="min-h-screen py-16 text-center">Yükleniyor…</div>;
 }
 
 export default function App() {

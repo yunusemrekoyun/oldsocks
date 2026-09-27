@@ -6,6 +6,7 @@ umask 077
 
 root="$(cd "$(dirname "$0")/../.." && pwd)"
 api_url="https://api.oldscks.com/api/v1"
+media_origin="https://media.oldscks.com"
 cd "$root"
 
 if [[ -n "$(git status --porcelain)" ]]; then
@@ -33,7 +34,7 @@ echo "==> Arayüz: lint, testler, üretim derlemesi"
   cd frontend
   npm run lint >/tmp/oldsocks-paket-lint.log 2>&1
   node --test src/utils/*.test.js >/tmp/oldsocks-paket-frontend-test.log 2>&1
-  VITE_API_BASE_URL="$api_url" npm run build >/tmp/oldsocks-paket-build.log 2>&1
+  VITE_API_BASE_URL="$api_url" VITE_MEDIA_ORIGIN="$media_origin" npm run build >/tmp/oldsocks-paket-build.log 2>&1
   node scripts/precompress.mjs dist >>/tmp/oldsocks-paket-build.log 2>&1
 ) || {
   echo "Arayüz kontrolü başarısız; /tmp/oldsocks-paket-*.log dosyalarına bakın." >&2
