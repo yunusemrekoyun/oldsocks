@@ -222,8 +222,12 @@ exports.refresh = async (req, res) => {
       .json({ accessToken: newAccessToken });
   } catch (err) {
     console.error("[Auth][Refresh] Token yenileme hatası:", err?.message || err);
-    res.clearCookie("refreshToken", COOKIE_OPTIONS);
-    res.status(403).json({ message: "Token yenileme başarısız." });
+    if (["JsonWebTokenError", "TokenExpiredError", "NotBeforeError"].includes(err?.name)) {
+      res.clearCookie("refreshToken", COOKIE_OPTIONS);
+      return res.status(403).json({ message: "Token yenileme başarısız." });
+    }
+    // Geçici hata (ör. veritabanı): çerezi silme, istemci sonra tekrar dener.
+    return res.status(503).json({ message: "Hizmet geçici olarak kullanılamıyor." });
   }
 };
 

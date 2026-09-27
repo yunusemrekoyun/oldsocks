@@ -41,11 +41,14 @@ export function AuthProvider({ children }) {
       .then((res) => {
         setRole(res.data.role);
       })
-      .catch(() => {
-        // 401/403 gelirse oturumu kapat
+      .catch((err) => {
+        const status = err?.response?.status;
         setRole(null);
-        setIsLoggedIn(false);
-        localStorage.removeItem("accessToken");
+        // Yalnız 401/403 oturumu kapatır; ağ veya sunucu hatasında kullanıcı çıkış yapmış sayılmaz.
+        if (status === 401 || status === 403) {
+          setIsLoggedIn(false);
+          localStorage.removeItem("accessToken");
+        }
       })
       .finally(() => {
         setLoading(false);

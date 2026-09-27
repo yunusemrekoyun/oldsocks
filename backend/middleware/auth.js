@@ -23,6 +23,8 @@ async function resolveTokenUser(token) {
   return { userId: String(user._id), role: user.role };
 }
 
+const JWT_ERRORS = new Set(["JsonWebTokenError", "TokenExpiredError", "NotBeforeError"]);
+
 exports.verifyToken = async (req, res, next) => {
   const authHeader = req.headers.authorization;
   if (!authHeader?.startsWith("Bearer ")) {
@@ -37,9 +39,14 @@ exports.verifyToken = async (req, res, next) => {
     if (err?.status === 401) {
       return res.status(401).json({ message: err.message });
     }
-    return res
-      .status(403)
-      .json({ message: "Token geçersiz veya süresi dolmuş" });
+    if (JWT_ERRORS.has(err?.name)) {
+      return res
+        .status(403)
+        .json({ message: "Token geçersiz veya süresi dolmuş" });
+    }
+    // Veritabanı gibi geçici bir hata: oturumu geçersiz sayma.
+    console.error("[Auth] Token doğrulanamadı:", err?.message || err);
+    return res.status(503).json({ message: "Hizmet geçici olarak kullanılamıyor. Lütfen tekrar deneyin." });
   }
 };
 

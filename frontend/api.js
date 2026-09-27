@@ -46,7 +46,9 @@ api.interceptors.response.use(
             return newToken;
           })
           .catch((err) => {
-            clearExpiredSession();
+            // Yalnız sunucu oturumu reddederse çıkış yap; ağ veya 5xx hatası geçicidir.
+            const refreshStatus = err?.response?.status;
+            if (refreshStatus === 401 || refreshStatus === 403) clearExpiredSession();
             throw err;
           })
           .finally(() => {
