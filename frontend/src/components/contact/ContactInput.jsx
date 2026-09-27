@@ -15,6 +15,9 @@ const ContactInput = ({
   rows,
   ...rest
 }) => {
+  // Görünür etiket yok; ekran okuyucu için alan adı yer tutucudan gelir.
+  const label = rest["aria-label"] ?? placeholder;
+  const autoComplete = rest.autoComplete ?? { name: "name", email: "email" }[name];
   const baseStyles =
     "w-full border border-light2 text-dark2 bg-white placeholder-dark2 rounded-lg px-4 py-2 focus:outline-none focus:border-dark1";
 
@@ -30,6 +33,7 @@ const ContactInput = ({
         disabled={disabled}
         rows={rows}
         {...rest}
+        aria-label={label}
       />
     );
   }
@@ -44,7 +48,9 @@ const ContactInput = ({
       onChange={onChange}
       required={required}
       disabled={disabled}
+      autoComplete={autoComplete}
       {...rest}
+      aria-label={label}
     />
   );
 };

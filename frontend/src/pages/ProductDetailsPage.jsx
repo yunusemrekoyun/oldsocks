@@ -7,6 +7,7 @@ import BreadCrumb from "../components/breadCrumb/BreadCrumb";
 import ProductDetails from "../components/products/product-details/ProductDetails";
 import SimilarProducts from "../components/products/product-details/SimilarProducts";
 import AddToCart from "../components/products/product-details/AddToCart";
+import ShippingReturnInfo from "../components/products/product-details/ShippingReturnInfo";
 import Campaigns from "../components/campaigns/Campaigns";
 import Services from "../components/services/Services";
 import { useStorefrontSettings } from "../context/storefrontSettings";
@@ -125,6 +126,7 @@ export default function ProductDetailsPage() {
             productName={product.name}
             image={product.images?.[0]}
           />
+          <ShippingReturnInfo />
           {similarProductsVisible !== false && <SimilarProducts
             categoryId={rootCategoryId}
             currentProductId={product._id}

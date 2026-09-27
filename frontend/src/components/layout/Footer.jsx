@@ -9,7 +9,7 @@ const Footer = () => {
   const footer = content?.footer;
   const contact = content?.contact;
   return (
-  <footer className="bg-dark1 text-gray-300 pt-12">
+  <footer className="bg-dark1 text-gray-300 pt-12 pb-16 md:pb-0">
     <div className="container mx-auto grid grid-cols-1 md:grid-cols-4 gap-8 px-6">
       {/* Hakkımızda */}
       <div>

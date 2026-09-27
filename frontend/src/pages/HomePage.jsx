@@ -17,6 +17,8 @@ const HomePage = () => {
     : <HomeProductSection key={key} sectionKey={key} />;
 
   return <>
+    {/* Sayfanın ana başlığı (ekran okuyucular ve arama motorları için; görünmez). */}
+    <h1 className="sr-only">OLDSOCKS online mağaza</h1>
     <Hero />
     <Categories />
     {productSection(order[0])}

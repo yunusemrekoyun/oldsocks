@@ -5,6 +5,7 @@ import defaultAvatar from "../../assets/user/fallback-avatar.webp";
 import { FaTrashAlt, FaCamera, FaUpload } from "react-icons/fa";
 import UserPasswordForm from "./UserPasswordForm";
 import DeleteAccountForm from "./DeleteAccountForm";
+import PhoneField from "./PhoneField";
 import {
   mediaErrorMessage,
   startMediaPreparation,
@@ -131,9 +132,10 @@ export default function UserAccount() {
         </div>
         <div className="min-w-0">
           <span className="font-semibold block mb-1">Telefon</span>
-          <p className="bg-light1 p-3 rounded-lg border border-light2">
-            {user.phone || "-"}
-          </p>
+          <PhoneField
+            phone={user.phone}
+            onSaved={(phone) => setUser((prev) => ({ ...prev, phone }))}
+          />
         </div>
       </div>
 

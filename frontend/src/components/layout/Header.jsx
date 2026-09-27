@@ -45,6 +45,7 @@ const Header = () => {
   const [shopOpen, setShopOpen] = useState(false);
   const [hoverParent, setHoverParent] = useState(null);
   const closeTimer = useRef(null);
+  const shopToggleRef = useRef(null);
   const navigate = useNavigate();
 
   // Mobil akordeon: açık parent id'leri
@@ -204,11 +205,25 @@ const Header = () => {
                 Ana Sayfa
               </Link>
 
-              {/* Mağaza (hover → mega menü) */}
+              {/* Mağaza (hover veya klavye → mega menü) */}
               <div
-                className="relative"
+                className="relative flex items-center gap-1"
                 onMouseEnter={openMenu}
                 onMouseLeave={scheduleClose}
+                onKeyDown={(e) => {
+                  if (e.key === "Escape" && shopOpen) {
+                    setShopOpen(false);
+                    setHoverParent(null);
+                    shopToggleRef.current?.focus();
+                  }
+                }}
+                onBlur={(e) => {
+                  // Odak menünün dışına çıkınca kapanır (klavyeyle gezinme).
+                  if (!e.currentTarget.contains(e.relatedTarget)) {
+                    setShopOpen(false);
+                    setHoverParent(null);
+                  }
+                }}
               >
                 <Link
                   to="/shop"
@@ -220,9 +235,21 @@ const Header = () => {
                 >
                   Mağaza
                 </Link>
+                <button
+                  ref={shopToggleRef}
+                  type="button"
+                  aria-expanded={shopOpen}
+                  aria-controls="magaza-menusu"
+                  aria-label="Mağaza menüsünü aç"
+                  onClick={() => (shopOpen ? setShopOpen(false) : openMenu())}
+                  className="rounded p-1 text-dark2 hover:text-dark1 focus-visible:outline focus-visible:outline-2 focus-visible:outline-dark1"
+                >
+                  <ChevronDownIcon className={`h-4 w-4 transition-transform ${shopOpen ? "rotate-180" : ""}`} />
+                </button>
 
                 {shopOpen && (
                   <div
+                    id="magaza-menusu"
                     className={
                       `absolute left-0 top-full mt-3 bg-white border border-light2 rounded-xl shadow-xl p-4 z-50 ` +
                       (hasRightPanel
@@ -248,6 +275,7 @@ const Header = () => {
                               setHoverParent(null);
                             }
                           }}
+                          onFocus={() => setHoverParent(subPanelCampaigns.length > 0 ? DISCOUNT_HOVER_KEY : null)}
                           onClick={() => goShopWith({ discountOnly: true })}
                           className={`w-full text-left px-3 py-2 font-medium text-red-600 ${
                             hoverParent === DISCOUNT_HOVER_KEY
@@ -288,6 +316,7 @@ const Header = () => {
                           <li key={p._id}>
                             <button
                               onMouseEnter={() => setHoverParent(p._id)}
+                              onFocus={() => setHoverParent(p._id)}
                               onClick={() =>
                                 goShopWith({
                                   category: [p._id],
