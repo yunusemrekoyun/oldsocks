@@ -19,7 +19,10 @@ const {
   getPasswordResetExpiryDate,
   hashPasswordResetToken,
 } = require("../utils/passwordReset");
+const { createWindowBudget } = require("../utils/windowBudget");
+const resetMailBudget = createWindowBudget({ max: 3, windowMs: 60 * 60 * 1000 });
 const {
+  hasFilledHoneypot,
   isValidEmailAddress,
   normalizeEmailAddress,
 } = require("../utils/email");
@@ -93,7 +96,13 @@ exports.register = async (req, res) => {
       password,
       phone,
       role,
+      website,
     } = req.body;
+
+    // Bot tuzağı dolu: hesap açma, başarılı gibi yanıt ver.
+    if (hasFilledHoneypot(website)) {
+      return res.status(201).json({ message: "Kayıt başarılı." });
+    }
 
     const normalizedEmail = sanitizeEmailOrThrow(email);
     const normalizedFirstName = sanitizeNameOrThrow(firstName, "Ad");
@@ -275,8 +284,18 @@ exports.forgotPassword = async (req, res) => {
       return res.status(400).json({ message: "Geçerli bir e-posta girin." });
     }
 
+    if (hasFilledHoneypot(req.body?.website)) {
+      return res.json(GENERIC_RESET_RESPONSE);
+    }
+
     const user = await User.findOne({ email: normalizedEmail });
     if (!user) {
+      return res.json(GENERIC_RESET_RESPONSE);
+    }
+
+    // Aynı adrese saatte en fazla 3 sıfırlama e-postası: başkasının gelen kutusu
+    // farklı IP'lerden doldurulamasın. Yanıt aynı kalır.
+    if (!resetMailBudget.allow(normalizedEmail)) {
       return res.json(GENERIC_RESET_RESPONSE);
     }
 

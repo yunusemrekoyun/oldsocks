@@ -78,7 +78,7 @@ const ContactPage = () => {
             )}
 
             <form className="space-y-6" onSubmit={onSubmit}>
-              <div className="absolute left-[-5000px] top-auto h-px w-px overflow-hidden">
+              <div aria-hidden="true" className="absolute left-[-5000px] top-auto h-px w-px overflow-hidden">
                 <label htmlFor="contact-website">Website</label>
                 <input
                   id="contact-website"

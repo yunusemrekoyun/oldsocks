@@ -88,3 +88,25 @@ test("olmayan hesapta yanıt süresi var olan hesaba yakındır (hesap varlığ�
   const missing = await time(`yok-${run}@test.local`);
   assert.ok(missing > existing * 0.5, `olmayan: ${missing.toFixed(1)} ms, var olan: ${existing.toFixed(1)} ms`);
 });
+
+test("aynı adrese saatte en fazla 3 sıfırlama e-postası gider; yanıt değişmez", async () => {
+  const email = `butce-${run}@test.local`;
+  await registerAndLogin(email);
+  // Saldırgan her isteği farklı bir IP'den atar; IP sınırı devreye girmez.
+  for (let i = 0; i < 5; i += 1) {
+    const res = await postJson(server.base, "/api/v1/auth/forgot-password", { email }, { "X-Forwarded-For": `10.9.8.${i + 1}` });
+    assert.equal(res.status, 200);
+  }
+  await new Promise((r) => setTimeout(r, 500));
+  assert.equal((await mailsTo(email)).length, 3);
+});
+
+test("bot tuzağı dolu kayıt hesap açmaz ama başarılı görünür", async () => {
+  const email = `bot-${run}@test.local`;
+  const res = await postJson(server.base, "/api/v1/auth/register", {
+    firstName: "Bot", lastName: "Deneme", email, password, website: "http://spam.example",
+  });
+  assert.equal(res.status, 201);
+  const login = await postJson(server.base, "/api/v1/auth/login", { email, password });
+  assert.equal(login.status, 401);
+});

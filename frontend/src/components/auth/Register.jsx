@@ -5,6 +5,7 @@ import api from "../../../api";
 import { motion } from "framer-motion";
 import { IMaskInput } from "react-imask";
 import { getPasswordValidation } from "../../utils/passwordRules";
+import HoneypotField from "../ui/HoneypotField";
 
 const Register = ({ onSwitch }) => {
   const [formData, setFormData] = useState({
@@ -14,6 +15,7 @@ const Register = ({ onSwitch }) => {
     password: "",
     confirmPassword: "",
     phone: "", // maskeli gösterim
+    website: "", // bot tuzağı
   });
 
   const [error, setError] = useState("");
@@ -63,6 +65,7 @@ const Register = ({ onSwitch }) => {
           email: formData.email.trim(),
           password: formData.password,
           phone: toE164IfAny(formData.phone) || undefined, // opsiyonel
+          website: formData.website,
         },
         { skipAuthRefresh: true }
       );
@@ -102,6 +105,7 @@ const Register = ({ onSwitch }) => {
       )}
 
       <form onSubmit={handleSubmit} className="space-y-5">
+        <HoneypotField id="register-website" value={formData.website} onChange={handleChange} />
         {/* firstName, lastName, email */}
         {["firstName", "lastName", "email"].map((field) => {
           const labels = {

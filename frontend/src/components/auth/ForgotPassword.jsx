@@ -1,9 +1,11 @@
 import React, { useState } from "react";
 import { motion as Motion } from "framer-motion";
 import api from "../../../api";
+import HoneypotField from "../ui/HoneypotField";
 
 const ForgotPassword = ({ onBackToLogin }) => {
   const [email, setEmail] = useState("");
+  const [website, setWebsite] = useState("");
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [loading, setLoading] = useState(false);
@@ -17,7 +19,7 @@ const ForgotPassword = ({ onBackToLogin }) => {
     try {
       const { data } = await api.post(
         "/auth/forgot-password",
-        { email: email.trim() },
+        { email: email.trim(), website },
         { skipAuthRefresh: true }
       );
       setSuccess(
@@ -60,6 +62,7 @@ const ForgotPassword = ({ onBackToLogin }) => {
       )}
 
       <form onSubmit={handleSubmit} className="space-y-5">
+        <HoneypotField id="forgot-website" value={website} onChange={(e) => setWebsite(e.target.value)} />
         <div>
           <label htmlFor="forgot-email" className="block text-sm mb-1 text-dark2">
             E-posta adresi
