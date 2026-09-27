@@ -299,8 +299,10 @@ const inlineWorkerEnabled = inlineWorkerConfigured
 Promise.all([databaseReady, mediaStorageReady])
   .then(() => {
     if (inlineWorkerEnabled) mediaWorker = startMediaWorker();
-    server = app.listen(PORT, () => {
-      console.log(`✅ Sunucu ayakta, port: ${PORT}`);
+    // Üretimde yalnız Nginx'in eriştiği yerel adreste dinle; güvenlik duvarı tek katman kalmasın.
+    const HOST = process.env.HOST || (process.env.NODE_ENV === "production" ? "127.0.0.1" : undefined);
+    server = app.listen(PORT, HOST, () => {
+      console.log(`✅ Sunucu ayakta, ${HOST || "tüm arayüzler"}:${PORT}`);
       if (ALLOWED_ORIGINS.length) {
         console.log("🔒 CORS whitelist:", ALLOWED_ORIGINS.join(", "));
       } else {
