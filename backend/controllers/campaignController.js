@@ -124,7 +124,7 @@ exports.createCampaign = async (req, res) => {
 exports.getCampaigns = async (_req, res) => {
   try {
     const campaigns = await campaignQuery(Campaign.find());
-    res.set("Cache-Control", "public, max-age=5, s-maxage=5");
+    res.set("Cache-Control", "private, no-store");
     res.json(campaigns.map((campaign) => serializeCampaign(campaign)));
   } catch (error) {
     console.error(error);

@@ -6,9 +6,10 @@ const { allowRoles } = require("../middleware/roles");
 const ctrl = require("../controllers/campaignController");
 
 // Public
-router.get("/", ctrl.getCampaigns);
+// Tam liste ve tek kampanya yalnız yönetim ekranı için; mağaza /active'i kullanır.
+router.get("/", verifyToken, allowRoles("admin"), ctrl.getCampaigns);
 router.get("/active", ctrl.getActiveCampaign);
-router.get("/:id", ctrl.getCampaign);
+router.get("/:id", verifyToken, allowRoles("admin"), ctrl.getCampaign);
 
 // Admin
 router.post(

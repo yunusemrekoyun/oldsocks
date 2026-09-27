@@ -13,6 +13,7 @@ const mongoose = require("mongoose");
 const connectDB = require("./config/db");
 const apiRoutes = require("./routes");
 const requestId = require("./middleware/requestId");
+const { publicAssetFilter } = require("./middleware/publicAssetFilter");
 const { trafficMonitor } = require("./services/trafficMonitor");
 const { MediaError, toMediaErrorPayload } = require("./services/media/errors");
 const {
@@ -230,6 +231,7 @@ app.use("/api/v1/newsletter/subscribe", newsletterLimiter);
 app.use("/api/v1", generalLimiter);
 
 /* 11) API routes */
+app.use("/api/v1", publicAssetFilter);
 app.use("/api/v1", apiRoutes);
 
 /* 12) 404 */
