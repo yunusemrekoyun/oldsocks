@@ -99,6 +99,28 @@ if (process.env.NODE_ENV !== "test") {
 const skipPreflight = (req) => req.method === "OPTIONS";
 const keyByIp = (req) => ipKeyGenerator(req.ip);
 
+// Sunucu içi önbellekten sunulan herkese açık okuma uçları. Maliyetleri çok düşük
+// olduğundan aynı IP'yi paylaşan mobil kullanıcılar (CGNAT) kalabalıkta
+// engellenmesin diye ayrı ve geniş bir sınıra tabidir.
+const PUBLIC_READ_PATHS = [
+  "/api/v1/products",
+  "/api/v1/categories",
+  "/api/v1/mini-campaigns",
+  "/api/v1/shipping",
+  "/api/v1/announcement-bar",
+  "/api/v1/cart-campaigns/header",
+  "/api/v1/storefront",
+  "/api/v1/site-content",
+  "/api/v1/hero-videos",
+  "/api/v1/campaigns/active",
+];
+const isPublicRead = (req) => {
+  if (req.method !== "GET" && req.method !== "HEAD") return false;
+  const path = req.originalUrl.split("?")[0];
+  if (path.includes("/admin")) return false;
+  return PUBLIC_READ_PATHS.some((prefix) => path === prefix || path.startsWith(`${prefix}/`));
+};
+
 /* 7) Rate limit (rotaya göre) */
 
 /**
@@ -112,22 +134,22 @@ const generalLimiter = rateLimit({
   max: 1200,
   standardHeaders: true,
   legacyHeaders: false,
-  skip: skipPreflight,
+  skip: (req) => skipPreflight(req) || isPublicRead(req),
   keyGenerator: keyByIp,
   skipSuccessfulRequests: false,
 });
 
 /**
- * Okuma-ağırlıklı uçlar (daha geniş)
- * - 1 dakikada 300 istek/IP
+ * Önbellekli herkese açık okumalar (GET/HEAD)
+ * - 1 dakikada 2000 istek/IP
  * - Başarılılar da sayılır
  */
 const readHeavyLimiter = rateLimit({
   windowMs: 60 * 1000,
-  max: 300,
+  max: 2000,
   standardHeaders: true,
   legacyHeaders: false,
-  skip: skipPreflight,
+  skip: (req) => !isPublicRead(req),
   keyGenerator: keyByIp,
   skipSuccessfulRequests: false,
 });
@@ -207,18 +229,8 @@ app.get("/readyz", (req, res) => {
 });
 
 /* 10) Rate limit uygulaması (sıra önemli) */
-/* Okuma-ağırlıklı GET uçları: daha geniş limiter */
-app.use(
-  [
-    "/api/v1/products",
-    "/api/v1/categories",
-    "/api/v1/mini-campaigns",
-    "/api/v1/shipping",
-    "/api/v1/announcement-bar",
-    "/api/v1/cart-campaigns",
-  ],
-  readHeavyLimiter
-);
+/* Önbellekli herkese açık okumalar: geniş limiter (diğer istekler genel limiter'a) */
+app.use("/api/v1", readHeavyLimiter);
 
 /* Kritik uçlar */
 app.use("/api/v1/auth", authLimiter);
