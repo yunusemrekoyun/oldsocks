@@ -5,6 +5,7 @@ const PasswordResetToken = require("../models/PasswordResetToken");
 const bcrypt = require("bcrypt");
 const { COOKIE_OPTIONS } = require("../utils/authTokens");
 const { validatePasswordPolicy } = require("../utils/passwordPolicy");
+const { sendAccountNoticeMail } = require("../utils/mailer");
 const {
   isValidEmailAddress,
   normalizeEmailAddress,
@@ -85,10 +86,21 @@ exports.updateMe = async (req, res) => {
         }
       }
     }
+    let previousEmail = null;
     if (Object.prototype.hasOwnProperty.call(updates, "email")) {
       updates.email = normalizeEmailAddress(updates.email);
       if (!isValidEmailAddress(updates.email) || updates.email.length > 100) {
         return res.status(400).json({ message: "Geçerli bir e-posta girin." });
+      }
+      // E-posta değişikliği hesabın kurtarma adresini değiştirir: mevcut parola şart.
+      const current = await User.findById(req.user.userId).select("email password");
+      if (!current) return res.status(404).json({ message: "Kullanıcı bulunamadı." });
+      if (updates.email !== normalizeEmailAddress(current.email)) {
+        const currentPassword = String(req.body?.currentPassword || "");
+        if (!currentPassword || !(await bcrypt.compare(currentPassword, current.password))) {
+          return res.status(400).json({ message: "E-posta adresini değiştirmek için mevcut şifrenizi girin." });
+        }
+        previousEmail = current.email;
       }
     }
     if (Object.prototype.hasOwnProperty.call(updates, "phone")) {
@@ -102,6 +114,13 @@ exports.updateMe = async (req, res) => {
       new: true,
       runValidators: true,
     }).select("-password -refreshTokens -tokenVersion");
+    if (previousEmail) {
+      sendAccountNoticeMail({
+        to: previousEmail,
+        subject: "E-posta adresiniz değiştirildi",
+        lines: [`Hesabınızın e-posta adresi ${user.email} olarak değiştirildi.`],
+      }).catch((error) => console.warn("[User][UpdateMe] Bildirim gönderilemedi:", error?.message || error));
+    }
     res.json(user);
   } catch (err) {
     console.error(err);
@@ -340,6 +359,11 @@ exports.changePassword = async (req, res) => {
     user.tokenVersion = Number(user.tokenVersion || 0) + 1;
     await user.save();
     await PasswordResetToken.deleteMany({ user: user._id });
+    sendAccountNoticeMail({
+      to: user.email,
+      subject: "Şifreniz değiştirildi",
+      lines: ["Hesabınızın şifresi değiştirildi.", "Tüm cihazlardaki oturumlarınız kapatıldı."],
+    }).catch((error) => console.warn("[User][ChangePassword] Bildirim gönderilemedi:", error?.message || error));
 
     return res
       .clearCookie("refreshToken", COOKIE_OPTIONS)

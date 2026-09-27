@@ -138,3 +138,21 @@ async function postJson(base, pathName, body, headers = {}) {
 }
 
 module.exports = { startTestServer, paytrCallback, paytrHash, postJson };
+
+// Yerel Mailpit (dev/yerel-ortam.sh) API'si: belirli alıcıya giden e-postaları getirir.
+const MAILPIT_API = process.env.TEST_MAILPIT_API || "http://127.0.0.1:8126/api/v1";
+async function mailsTo(email, { waitMs = 5000 } = {}) {
+  const deadline = Date.now() + waitMs;
+  for (;;) {
+    const res = await fetch(`${MAILPIT_API}/search?query=${encodeURIComponent(`to:"${email}"`)}`);
+    const data = await res.json();
+    if (data.messages?.length || Date.now() > deadline) {
+      return Promise.all(
+        (data.messages || []).map(async (m) => (await fetch(`${MAILPIT_API}/message/${m.ID}`)).json())
+      );
+    }
+    await new Promise((r) => setTimeout(r, 200));
+  }
+}
+
+module.exports.mailsTo = mailsTo;

@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import api from "../../api";
 import { getPasswordValidation } from "../utils/passwordRules";
@@ -6,7 +6,16 @@ import { getPasswordValidation } from "../utils/passwordRules";
 export default function ResetPasswordPage() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const token = searchParams.get("token") || "";
+  // Yeni bağlantılar token'ı # kısmında taşır (sunucu loglarına düşmez); eskiler sorgu dizesinde.
+  const [token] = useState(
+    () => new URLSearchParams(window.location.hash.slice(1)).get("token") || searchParams.get("token") || ""
+  );
+  useEffect(() => {
+    // Token'ı adres çubuğundan ve tarayıcı geçmişinden kaldır.
+    if (window.location.hash || window.location.search) {
+      window.history.replaceState(window.history.state, "", window.location.pathname);
+    }
+  }, []);
 
   const [form, setForm] = useState({
     password: "",

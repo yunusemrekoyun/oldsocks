@@ -2,7 +2,7 @@ const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 const User = require("../models/User");
 const PasswordResetToken = require("../models/PasswordResetToken");
-const { sendPasswordResetMail } = require("../utils/mailer");
+const { sendAccountNoticeMail, sendPasswordResetMail } = require("../utils/mailer");
 const {
   COOKIE_OPTIONS,
   createAccessToken,
@@ -277,7 +277,8 @@ exports.forgotPassword = async (req, res) => {
       userAgent: String(req.get("user-agent") || "").slice(0, 300) || null,
     });
 
-    const resetLink = `${getPrimaryFrontendOrigin()}/reset-password?token=${encodeURIComponent(
+    // Token URL'nin # kısmında: tarayıcı bunu sunucuya göndermez, erişim loglarına düşmez.
+    const resetLink = `${getPrimaryFrontendOrigin()}/reset-password#token=${encodeURIComponent(
       rawToken
     )}`;
 
@@ -345,6 +346,11 @@ exports.resetPassword = async (req, res) => {
     user.password = await bcrypt.hash(password, 10);
     await invalidateSessions(user);
     await PasswordResetToken.deleteMany({ user: user._id });
+    sendAccountNoticeMail({
+      to: user.email,
+      subject: "Şifreniz sıfırlandı",
+      lines: ["Hesabınızın şifresi, şifre sıfırlama bağlantısıyla değiştirildi.", "Tüm cihazlardaki oturumlarınız kapatıldı."],
+    }).catch((error) => console.warn("[Auth][ResetPassword] Bildirim gönderilemedi:", error?.message || error));
 
     return res.json({
       message: "Şifreniz güncellendi. Giriş yapabilirsiniz.",
