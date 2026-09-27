@@ -268,7 +268,7 @@ export default function OrdersPage() {
           <div className="flex items-center gap-2 text-dark2 min-w-0">
             <FaBoxOpen />
             <h1 className="text-xl font-semibold text-dark1 truncate">
-              {listMode === "pending" ? "Pending Siparişler" : "Siparişler"}
+              {listMode === "pending" ? "Bekleyen Siparişler" : "Siparişler"}
             </h1>
             <span className="text-xs bg-light1 text-dark2 px-2 py-0.5 rounded shrink-0">
               {filteredOrders.length}
@@ -303,7 +303,7 @@ export default function OrdersPage() {
                     : "text-dark2 hover:bg-light1"
                 }`}
               >
-                Pending Listele ({pendingCount})
+                Bekleyenler ({pendingCount})
               </button>
             </div>
 

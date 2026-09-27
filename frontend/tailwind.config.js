@@ -1,4 +1,6 @@
 // tailwind.config.js
+import defaultTheme from "tailwindcss/defaultTheme";
+
 export default {
   content: [
     "./src/**/*.{js,jsx,ts,tsx}",
@@ -6,6 +8,8 @@ export default {
     "./node_modules/@material-tailwind/react/theme/components/**/*.js",
   ],
   theme: {
+    // "xs" en küçük kırılım olarak başa eklenir; extend ile eklenirse CSS sırası bozulur.
+    screens: { xs: "480px", ...defaultTheme.screens },
     extend: {
       fontFamily: {
         playfair: ['"Playfair Display"', "serif"],
