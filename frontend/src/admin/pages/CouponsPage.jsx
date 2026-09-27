@@ -17,9 +17,20 @@ const emptyForm = {
   discountType: "percent",
   discountValue: "",
   minimumSubtotal: "",
+  expiresAt: "",
+  maxUses: "",
   isEnabled: true,
   productIds: [],
 };
+
+// datetime-local alanı yerel saati "YYYY-MM-DDTHH:mm" biçiminde bekler.
+function toLocalInput(value) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
 
 function discountTypeLabel(value) {
   return (
@@ -153,6 +164,8 @@ export default function CouponsPage() {
         coupon.minimumSubtotal === null || coupon.minimumSubtotal === undefined
           ? ""
           : String(coupon.minimumSubtotal),
+      expiresAt: toLocalInput(coupon.expiresAt),
+      maxUses: coupon.maxUses ? String(coupon.maxUses) : "",
       isEnabled: Boolean(coupon.isEnabled),
       productIds: (coupon.productIds || []).map(String),
     });
@@ -195,11 +208,22 @@ export default function CouponsPage() {
       throw new Error("Yüzdelik kupon 100'ü aşamaz.");
     }
 
+    const maxUses = form.maxUses === "" ? null : Number(form.maxUses);
+    if (maxUses !== null && (!Number.isInteger(maxUses) || maxUses < 1)) {
+      throw new Error("Kullanım sınırı 1 veya daha büyük bir tam sayı olmalıdır.");
+    }
+    const expiresAt = form.expiresAt ? new Date(form.expiresAt) : null;
+    if (expiresAt && Number.isNaN(expiresAt.getTime())) {
+      throw new Error("Bitiş tarihini kontrol edin.");
+    }
+
     return {
       code,
       discountType: form.discountType,
       discountValue,
       minimumSubtotal,
+      expiresAt: expiresAt ? expiresAt.toISOString() : null,
+      maxUses,
       isEnabled: Boolean(form.isEnabled),
       productIds: form.productIds,
     };
@@ -340,6 +364,16 @@ export default function CouponsPage() {
                           <p>
                             Alt Sınır: <b className="text-dark1">{fmtTL(coupon.minimumSubtotal || 0)}</b>
                           </p>
+                          {coupon.expiresAt && (
+                            <p className={new Date(coupon.expiresAt) <= new Date() ? "text-red-700" : undefined}>
+                              Bitiş: <b>{new Date(coupon.expiresAt).toLocaleString("tr-TR", { dateStyle: "medium", timeStyle: "short" })}</b>
+                            </p>
+                          )}
+                          {coupon.maxUses && (
+                            <p>
+                              Kullanım sınırı: <b className="text-dark1">{coupon.maxUses}</b>
+                            </p>
+                          )}
                           <p>
                             Kapsanan Ürün: <b className="text-dark1">{Array.isArray(coupon.productIds) ? coupon.productIds.length : 0}</b>
                           </p>
@@ -487,6 +521,40 @@ export default function CouponsPage() {
                 <p className="mt-1 text-xs text-gray-500">
                   Kupon yalnızca kapsanan ürünlerin toplamı bu tutara ulaştığında çalışır.
                 </p>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <label htmlFor="coupon-expires" className="mb-1 block text-sm font-medium">Bitiş (isteğe bağlı)</label>
+                  <input
+                    id="coupon-expires"
+                    type="datetime-local"
+                    className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none transition focus:border-dark1"
+                    value={form.expiresAt}
+                    onChange={(e) => {
+                      setDirty(true);
+                      setForm((prev) => ({ ...prev, expiresAt: e.target.value }));
+                    }}
+                  />
+                  <p className="mt-1 text-xs text-gray-500">Boş bırakılırsa süresiz.</p>
+                </div>
+                <div>
+                  <label htmlFor="coupon-max-uses" className="mb-1 block text-sm font-medium">Kullanım sınırı (isteğe bağlı)</label>
+                  <input
+                    id="coupon-max-uses"
+                    type="number"
+                    min={1}
+                    step="1"
+                    className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none transition focus:border-dark1"
+                    value={form.maxUses}
+                    onChange={(e) => {
+                      setDirty(true);
+                      setForm((prev) => ({ ...prev, maxUses: e.target.value }));
+                    }}
+                    placeholder="Sınırsız"
+                  />
+                  <p className="mt-1 text-xs text-gray-500">Kupon en fazla bu kadar siparişte kullanılabilir. Ödenmiş ve ödeme bekleyen siparişler sayılır.</p>
+                </div>
               </div>
 
               <label className="flex items-start gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-3 text-sm">

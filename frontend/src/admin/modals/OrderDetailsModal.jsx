@@ -27,6 +27,11 @@ const REASON_LABELS = {
     "Ödeme alındıktan sonra yeterli stok bulunamadı; manuel kontrol gerekiyor.",
   payment_failed: "Ödeme sağlayıcısı işlemin başarısız olduğunu bildirdi.",
   stock_unavailable: "Sipariş tamamlanırken yeterli stok bulunamadı.",
+  payment_abandoned: "Ödeme 24 saat içinde tamamlanmadığı için kapatıldı.",
+  paid_after_cancel:
+    "İptal edilmiş siparişe ödeme geldi; PayTR panelinden kontrol edip tamamlayın ya da iade edin.",
+  coupon_session_replaced:
+    "Müşteri aynı kuponla yeni bir ödeme başlattığı için bu oturum kapatıldı.",
 };
 
 function fmtPrice(value) {

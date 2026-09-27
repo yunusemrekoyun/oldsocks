@@ -3,10 +3,35 @@ const Product = require("../models/Product");
 const ShippingMethod = require("../models/ShippingMethod");
 const CartCampaign = require("../models/CartCampaign");
 const Coupon = require("../models/Coupon");
+const Order = require("../models/Order");
 const {
   hasCouponUsage,
   normalizeCouponCode,
 } = require("../utils/couponUsageService");
+
+const COUPON_USED_STATUSES = ["payment_review", "paid", "shipped", "completed"];
+const PENDING_HOLD_MS = 24 * 60 * 60 * 1000;
+
+function couponIdentity({ customerUserId, customerEmail } = {}) {
+  const email = String(customerEmail || "").trim().toLowerCase();
+  return [
+    ...(customerUserId ? [{ user: customerUserId }] : []),
+    ...(email ? [{ "guest.email": email }] : []),
+  ];
+}
+
+// Aynı müşterinin aynı kuponla açtığı eski ödeme oturumlarını kapatır. Kapatılan
+// siparişe sonradan ödeme gelirse PayTR bildirimi onu incelemeye alır.
+async function supersedePendingCouponOrders(order) {
+  const couponId = order?.coupon?.couponId;
+  const identity = couponIdentity({ customerUserId: order?.user, customerEmail: order?.guest?.email });
+  if (!couponId || !identity.length) return 0;
+  const result = await Order.updateMany(
+    { _id: { $lt: order._id }, "coupon.couponId": couponId, status: "pending", $or: identity },
+    { $set: { status: "cancelled", cancelReason: "coupon_session_replaced", cancelledAt: new Date() } }
+  );
+  return result.modifiedCount;
+}
 
 class HttpError extends Error {
   constructor(status, message, extras = {}) {
@@ -316,12 +341,37 @@ async function resolveCouponForLines(selectedCouponCode, lines, context = {}) {
     });
   }
 
-  if (context.customerUserId || context.customerEmail) {
-    const alreadyUsed = await hasCouponUsage({
-      couponId: coupon._id,
-      userId: context.customerUserId || null,
-      email: context.customerEmail || "",
-    });
+  if (coupon.expiresAt && new Date(coupon.expiresAt) <= new Date()) {
+    throw new HttpError(409, "Bu kuponun süresi dolmuş.", { source: "coupon" });
+  }
+
+  // Ödenmiş siparişler ile başka müşterilerin son 24 saatte açtığı ödeme oturumları
+  // kullanım sayılır. Aynı müşterinin bekleyen oturumu sayılmaz: yeni oturum açıldığında
+  // eskisi iptal edilir (supersedePendingCouponOrders), böylece kartı reddedilen müşteri
+  // tekrar deneyebilir.
+  const identity = couponIdentity(context);
+  const usedFilter = { "coupon.couponId": coupon._id, status: { $in: COUPON_USED_STATUSES } };
+
+  if (coupon.maxUses) {
+    const othersPending = {
+      "coupon.couponId": coupon._id,
+      status: "pending",
+      createdAt: { $gte: new Date(Date.now() - PENDING_HOLD_MS) },
+      ...(identity.length ? { $nor: identity } : {}),
+    };
+    const used = await Order.countDocuments({ $or: [usedFilter, othersPending] });
+    if (used >= coupon.maxUses) {
+      throw new HttpError(409, "Bu kupon kullanım sınırına ulaştı.", { source: "coupon" });
+    }
+  }
+
+  if (identity.length) {
+    const alreadyUsed =
+      (await hasCouponUsage({
+        couponId: coupon._id,
+        userId: context.customerUserId || null,
+        email: context.customerEmail || "",
+      })) || (await Order.exists({ ...usedFilter, $or: identity }));
     if (alreadyUsed) {
       throw new HttpError(409, "Bu kuponu daha önce kullandınız.", {
         source: "coupon",
@@ -516,4 +566,5 @@ module.exports = {
   buildAggregatedItems,
   calculateCartPricing,
   nowInRange,
+  supersedePendingCouponOrders,
 };

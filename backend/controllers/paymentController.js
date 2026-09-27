@@ -10,7 +10,10 @@ const {
   StockUnavailableError,
   OrderPaymentStateError,
 } = require("../utils/updateStock");
-const { calculateCartPricing } = require("../services/cartPricingService");
+const {
+  calculateCartPricing,
+  supersedePendingCouponOrders,
+} = require("../services/cartPricingService");
 const { recordCouponUsageForOrder } = require("../utils/couponUsageService");
 
 /* Frontend base (ilk origin) */
@@ -243,6 +246,9 @@ exports.startGuestPaymentSession = async (req, res) => {
       const message = err?.status ? err.message : "Sepet doğrulanamadı.";
       return res.status(status).json({ message, source: err?.source || null });
     }
+    if (!(Number(pricing?.summary?.grandTotal) >= 1)) {
+      return res.status(422).json({ message: "Sipariş tutarı ödeme için çok düşük." });
+    }
 
     // 2) merchant_oid / orderNumber üret
     const conversationId = uuidv4()
@@ -252,7 +258,7 @@ exports.startGuestPaymentSession = async (req, res) => {
     const orderNumber = Math.floor(1e9 + Math.random() * 9e9).toString();
 
     // 3) Order yarat (user YOK, guest DOLU)
-    await Order.create({
+    const createdOrder = await Order.create({
       orderNumber,
       user: undefined,
       guest: {
@@ -308,6 +314,11 @@ exports.startGuestPaymentSession = async (req, res) => {
         fee: pricing.summary.shippingFee,
       },
     });
+    if (createdOrder.coupon?.couponId) {
+      await supersedePendingCouponOrders(createdOrder).catch((err) =>
+        console.warn("[PAYMENT] eski kupon oturumu kapatılamadı:", err?.message || err)
+      );
+    }
 
     return res.json({
       conversationId,
@@ -386,6 +397,9 @@ exports.startPaymentSession = async (req, res) => {
       const message = err?.status ? err.message : "Sepet doğrulanamadı.";
       return res.status(status).json({ message, source: err?.source || null });
     }
+    if (!(Number(pricing?.summary?.grandTotal) >= 1)) {
+      return res.status(422).json({ message: "Sipariş tutarı ödeme için çok düşük." });
+    }
 
     // PayTR merchant_oid şartına uygun benzersiz ID (alfanümerik, 64 max)
     const conversationId = uuidv4()
@@ -395,7 +409,7 @@ exports.startPaymentSession = async (req, res) => {
     const orderNumber = Math.floor(1e9 + Math.random() * 9e9).toString();
 
     // Pending Order
-    await Order.create({
+    const createdOrder = await Order.create({
       orderNumber,
       user: userId,
       items: pricing.items,
@@ -444,6 +458,11 @@ exports.startPaymentSession = async (req, res) => {
         fee: pricing.summary.shippingFee,
       },
     });
+    if (createdOrder.coupon?.couponId) {
+      await supersedePendingCouponOrders(createdOrder).catch((err) =>
+        console.warn("[PAYMENT] eski kupon oturumu kapatılamadı:", err?.message || err)
+      );
+    }
 
     return res.json({
       conversationId,

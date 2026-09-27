@@ -19,6 +19,10 @@ const CouponSchema = new mongoose.Schema(
     },
     discountValue: { type: Number, required: true, min: 0.01 },
     minimumSubtotal: { type: Number, default: 0, min: 0 },
+    // Boşsa süresiz. Bu andan sonra kupon kabul edilmez.
+    expiresAt: { type: Date, default: null },
+    // Boşsa sınırsız. Ödenmiş ve ödeme bekleyen siparişler sayılır.
+    maxUses: { type: Number, default: null, min: 1 },
     productIds: [
       { type: mongoose.Schema.Types.ObjectId, ref: "Product", required: true },
     ],

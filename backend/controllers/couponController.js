@@ -78,6 +78,19 @@ async function buildCouponPayload(body) {
   const productIds = parseObjectIdArray(body?.productIds || []);
   await ensureProductsExist(productIds);
 
+  let expiresAt = null;
+  if (body?.expiresAt) {
+    expiresAt = new Date(body.expiresAt);
+    if (Number.isNaN(expiresAt.getTime())) throw new HttpError(400, "Geçersiz bitiş tarihi.");
+  }
+  let maxUses = null;
+  if (body?.maxUses !== undefined && body?.maxUses !== null && body?.maxUses !== "") {
+    maxUses = Number(body.maxUses);
+    if (!Number.isSafeInteger(maxUses) || maxUses < 1) {
+      throw new HttpError(400, "Kullanım sınırı 1 veya daha büyük bir tam sayı olmalıdır.");
+    }
+  }
+
   return {
     code,
     isEnabled: parseBoolean(body?.isEnabled, true),
@@ -85,6 +98,8 @@ async function buildCouponPayload(body) {
     discountValue,
     minimumSubtotal,
     productIds,
+    expiresAt,
+    maxUses,
   };
 }
 
