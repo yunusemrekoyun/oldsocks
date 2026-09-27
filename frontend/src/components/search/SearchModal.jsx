@@ -3,11 +3,15 @@ import { FaSearch, FaTimes } from "react-icons/fa";
 import { useNavigate } from "react-router-dom";
 import { getProductsCached } from "../../services/productCache";
 import { formatTry } from "../../utils/currency";
+import { searchProducts } from "../../utils/productSearch";
+
+const MAX_RESULTS = 30;
 
 export default function SearchModal({ open, onClose }) {
   const [allProducts, setAllProducts] = useState([]);
   const [query, setQuery] = useState("");
   const [results, setResults] = useState([]);
+  const [total, setTotal] = useState(0);
   const containerRef = useRef(null);
   const navigate = useNavigate();
 
@@ -34,9 +38,9 @@ export default function SearchModal({ open, onClose }) {
 
   // Arama filtrelemesi
   useEffect(() => {
-    const q = query.toLowerCase();
-    if (!q) return setResults([]);
-    setResults(allProducts.filter((p) => p.name.toLowerCase().includes(q)));
+    const matches = searchProducts(allProducts, query);
+    setTotal(matches.length);
+    setResults(matches.slice(0, MAX_RESULTS));
   }, [query, allProducts]);
 
   // Aç/Kapat kontrolü
@@ -79,6 +83,14 @@ export default function SearchModal({ open, onClose }) {
     navigate(`/product-details/${id}`);
   };
 
+  const showAll = (event) => {
+    event?.preventDefault();
+    const q = query.trim();
+    if (!q) return;
+    handleClose();
+    navigate(`/shop?q=${encodeURIComponent(q)}`);
+  };
+
   if (!isVisible) return null;
 
   return (
@@ -104,17 +116,19 @@ export default function SearchModal({ open, onClose }) {
         >
           <FaTimes />
         </button>
-        <div className="flex items-center mb-4 border-b pb-2">
-          <FaSearch className="text-gray-500 mr-2" />
+        <form role="search" onSubmit={showAll} className="flex items-center mb-4 border-b pb-2 pr-8">
+          <FaSearch className="text-gray-500 mr-2" aria-hidden="true" />
           <input
             autoFocus
             type="text"
-            placeholder="Ürün ara..."
+            enterKeyHint="search"
+            aria-label="Ürün ara"
+            placeholder="Ürün, renk veya kategori ara..."
             className="w-full outline-none text-lg"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
-        </div>
+        </form>
 
         <div className="max-h-64 overflow-auto">
           {query ? (
@@ -138,9 +152,11 @@ export default function SearchModal({ open, onClose }) {
                       <div className="text-dark1 font-medium group-hover:underline">
                         {p.name}
                       </div>
-                      <div className="text-sm text-gray-500">
-                        {p.description?.slice(0, 50)}...
-                      </div>
+                      {p.description && (
+                        <div className="text-sm text-gray-500">
+                          {p.description.length > 50 ? `${p.description.slice(0, 50)}…` : p.description}
+                        </div>
+                      )}
                     </div>
                   </div>
                   <div className="text-right space-y-1 min-w-[80px]">
@@ -161,6 +177,15 @@ export default function SearchModal({ open, onClose }) {
             </div>
           )}
         </div>
+        {query.trim() && total > 0 && (
+          <button
+            type="button"
+            onClick={showAll}
+            className="mt-3 w-full rounded-lg border border-dark1 py-2 text-sm font-medium text-dark1 transition hover:bg-dark1 hover:text-white"
+          >
+            Tüm sonuçları mağazada gör ({total})
+          </button>
+        )}
       </div>
 
       {/* Animasyonlar */}

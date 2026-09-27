@@ -137,13 +137,7 @@ export default function Categories() {
               <CategoryItem
                 image={c.image}
                 alt={c.name}
-                onClick={() =>
-                  navigate("/shop", {
-                    state: {
-                      preset: { category: [c._id], subCategory: [] },
-                    },
-                  })
-                }
+                onClick={() => navigate(`/shop?kategori=${encodeURIComponent(c._id)}`)}
               />
             </div>
           ))}

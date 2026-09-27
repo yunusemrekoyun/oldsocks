@@ -122,13 +122,23 @@ const Header = () => {
     }, 250);
   };
 
-  // Shop’a preset ile git
+  // Mağazaya git: kategori ve indirim adres çubuğunda (paylaşılabilir),
+  // kampanya ürün listeleri sayfa durumunda taşınır.
   const goShopWith = (preset) => {
     setShopOpen(false);
     setHoverParent(null);
     setMobileMenuOpen(false);
     setDrawerVisible(false);
-    navigate("/shop", { state: { preset } });
+    if (Array.isArray(preset?.productIds)) {
+      navigate("/shop", { state: { preset } });
+      return;
+    }
+    const params = new URLSearchParams();
+    for (const id of preset?.category || []) params.append("kategori", String(id));
+    for (const id of preset?.subCategory || []) params.append("alt", String(id));
+    if (preset?.discountOnly) params.set("indirim", "1");
+    const search = params.toString();
+    navigate(search ? `/shop?${search}` : "/shop");
   };
 
   // Mobil drawer animasyonu
