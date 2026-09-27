@@ -188,8 +188,10 @@ exports.getOrderById = async (req, res) => {
 };
 
 exports.confirmOrderPayment = async (req, res) => {
-  const { conversationId } = req.body;
-  if (!conversationId)
+  // Sorgu operatörü taşıyan nesneler başka siparişi eşleyebilir; yalnız metin kabul edilir.
+  const conversationId =
+    typeof req.body?.conversationId === "string" ? req.body.conversationId.trim() : "";
+  if (!conversationId || conversationId.length > 64)
     return res.status(400).json({ message: "Eksik parametre." });
 
   const order = await Order.findOne({ conversationId });

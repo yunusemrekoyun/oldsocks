@@ -704,8 +704,9 @@ exports.mockComplete = async (req, res) => {
       return res.status(403).json({ message: "Mock ödeme aktif değil." });
     }
 
-    const { conversationId } = req.body || {};
-    if (!conversationId) {
+    const conversationId =
+      typeof req.body?.conversationId === "string" ? req.body.conversationId.trim() : "";
+    if (!conversationId || conversationId.length > 64) {
       return res.status(400).json({ message: "Eksik parametre." });
     }
 

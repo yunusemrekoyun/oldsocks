@@ -158,3 +158,12 @@ test("son adet için iki ödeme: ilki ödenir, ikincisi incelemeye düşer (stok
   assert.deepEqual(statuses, ["paid", "payment_review"]);
   assert.equal(await stockOf(productId), 0);
 });
+
+test("sipariş onay ve mock ödeme uçları yalnız metin sipariş kimliği kabul eder", async () => {
+  const productId = await seedProduct({ stock: 3 });
+  await startGuestOrder(productId);
+  for (const path of ["/api/v1/orders/confirm", "/api/v1/payment/mock-complete"]) {
+    const res = await postJson(server.base, path, { conversationId: { $regex: "." } });
+    assert.equal(res.status, 400, `${path} → ${res.status} ${JSON.stringify(res.data)}`);
+  }
+});
