@@ -2,10 +2,13 @@
 import defaultTheme from "tailwindcss/defaultTheme";
 
 export default {
+  // Mağaza CSS'i: yönetim paneli (src/admin) ve Material Tailwind sınıfları hariç.
+  // Panel sınıfları tailwind.admin.config.js ile src/admin/admin.css'e derlenir ve
+  // yalnız panel açılınca yüklenir.
   content: [
-    "./src/**/*.{js,jsx,ts,tsx}",
-    "./node_modules/@material-tailwind/react/components/**/*.js",
-    "./node_modules/@material-tailwind/react/theme/components/**/*.js",
+    "./index.html",
+    "./src/*.{js,jsx,ts,tsx}",
+    "./src/{components,pages,context,hooks,services,utils}/**/*.{js,jsx,ts,tsx}",
   ],
   theme: {
     // "xs" en küçük kırılım olarak başa eklenir; extend ile eklenirse CSS sırası bozulur.

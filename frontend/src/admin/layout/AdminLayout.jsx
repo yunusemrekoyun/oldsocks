@@ -37,6 +37,7 @@ import {
   BoltIcon,
   DocumentTextIcon,
 } from "@heroicons/react/24/solid";
+import "../admin.css";
 
 /* --------- Küçük yardımcı --------- */
 const cx = (...cls) => cls.filter(Boolean).join(" ");
