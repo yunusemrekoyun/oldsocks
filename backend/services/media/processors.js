@@ -19,7 +19,8 @@ const {
 const IMAGE_TIMEOUT_SECONDS = 45;
 const VIDEO_TIMEOUT_MS = 12 * 60 * 1000;
 const VIDEO_MAX_PIXELS = 40_000_000;
-const VIDEO_THREADS = Math.max(1, Number(process.env.MEDIA_VIDEO_THREADS || 2));
+// 1 vCPU'da ffmpeg'in tek iş parçacığı kullanması API'ye nefes aldırır.
+const VIDEO_THREADS = Math.max(1, Number(process.env.MEDIA_VIDEO_THREADS || 1));
 
 function outputVariant({ relativeKey, name, kind, format, mime, stats, metadata }) {
   return {

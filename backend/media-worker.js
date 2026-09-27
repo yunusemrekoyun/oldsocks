@@ -1,5 +1,17 @@
 require("./config/env").loadEnv();
 
+// Medya işleme, tek çekirdekli sunucuda API ile aynı CPU'yu paylaşır. Düşük öncelik
+// (nice) vitrin isteklerinin öne geçmesini sağlar; sonradan açılan iş parçacıkları ve
+// ffmpeg alt süreçleri bu önceliği devralır, bu yüzden her şeyden önce ayarlanır.
+{
+  const niceValue = Number(process.env.MEDIA_WORKER_NICE ?? 10);
+  try {
+    if (Number.isInteger(niceValue) && niceValue !== 0) require("node:os").setPriority(niceValue);
+  } catch (error) {
+    console.warn("[media-worker] Öncelik ayarlanamadı:", error?.message || error);
+  }
+}
+
 const mongoose = require("mongoose");
 const connectDB = require("./config/db");
 const { initializeMediaStorage } = require("./services/media/storage");
