@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import SocialMediaItem from "./SocialMediaItem";
+import ExternalContentGate from "../privacy/ExternalContentGate";
 import api from "../../../api";
 
 // Slider
@@ -28,6 +29,7 @@ export default function SocialMedia() {
       {posts.length === 0 ? (
         <p className="text-center text-gray-500">Henüz gönderi yok.</p>
       ) : (
+        <ExternalContentGate service="Instagram" what="Gönderiler">
         <div className="w-full">
           {/* 1 slayt görünür; drag / swipe ile ileri-geri */}
           <Swiper
@@ -51,6 +53,7 @@ export default function SocialMedia() {
             ))}
           </Swiper>
         </div>
+        </ExternalContentGate>
       )}
     </section>
   );

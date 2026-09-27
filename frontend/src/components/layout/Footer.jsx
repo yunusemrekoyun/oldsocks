@@ -1,5 +1,6 @@
 // src/components/Footer.jsx
 import { Link } from "react-router-dom";
+import { setConsent } from "../../utils/consent";
 import { FaFacebookF, FaInstagram } from "react-icons/fa";
 import { useSiteContent } from "../../context/siteContent";
 
@@ -44,6 +45,11 @@ const Footer = () => {
             </li>
             <li>
               <Link to="/kvkk">KVKK Aydınlatma Metni</Link>
+            </li>
+            <li>
+              <button type="button" onClick={() => setConsent(null)} className="text-left hover:underline">
+                Çerez Tercihleri
+              </button>
             </li>
           </ul>
         </div>

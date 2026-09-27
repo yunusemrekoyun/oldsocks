@@ -1,4 +1,9 @@
 // src/main.jsx
+// Fontlar kendi sunucumuzdan gelir (Google'a istek ve çerez onayı gerekmez).
+// @font-face tanımları yalnız sayfada kullanılan font dosyasını indirir.
+import "@fontsource/playfair-display/700.css";
+import "@fontsource-variable/manrope";
+import "@fontsource-variable/bodoni-moda";
 import "./index.css";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";

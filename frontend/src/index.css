@@ -1,5 +1,3 @@
-@import url("https://fonts.googleapis.com/css2?family=Bodoni+Moda:wght@500;600;700&family=Manrope:wght@400;500;600;700&family=Playfair+Display:wght@700&display=swap");
-
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -10,13 +8,13 @@
 }
 
 .storefront-font-modern {
-  --storefront-body-font: "Manrope", Arial, sans-serif;
-  --storefront-heading-font: "Manrope", Arial, sans-serif;
+  --storefront-body-font: "Manrope Variable", "Manrope", Arial, sans-serif;
+  --storefront-heading-font: "Manrope Variable", "Manrope", Arial, sans-serif;
 }
 
 .storefront-font-fashion {
-  --storefront-body-font: "Manrope", Arial, sans-serif;
-  --storefront-heading-font: "Bodoni Moda", Georgia, serif;
+  --storefront-body-font: "Manrope Variable", "Manrope", Arial, sans-serif;
+  --storefront-heading-font: "Bodoni Moda Variable", "Bodoni Moda", Georgia, serif;
 }
 
 .storefront-theme {

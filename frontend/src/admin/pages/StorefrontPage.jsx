@@ -14,8 +14,8 @@ const sources = [
 ];
 const fonts = [
   { value: "classic", label: "Klasik", detail: "Mevcut görünüm · Playfair başlık, sade metin", heading: '"Playfair Display", Georgia, serif', body: "Arial, sans-serif" },
-  { value: "modern", label: "Modern", detail: "Manrope başlık ve metin", heading: '"Manrope", Arial, sans-serif', body: '"Manrope", Arial, sans-serif' },
-  { value: "fashion", label: "Moda", detail: "Bodoni başlık, Manrope metin", heading: '"Bodoni Moda", Georgia, serif', body: '"Manrope", Arial, sans-serif' },
+  { value: "modern", label: "Modern", detail: "Manrope başlık ve metin", heading: '"Manrope Variable", Arial, sans-serif', body: '"Manrope Variable", Arial, sans-serif' },
+  { value: "fashion", label: "Moda", detail: "Bodoni başlık, Manrope metin", heading: '"Bodoni Moda Variable", Georgia, serif', body: '"Manrope Variable", Arial, sans-serif' },
 ];
 
 function ProductThumbnail({ product }) {

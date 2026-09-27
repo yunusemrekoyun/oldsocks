@@ -24,6 +24,15 @@ export default function CookiePolicyPage() {
         </li>
       </ul>
 
+      <h2 className="text-xl font-medium mt-8 mb-2">Dış İçerikler</h2>
+      <p className="text-gray-700">
+        İletişim sayfasındaki harita Google Haritalar'dan, blogdaki gönderiler
+        Instagram'dan yüklenir. Bu hizmetler yüklendiklerinde kendi çerezlerini
+        kullanabilir ve IP adresinizi görebilir. Bu nedenle bu içerikler yalnız
+        izin verdiğinizde yüklenir. Site yazı tipleri kendi sunucumuzdan
+        verilir; bunun için üçüncü tarafa istek gönderilmez.
+      </p>
+
       <h2 className="text-xl font-medium mt-8 mb-2">Saklama Süresi</h2>
       <p className="text-gray-700">
         Zorunlu çerezler oturum süresince veya yasal/işlemsel gereklilikler
@@ -32,9 +41,9 @@ export default function CookiePolicyPage() {
 
       <h2 className="text-xl font-medium mt-8 mb-2">Bilgilendirme</h2>
       <p className="text-gray-700">
-        Sayfanın altında görünen bildirim, yalnızca kullanılan zorunlu çerezler
-        hakkında bilgi verir. Bu çerezler oturum, sepet ve ödeme işlevlerinin
-        çalışması için gereklidir.
+        Sitemize ilk girişinizde "Yalnız zorunlu" veya "Tümüne izin ver"
+        seçeneklerinden birini seçersiniz. Tercihinizi sayfa altındaki "Çerez
+        Tercihleri" bağlantısından istediğiniz zaman değiştirebilirsiniz.
       </p>
 
       <h2 className="text-xl font-medium mt-8 mb-2">İletişim</h2>

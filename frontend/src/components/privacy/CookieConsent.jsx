@@ -1,63 +1,47 @@
-import React, { useEffect, useState } from "react";
+import React from "react";
 import { Link } from "react-router-dom";
-
-const STORAGE_KEY = "cookieConsent"; // "accepted"
+import useConsent from "../../hooks/useConsent";
+import { setConsent } from "../../utils/consent";
 
 export default function CookieConsent() {
-  const [visible, setVisible] = useState(false);
-
-  useEffect(() => {
-    const v = localStorage.getItem(STORAGE_KEY);
-    if (!v) setVisible(true);
-  }, []);
-
-  const accept = () => {
-    localStorage.setItem(STORAGE_KEY, "accepted");
-    setVisible(false);
-  };
-
-  if (!visible) return null;
+  const consent = useConsent();
+  if (consent) return null;
 
   return (
     <div className="fixed inset-x-0 bottom-0 z-[1000] pointer-events-none">
       <div className="relative w-full">
         <div
-          className="
-            pointer-events-auto
-            mx-auto
-            mb-6
-            max-w-[700px]
-            w-[calc(100%-24px)]
-            rounded-2xl
-            border
-            border-gray-200
-            bg-white/70
-            backdrop-blur
-            shadow-xl
-          "
+          role="dialog"
+          aria-live="polite"
+          aria-label="Çerez tercihi"
+          className="pointer-events-auto mx-auto mb-6 w-[calc(100%-24px)] max-w-[700px] rounded-2xl border border-gray-200 bg-white/90 shadow-xl backdrop-blur"
         >
           <div className="p-4 sm:p-5">
-            <h3 className="text-sm sm:text-base font-semibold text-gray-900">
-              Çerez Kullanımı
-            </h3>
-            <p className="mt-1 text-xs sm:text-sm text-gray-700 leading-5">
-              Sitemiz; oturum (giriş), sepet ve ödeme akışları için{" "}
-              <b>zorunlu çerezler</b> kullanır. Detaylar için{" "}
-              <Link
-                to="/cookies"
-                className="text-black underline underline-offset-2"
-              >
+            <h3 className="text-sm font-semibold text-gray-900 sm:text-base">Çerez Kullanımı</h3>
+            <p className="mt-1 text-xs leading-5 text-gray-700 sm:text-sm">
+              Oturum, sepet ve ödeme için <b>zorunlu çerezler</b> kullanırız. İletişim sayfasındaki
+              harita (Google) ve blogdaki Instagram gönderileri gibi dış içerikler yalnız izin
+              verirseniz yüklenir. Ayrıntılar:{" "}
+              <Link to="/cookies" className="text-black underline underline-offset-2">
                 Çerez Politikası
               </Link>
-              ’nı inceleyebilirsiniz.
+              .
             </p>
 
-            <div className="mt-4 flex justify-end">
+            <div className="mt-4 flex flex-col-reverse justify-end gap-2 sm:flex-row">
               <button
-                onClick={accept}
-                className="px-3 py-2 text-sm rounded-lg bg-black text-white hover:bg-gray-800"
+                type="button"
+                onClick={() => setConsent("necessary")}
+                className="rounded-lg bg-black px-3 py-2 text-sm text-white hover:bg-gray-800"
               >
-                Tamam, anladım
+                Yalnız zorunlu
+              </button>
+              <button
+                type="button"
+                onClick={() => setConsent("all")}
+                className="rounded-lg bg-black px-3 py-2 text-sm text-white hover:bg-gray-800"
+              >
+                Tümüne izin ver
               </button>
             </div>
           </div>
