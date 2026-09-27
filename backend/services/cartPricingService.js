@@ -400,6 +400,43 @@ function selectCampaign(eligibleCampaigns, selectedCampaignId) {
   return found;
 }
 
+// Sepet eşitleme: her satırın güncel fiyatını ve stoğunu döner, hata fırlatmaz.
+// status: ok | missing (ürün yok/arşivde) | size_missing | insufficient (stok az)
+async function checkCartItems(rawItems) {
+  if (!Array.isArray(rawItems) || rawItems.length > 100) {
+    throw new HttpError(400, "Sepet boş veya geçersiz.");
+  }
+  const lines = rawItems.map((item) => ({
+    id: String(item?.id || item?.productId || "").trim(),
+    size: normalizeSize(item?.size),
+    qty: Number(item?.qty),
+  }));
+  const ids = [...new Set(lines.map((l) => l.id).filter((id) => mongoose.isObjectIdOrHexString(id)))];
+  const products = ids.length
+    ? await Product.find({ _id: { $in: ids }, archivedAt: null })
+        .select("name price originalPrice sizes")
+        .lean()
+    : [];
+  const byId = new Map(products.map((p) => [String(p._id), p]));
+
+  return lines.map((line) => {
+    const product = byId.get(line.id);
+    if (!product) return { id: line.id, size: line.size, status: "missing" };
+    const sizeRecord = (product.sizes || []).find((s) => normalizeSize(s?.size) === line.size);
+    const base = {
+      id: line.id,
+      size: line.size,
+      name: product.name,
+      price: Number(product.price),
+      originalPrice: Number(product.originalPrice) > 0 ? Number(product.originalPrice) : Number(product.price),
+    };
+    if (!sizeRecord) return { ...base, status: "size_missing", available: 0 };
+    const available = Math.max(0, Number(sizeRecord.stock || 0));
+    const qty = Number.isSafeInteger(line.qty) && line.qty > 0 ? line.qty : 1;
+    return { ...base, available, status: qty > available ? "insufficient" : "ok" };
+  });
+}
+
 async function calculateCartPricing(rawItems, options = {}) {
   const selectedCampaignId = options?.selectedCampaignId
     ? String(options.selectedCampaignId)
@@ -565,6 +602,7 @@ module.exports = {
   HttpError,
   buildAggregatedItems,
   calculateCartPricing,
+  checkCartItems,
   nowInRange,
   supersedePendingCouponOrders,
 };

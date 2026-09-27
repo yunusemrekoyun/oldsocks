@@ -1,44 +1,18 @@
 // src/components/cart/CartItem.jsx
-import React, { useEffect, useState, useRef } from "react";
+import React, { useState, useRef } from "react";
 import { useCart } from "../../context/useCart";
 import { FaTrash, FaPlus, FaMinus } from "react-icons/fa";
 import { Link } from "react-router-dom";
-import api from "../../../api";
 import { formatTry } from "../../utils/currency";
 
-export default function CartItem({ item }) {
+export default function CartItem({ item, available }) {
   const { removeFromCart, addToCart, updateQty } = useCart?.() || {};
-  const [maxStock, setMaxStock] = useState(Infinity);
-  const [loadingStock, setLoadingStock] = useState(true);
+  // Stok sepetteki tüm satırlar için tek istekte gelir (Cart → /cart-campaigns/check).
+  // Henüz gelmediyse sınırsız kabul edilir; ödeme adımı stoğu yine sunucuda doğrular.
+  const loadingStock = available === undefined;
+  const maxStock = loadingStock ? Infinity : Math.max(0, Number(available) || 0);
   const [warn, setWarn] = useState("");
   const warnRef = useRef(false);
-
-  useEffect(() => {
-    let alive = true;
-    (async () => {
-      try {
-        setLoadingStock(true);
-        const { data } = await api.get(`/products/${item.id}`);
-        if (!alive) return;
-        const sizes = Array.isArray(data?.sizes) ? data.sizes : [];
-        if (sizes.length === 0) {
-          setMaxStock(Infinity);
-        } else {
-          const row = sizes.find((s) => s.size === item.size);
-          const stock = Number(row?.stock ?? 0);
-          setMaxStock(stock > 0 ? stock : 0);
-        }
-      } catch (e) {
-        console.error("Stok bilgisi alınamadı:", e);
-        setMaxStock(Infinity);
-      } finally {
-        if (alive) setLoadingStock(false);
-      }
-    })();
-    return () => {
-      alive = false;
-    };
-  }, [item.id, item.size]);
 
   const showWarn = (msg) => {
     if (warnRef.current) return;

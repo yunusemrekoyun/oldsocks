@@ -4,6 +4,7 @@ const Product = require("../models/Product");
 const { timedCache } = require("../services/timedCache");
 const {
   calculateCartPricing,
+  checkCartItems,
   HttpError,
   nowInRange,
 } = require("../services/cartPricingService");
@@ -261,6 +262,18 @@ exports.listHeaderCampaigns = async (_req, res) => {
   } catch (err) {
     console.error("[CartCampaign][header] error:", err);
     res.status(500).json({ message: "Header kampanyaları alınamadı." });
+  }
+};
+
+exports.checkCartItems = async (req, res) => {
+  try {
+    const items = await checkCartItems(req.body?.cartItems);
+    res.set("Cache-Control", "no-store");
+    return res.json({ items });
+  } catch (err) {
+    if (err?.status) return res.status(err.status).json({ message: err.message });
+    console.error("[CartCampaign][check] error:", err);
+    return res.status(500).json({ message: "Sepet kontrol edilemedi." });
   }
 };
 

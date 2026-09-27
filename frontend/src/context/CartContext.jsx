@@ -1,6 +1,7 @@
 // src/context/CartProvider.jsx
 import React, { useState, useEffect } from "react";
 import { CartContext } from "./CartContextObject";
+import { sanitizeCartItems } from "../utils/cartReconcile";
 
 const STORAGE_KEY = "cartItems";
 const CAMPAIGN_STORAGE_KEY = "selectedCartCampaignId";
@@ -10,7 +11,7 @@ export default function CartProvider({ children }) {
   const [items, setItems] = useState(() => {
     try {
       const stored = localStorage.getItem(STORAGE_KEY);
-      return stored ? JSON.parse(stored) : [];
+      return stored ? sanitizeCartItems(JSON.parse(stored)) : [];
     } catch {
       return [];
     }
@@ -39,6 +40,30 @@ export default function CartProvider({ children }) {
       return;
     }
   }, [items]);
+
+  // Başka sekmede sepet değişince bu sekme de güncellenir; aksi hâlde son yazan
+  // sekme diğerinin sepetini ezer.
+  useEffect(() => {
+    const onStorage = (event) => {
+      if (event.storageArea !== localStorage) return;
+      if (event.key === STORAGE_KEY) {
+        try {
+          setItems(event.newValue ? sanitizeCartItems(JSON.parse(event.newValue)) : []);
+        } catch {
+          setItems([]);
+        }
+      } else if (event.key === CAMPAIGN_STORAGE_KEY) {
+        setSelectedCampaignId(event.newValue || null);
+      } else if (event.key === COUPON_STORAGE_KEY) {
+        setSelectedCouponCode(event.newValue || null);
+      } else if (event.key === null) {
+        // localStorage.clear()
+        setItems([]);
+      }
+    };
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, []);
 
   useEffect(() => {
     try {
@@ -98,6 +123,9 @@ export default function CartProvider({ children }) {
     );
   };
 
+  // Sunucuyla eşitleme sonrası sepetin tamamını değiştirir.
+  const replaceItems = (next) => setItems(sanitizeCartItems(next));
+
   const clearCart = () => {
     setItems([]);
     setSelectedCampaignId(null);
@@ -111,6 +139,7 @@ export default function CartProvider({ children }) {
         addToCart,
         updateQty,
         removeFromCart,
+        replaceItems,
         clearCart,
         selectedCampaignId,
         setSelectedCampaignId,

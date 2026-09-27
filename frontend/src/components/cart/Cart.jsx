@@ -7,9 +7,11 @@ import CartItem from "./CartItem";
 import { FaShoppingCart } from "react-icons/fa";
 import AuthRequiredModal from "../auth/AuthRequireModal";
 import api from "../../../api";
+import publicApi from "../../../publicApi";
 import { formatTry } from "../../utils/currency";
 import ConfirmDialog from "../ui/ConfirmDialog";
 import CartRecommendations from "./CartRecommendations";
+import { cartKey, reconcileCart } from "../../utils/cartReconcile";
 
 export default function Cart() {
   const {
@@ -19,6 +21,7 @@ export default function Cart() {
     setSelectedCampaignId,
     selectedCouponCode,
     setSelectedCouponCode,
+    replaceItems,
   } = useCart();
   const { isLoggedIn } = useAuth();
   const navigate = useNavigate();
@@ -37,6 +40,38 @@ export default function Cart() {
   const [pricingError, setPricingError] = useState(null);
   const [couponInput, setCouponInput] = useState(selectedCouponCode || "");
   const [couponError, setCouponError] = useState(null);
+
+  // Sunucuyla eşitleme: güncel fiyat, stok ve satıştan kalkan ürünler
+  const [stockByKey, setStockByKey] = useState(null); // Map<cartKey, available> | null
+  const [cartNotices, setCartNotices] = useState([]);
+  const linesKey = items.map((i) => `${cartKey(i.id, i.size)}:${i.qty}:${i.price}`).join("|");
+
+  useEffect(() => {
+    if (!items.length) return undefined;
+    let alive = true;
+    publicApi
+      .post("/cart-campaigns/check", {
+        cartItems: items.map(({ id, size, qty }) => ({ id, size, qty })),
+      })
+      .then(({ data }) => {
+        if (!alive) return;
+        const results = Array.isArray(data?.items) ? data.items : [];
+        setStockByKey(new Map(results.map((r) => [cartKey(r.id, r.size), r.available ?? 0])));
+        const { items: next, notices, changed } = reconcileCart(items, results);
+        if (notices.length) {
+          setCartNotices((prev) => [...new Set([...prev, ...notices])]);
+        }
+        if (changed) replaceItems(next);
+      })
+      .catch(() => {
+        // Eşitleme yapılamazsa sepet olduğu gibi kalır; ödeme adımı yine sunucuda doğrulanır.
+      });
+    return () => {
+      alive = false;
+    };
+    // linesKey sepet satırlarını temsil eder; items her render'da yeni dizi olabilir.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [linesKey]);
 
   // Kargo metodu (tek kayıt varsayımı)
   const [shipping, setShipping] = useState(null); // { _id, name, fee, freeShippingThreshold }
@@ -103,7 +138,8 @@ export default function Cart() {
         setAppliedCampaign(applied);
         setAppliedCoupon(coupon);
         setPricingError(null);
-        setCouponError(null);
+        // Geçersiz kupon kaldırıldıktan sonraki yeniden hesaplama hata mesajını silmesin.
+        if (selectedCouponCode) setCouponError(null);
       } catch (e) {
         console.error("Sepet fiyatlandırması alınamadı:", e);
         const message =
@@ -231,11 +267,31 @@ export default function Cart() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8">
         {/* Ürün listesi */}
         <section className="lg:col-span-2">
+          {cartNotices.length > 0 && (
+            <div
+              role="status"
+              className="mb-4 flex items-start justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900"
+            >
+              <ul className="space-y-1">
+                {cartNotices.map((notice) => (
+                  <li key={notice}>{notice}</li>
+                ))}
+              </ul>
+              <button
+                type="button"
+                onClick={() => setCartNotices([])}
+                className="shrink-0 font-medium underline underline-offset-2"
+              >
+                Tamam
+              </button>
+            </div>
+          )}
           <div className="space-y-4 sm:space-y-6">
             {items.map((item) => (
               <CartItem
                 key={`${item.id}-${item.size || "nosize"}`}
                 item={item}
+                available={stockByKey ? stockByKey.get(cartKey(item.id, item.size)) : undefined}
               />
             ))}
           </div>
