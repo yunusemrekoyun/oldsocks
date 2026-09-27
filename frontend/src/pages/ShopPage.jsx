@@ -9,6 +9,7 @@ import useProductsCache from "../hooks/useProductsCache";
 import useCategoriesCache from "../hooks/useCategoriesCache";
 import { buildVariantColorMap } from "../utils/productVariants";
 import { searchProducts } from "../utils/productSearch";
+import usePageMeta from "../hooks/usePageMeta";
 import PageLoading from "../components/common/PageLoading";
 
 const SORT_OPTIONS = [
@@ -224,13 +225,18 @@ export default function ShopPage() {
     categoryName ||
     (discountOnly ? "İndirimdekiler" : "");
 
-  useEffect(() => {
-    const previous = document.title;
-    document.title = listTitle ? `${listTitle} | OLDSOCKS` : "Mağaza | OLDSOCKS";
-    return () => {
-      document.title = previous;
-    };
-  }, [listTitle]);
+  // Arama sonuçları dizine girmez; tek kategori kendi adresiyle, diğerleri /shop ile.
+  const singleCategory =
+    filters.subCategory.length === 1 ? `alt=${filters.subCategory[0]}` :
+    filters.category.length === 1 && !filters.subCategory.length ? `kategori=${filters.category[0]}` : "";
+  usePageMeta({
+    title: listTitle || "Mağaza",
+    description: categoryName
+      ? `${categoryName} ürünleri OLDSOCKS mağazasında.`
+      : "OLDSOCKS mağazasındaki tüm ürünler: beden, renk ve fiyata göre filtreleyin.",
+    noindex: Boolean(query),
+    canonicalPath: singleCategory && !presetTitle && !campaignTitle && !miniTitle ? `/shop?${singleCategory}` : "/shop",
+  });
 
   /* Kampanya/filtre temizleme */
   const clearCampaign = () => {

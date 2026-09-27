@@ -1,8 +1,10 @@
 // src/pages/AgreementPage.jsx
 import React from "react";
 import { Link } from "react-router-dom";
+import usePageMeta from "../hooks/usePageMeta";
 
 export default function AgreementPage() {
+  usePageMeta({ title: "Mesafeli Satış Sözleşmesi" });
   // Mağaza bilgileri (footer ile uyumlu tut)
   const STORE = {
     brand: "OLDSOCKS",

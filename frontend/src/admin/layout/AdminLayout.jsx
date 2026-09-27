@@ -38,12 +38,14 @@ import {
   DocumentTextIcon,
 } from "@heroicons/react/24/solid";
 import "../admin.css";
+import usePageMeta from "../../hooks/usePageMeta";
 
 /* --------- Küçük yardımcı --------- */
 const cx = (...cls) => cls.filter(Boolean).join(" ");
 
 /* --------- Ana Layout --------- */
 export default function AdminLayout({ children }) {
+  usePageMeta({ title: "Yönetim Paneli", noindex: true });
   const location = useLocation();
   const { count: unseenOrders } = useUnseenOrders({ poll: true });
   const { count: unseenComments } = useUnseenComments({ poll: true });

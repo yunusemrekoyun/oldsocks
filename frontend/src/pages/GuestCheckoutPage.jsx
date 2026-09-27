@@ -5,6 +5,7 @@ import { useCart } from "../context/useCart";
 import ToastAlert from "../components/ui/ToastAlert";
 import api from "../../api";
 import { formatTry } from "../utils/currency";
+import usePageMeta from "../hooks/usePageMeta";
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/i;
 const GUEST_FIELD_KEYS = [
@@ -69,6 +70,7 @@ function focusFirstInvalidField(errors) {
 }
 
 export default function GuestCheckoutPage() {
+  usePageMeta({ title: "Misafir Ödeme", noindex: true });
   const {
     items,
     selectedCampaignId,

@@ -9,6 +9,7 @@ import ToastAlert from "../components/ui/ToastAlert";
 import api from "../../api";
 import { formatTry } from "../utils/currency";
 import PageLoading from "../components/common/PageLoading";
+import usePageMeta from "../hooks/usePageMeta";
 
 function getPhoneDigits(value) {
   return String(value || "")
@@ -17,6 +18,7 @@ function getPhoneDigits(value) {
 }
 
 export default function CheckoutPage() {
+  usePageMeta({ title: "Ödeme", noindex: true });
   const {
     items,
     selectedCampaignId,

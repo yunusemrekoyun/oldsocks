@@ -1,8 +1,10 @@
 import React from "react";
 import { Link } from "react-router-dom";
 import { Home } from "lucide-react";
+import usePageMeta from "../hooks/usePageMeta";
 
 export default function NotFoundPage() {
+  usePageMeta({ title: "Sayfa bulunamadı", noindex: true });
   return (
     <section className="flex min-h-screen flex-col items-center justify-center bg-dark1 text-center text-light1 px-6">
       {/* 404 Başlık */}

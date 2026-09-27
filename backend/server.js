@@ -224,6 +224,8 @@ app.get("/healthz", (req, res) => {
   });
 });
 
+app.get("/sitemap.xml", require("./services/sitemap").sendSitemap);
+
 app.get("/readyz", (req, res) => {
   const ready = mongoose.connection.readyState === 1;
   res.status(ready ? 200 : 503).json({ ok: ready });

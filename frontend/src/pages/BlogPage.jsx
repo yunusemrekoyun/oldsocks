@@ -13,8 +13,10 @@ import NewsLetter from "../components/blog/NewsLetter";
 import { formatTurkishDate } from "../utils/date";
 import BlogPagination from "../components/blog/BlogPagination";
 import PageLoading from "../components/common/PageLoading";
+import usePageMeta from "../hooks/usePageMeta";
 
 export default function BlogPage() {
+  usePageMeta({ title: "Blog" });
   const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchParams] = useSearchParams();

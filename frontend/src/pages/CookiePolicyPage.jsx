@@ -1,6 +1,8 @@
 import React from "react";
+import usePageMeta from "../hooks/usePageMeta";
 
 export default function CookiePolicyPage() {
+  usePageMeta({ title: "Çerez Politikası" });
   return (
     <section className="container mx-auto px-4 py-10 max-w-3xl">
       <h1 className="text-2xl font-semibold mb-4">Çerez Politikası</h1>

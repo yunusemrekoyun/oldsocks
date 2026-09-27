@@ -6,8 +6,10 @@ import Campaigns from "../components/campaigns/Campaigns";
 import Services from "../components/services/Services";
 import HomeProductSection from "../components/products/HomeProductSection";
 import { normalizeSectionOrder, useStorefrontSettings } from "../context/storefrontSettings";
+import usePageMeta from "../hooks/usePageMeta";
 
 const HomePage = () => {
+  usePageMeta({});
   const { sectionOrder, sections } = useStorefrontSettings();
   const order = normalizeSectionOrder(sectionOrder);
   const productSection = (key) => sections?.[key]?.visible === false

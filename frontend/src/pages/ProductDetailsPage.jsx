@@ -11,6 +11,8 @@ import Campaigns from "../components/campaigns/Campaigns";
 import Services from "../components/services/Services";
 import { useStorefrontSettings } from "../context/storefrontSettings";
 import PageLoading from "../components/common/PageLoading";
+import usePageMeta from "../hooks/usePageMeta";
+import { formatTry } from "../utils/currency";
 
 export default function ProductDetailsPage() {
   const { similarProductsVisible } = useStorefrontSettings();
@@ -32,6 +34,62 @@ export default function ProductDetailsPage() {
       })
       .finally(() => setLoading(false));
   }, [id]);
+
+  const firstImage = product?.media?.images?.[0]?.url || product?.images?.[0] || undefined;
+  usePageMeta({
+    title: product?.name || (error ? "Ürün bulunamadı" : "Ürün"),
+    description: product
+      ? product.description || `${product.name} — ${formatTry(product.price)}. OLDSOCKS mağazasında.`
+      : undefined,
+    image: firstImage,
+    type: product ? "product" : "website",
+    noindex: Boolean(error),
+  });
+
+  // Google'da fiyat ve stok gösterilebilsin diye yapılandırılmış veri (schema.org).
+  useEffect(() => {
+    if (!product) return undefined;
+    const url = `${window.location.origin}/product-details/${product._id}`;
+    const cat = product.category && typeof product.category === "object" ? product.category : null;
+    const inStock = (product.sizes || []).some((s) => Number(s?.stock) > 0);
+    const crumbs = [
+      { name: "Ana Sayfa", item: `${window.location.origin}/` },
+      { name: "Mağaza", item: `${window.location.origin}/shop` },
+      ...(cat?._id ? [{ name: cat.name, item: `${window.location.origin}/shop?kategori=${cat._id}` }] : []),
+      { name: product.name, item: url },
+    ];
+    const data = {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "Product",
+          name: product.name,
+          ...(firstImage ? { image: [firstImage] } : {}),
+          ...(product.description ? { description: product.description } : {}),
+          sku: String(product._id),
+          ...(product.color ? { color: product.color } : {}),
+          brand: { "@type": "Brand", name: "OLDSOCKS" },
+          offers: {
+            "@type": "Offer",
+            url,
+            priceCurrency: "TRY",
+            price: Number(product.price || 0).toFixed(2),
+            availability: inStock ? "https://schema.org/InStock" : "https://schema.org/OutOfStock",
+            itemCondition: "https://schema.org/NewCondition",
+          },
+        },
+        {
+          "@type": "BreadcrumbList",
+          itemListElement: crumbs.map((c, i) => ({ "@type": "ListItem", position: i + 1, name: c.name, item: c.item })),
+        },
+      ],
+    };
+    const el = document.createElement("script");
+    el.type = "application/ld+json";
+    el.textContent = JSON.stringify(data);
+    document.head.appendChild(el);
+    return () => el.remove();
+  }, [product, firstImage]);
 
   if (loading) return <PageLoading text="Ürün yükleniyor…" />;
   if (error)

@@ -18,6 +18,7 @@ import SocialMedia from "../components/blog/SocialMedia";
 import NewsLetter from "../components/blog/NewsLetter";
 import { formatTurkishDate } from "../utils/date";
 import PageLoading from "../components/common/PageLoading";
+import usePageMeta from "../hooks/usePageMeta";
 
 export default function BlogDetailsPage() {
   const { slug } = useParams();
@@ -37,6 +38,14 @@ export default function BlogDetailsPage() {
       })
       .finally(() => setLoading(false));
   }, [slug]);
+
+  usePageMeta({
+    title: blog?.title || (loading ? "Blog" : "Yazı bulunamadı"),
+    description: blog?.excerpt || blog?.subtitle,
+    image: blog?.coverImageUrl,
+    type: blog ? "article" : "website",
+    noindex: !loading && !blog,
+  });
 
   // Yorumları getir
   const fetchComments = useCallback(() => {

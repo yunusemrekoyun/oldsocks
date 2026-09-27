@@ -12,6 +12,7 @@ import {
   ExclamationTriangleIcon,
   XCircleIcon,
 } from "@heroicons/react/24/solid";
+import usePageMeta from "../hooks/usePageMeta";
 
 const POLL_INTERVAL_MS = 2000;
 const POLL_LIMIT_MS = 30000;
@@ -38,6 +39,7 @@ async function fetchPaymentState(conversationId) {
 }
 
 export default function PaymentResultPage() {
+  usePageMeta({ title: "Ödeme Sonucu", noindex: true });
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const { clearCart } = useCart();

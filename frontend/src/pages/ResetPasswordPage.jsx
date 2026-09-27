@@ -2,8 +2,10 @@ import React, { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import api from "../../api";
 import { getPasswordValidation } from "../utils/passwordRules";
+import usePageMeta from "../hooks/usePageMeta";
 
 export default function ResetPasswordPage() {
+  usePageMeta({ title: "Şifre Sıfırlama", noindex: true });
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   // Yeni bağlantılar token'ı # kısmında taşır (sunucu loglarına düşmez); eskiler sorgu dizesinde.

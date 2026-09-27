@@ -7,8 +7,10 @@ import History from "../components/about/History";
 import Categories from "../components/categories/Categories";
 import Services from "../components/services/Services";
 import { useSiteContent } from "../context/siteContent";
+import usePageMeta from "../hooks/usePageMeta";
 
 const AboutPage = () => {
+  usePageMeta({ title: "Hakkımızda" });
   const content = useSiteContent();
   return (
   <>

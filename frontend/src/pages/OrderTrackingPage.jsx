@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { Link } from "react-router-dom";
 import api from "../../api";
 import { formatTry } from "../utils/currency";
+import usePageMeta from "../hooks/usePageMeta";
 
 const STEPS = [
   { key: "paid", label: "Ödeme alındı", at: "paymentReceivedAt" },
@@ -70,6 +71,7 @@ function StatusSteps({ order }) {
 }
 
 export default function OrderTrackingPage() {
+  usePageMeta({ title: "Sipariş Takibi", noindex: true });
   const [form, setForm] = useState({ orderNumber: "", email: "" });
   const [order, setOrder] = useState(null);
   const [error, setError] = useState("");

@@ -7,8 +7,10 @@ import ContactInput from "../components/contact/ContactInput";
 import ContactInfo from "../components/contact/ContactInfo";
 import api from "../../api";
 import { useSiteContent } from "../context/siteContent";
+import usePageMeta from "../hooks/usePageMeta";
 
 const ContactPage = () => {
+  usePageMeta({ title: "İletişim", description: "OLDSOCKS mağaza adresi, telefon ve iletişim formu." });
   const siteContent = useSiteContent();
   const [form, setForm] = useState({
     name: "",

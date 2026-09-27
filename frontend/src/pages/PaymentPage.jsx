@@ -5,8 +5,10 @@ import { useCart } from "../context/useCart";
 import ToastAlert from "../components/ui/ToastAlert";
 import api from "../../api";
 import { formatTry } from "../utils/currency";
+import usePageMeta from "../hooks/usePageMeta";
 
 export default function PaymentPage() {
+  usePageMeta({ title: "Ödeme", noindex: true });
   const containerRef = useRef(null);
   const startedForConvRef = useRef(null); // aynı conversation için sadece bir kez çalış
   const iframeAppendedRef = useRef(false); // ikinci kez iframe eklenmesin
