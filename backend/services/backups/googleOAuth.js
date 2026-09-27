@@ -1,7 +1,7 @@
 const crypto = require("node:crypto");
 const BackupOAuthState = require("../../models/BackupOAuthState");
 const BackupSettings = require("../../models/BackupSettings");
-const { decrypt, encrypt } = require("./secrets");
+const { decrypt, encrypt, ensureMasterKey } = require("./secrets");
 const { newResticPassword } = require("./commands");
 
 const SCOPE = "https://www.googleapis.com/auth/drive.file";
@@ -46,6 +46,10 @@ async function configureClient(clientId, clientSecret) {
     const error = new Error("Bağlı Drive hesabının istemcisi değiştirilemez.");
     error.statusCode = 409;
     throw error;
+  }
+  // İlk kurulum: henüz şifrelenmiş hiçbir ayar yoksa anahtarı oluştur.
+  if (!existing?.clientIdEncrypted && !existing?.resticPasswordEncrypted) {
+    await ensureMasterKey();
   }
   const encrypted = await Promise.all([
     encrypt(id),

@@ -57,3 +57,20 @@ test("medya ağacındaki sembolik bağlantı reddedilir", async (t) => {
   await fs.symlink(os.tmpdir(), path.join(stage, "media", "assets", "outside"));
   await assert.rejects(verifyMediaTree(stage), /link or unsupported/);
 });
+
+test("yedek hazırlığı medyayı kopyalamadan sabit bağlantıyla alır; olmayan klasör boş oluşur", async (t) => {
+  const { linkTree } = require("../services/backups/jobs");
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "oldsocks-link-test-"));
+  t.after(() => fs.rm(root, { recursive: true, force: true }));
+  await fs.mkdir(path.join(root, "src", "a", "b"), { recursive: true });
+  await fs.writeFile(path.join(root, "src", "a", "b", "w640.webp"), "gorsel");
+  await linkTree(path.join(root, "src"), path.join(root, "hedef"));
+  const [source, linked] = await Promise.all([
+    fs.stat(path.join(root, "src", "a", "b", "w640.webp")),
+    fs.stat(path.join(root, "hedef", "a", "b", "w640.webp")),
+  ]);
+  assert.equal(linked.ino, source.ino);
+  assert.equal(await fs.readFile(path.join(root, "hedef", "a", "b", "w640.webp"), "utf8"), "gorsel");
+  await linkTree(path.join(root, "yok"), path.join(root, "bos"));
+  assert.deepEqual(await fs.readdir(path.join(root, "bos")), []);
+});

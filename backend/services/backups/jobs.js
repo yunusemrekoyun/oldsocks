@@ -138,17 +138,58 @@ async function claimJob(workerId) {
   );
 }
 
+const STAGE_PREFIX = "oldsocks-backup-stage-";
+
+// Medya dosyaları yayınlandıktan sonra değişmez; kopyalamak yerine sabit bağlantı
+// (hard link) oluşturulur, böylece yedek sırasında disk kullanımı katlanmaz.
+// Farklı dosya sistemindeyse eskisi gibi kopyalanır.
+async function linkTree(source, target) {
+  // Hedef her durumda oluşur: doğrulama üç klasörün de var olmasını bekler.
+  await fs.mkdir(target, { recursive: true, mode: 0o700 });
+  let entries;
+  try {
+    entries = await fs.readdir(source, { withFileTypes: true });
+  } catch (error) {
+    if (error.code === "ENOENT") return;
+    throw error;
+  }
+  for (const entry of entries) {
+    const from = path.join(source, entry.name);
+    const to = path.join(target, entry.name);
+    if (entry.isDirectory()) {
+      await linkTree(from, to);
+    } else if (entry.isFile()) {
+      try {
+        await fs.link(from, to);
+      } catch (error) {
+        if (!["EXDEV", "EPERM", "ENOTSUP"].includes(error.code)) throw error;
+        await fs.copyFile(from, to, fs.constants.COPYFILE_EXCL);
+      }
+    }
+  }
+}
+
+// Süreç yedek sırasında ölürse geride kalan geçici klasörleri temizle.
+async function removeStaleStages() {
+  const tmp = os.tmpdir();
+  const entries = await fs.readdir(tmp).catch(() => []);
+  const cutoff = Date.now() - 6 * 60 * 60 * 1000;
+  for (const name of entries) {
+    if (!name.startsWith(STAGE_PREFIX)) continue;
+    const full = path.join(tmp, name);
+    const stat = await fs.stat(full).catch(() => null);
+    if (stat && stat.mtimeMs < cutoff) await fs.rm(full, { recursive: true, force: true });
+  }
+}
+
 async function createStage() {
-  const stage = await fs.mkdtemp(path.join(os.tmpdir(), "oldsocks-backup-stage-"));
+  const stage = await fs.mkdtemp(path.join(os.tmpdir(), STAGE_PREFIX));
   await fs.chmod(stage, 0o700);
   const databasePath = path.join(stage, "mongodb.ejson.gz");
   try {
     const database = await writeDatabaseArchive(mongoose.connection.db, databasePath);
     for (const folder of ["assets", "trash", "quarantine"]) {
-      await fs.cp(directoryPath(folder), path.join(stage, "media", folder), {
-        recursive: true,
-        errorOnExist: true,
-      });
+      await linkTree(directoryPath(folder), path.join(stage, "media", folder));
     }
     const archive = await readDatabaseArchive(databasePath);
     const tree = await verifyMediaTree(stage);
@@ -357,8 +398,9 @@ function startBackupWorker() {
       if (!stopped) timer = setTimeout(() => { runningPromise = tick(); }, POLL_MS);
     }
   }
+  removeStaleStages().catch((error) => console.error("Backup stage cleanup failed:", error?.code || "Error"));
   timer = setTimeout(() => { runningPromise = tick(); }, 5000);
   return { async stop() { stopped = true; clearTimeout(timer); await runningPromise; } };
 }
 
-module.exports = { alertIfBackupStale, istanbulDateParts, queueBackup, queuePreview, queueRestore, startBackupWorker };
+module.exports = { alertIfBackupStale, linkTree, istanbulDateParts, queueBackup, queuePreview, queueRestore, startBackupWorker };

@@ -11,7 +11,9 @@ function keyPath() {
   return configured || path.resolve(rootPath(), "..", "backup", "master.key");
 }
 
-async function loadKey() {
+// Anahtar yalnız ilk kurulumda oluşturulur. Kurulumdan sonra kaybolursa sessizce yenisi
+// üretilmez; aksi hâlde kayıtlı Drive ayarları çözülemez hâle gelir ve bu fark edilmez.
+async function ensureMasterKey() {
   const file = keyPath();
   await fs.mkdir(path.dirname(file), { recursive: true, mode: 0o700 });
   try {
@@ -25,7 +27,23 @@ async function loadKey() {
   } catch (error) {
     if (error.code !== "EEXIST") throw error;
   }
-  const key = await fs.readFile(file);
+  keyPromise = undefined;
+}
+
+async function loadKey() {
+  const file = keyPath();
+  let key;
+  try {
+    key = await fs.readFile(file);
+  } catch (error) {
+    if (error.code !== "ENOENT") throw error;
+    const missing = new Error(
+      "Yedek şifreleme anahtarı bulunamadı. Kurtarma kitindeki master.key dosyasını sunucuya geri koyun; yeni anahtar üretilmedi."
+    );
+    missing.code = "BACKUP_KEY_MISSING";
+    missing.statusCode = 409;
+    throw missing;
+  }
   if (key.length !== KEY_BYTES) throw new Error("Backup master key is invalid");
   const stat = await fs.stat(file);
   if (stat.mode & 0o077) throw new Error("Backup master key permissions are too open");
@@ -117,4 +135,4 @@ async function openRecoveryKit(kit, passphrase) {
   }
 }
 
-module.exports = { decrypt, encrypt, keyPath, makeRecoveryKit, masterKey, openRecoveryKit };
+module.exports = { decrypt, encrypt, ensureMasterKey, keyPath, makeRecoveryKit, masterKey, openRecoveryKit };
