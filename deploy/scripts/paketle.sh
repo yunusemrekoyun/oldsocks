@@ -1,5 +1,9 @@
 #!/usr/bin/env bash
 # Mac'te çalışır. Temiz çalışma ağacından test edilmiş bir sürüm paketi üretir.
+# Kullanım: deploy/scripts/paketle.sh [commit]
+#   commit verilmezse HEAD paketlenir. Verilirse o commit geçici bir çalışma
+#   ağacında (mevcut node_modules ile) test edilip derlenir; sürümleri gruplar
+#   hâlinde dağıtmak için.
 # Çıktı: /tmp/oldsocks-release-<commit>.tar.gz ve yanında .sha256
 set -euo pipefail
 umask 077
@@ -9,11 +13,24 @@ api_url="https://api.oldscks.com/api/v1"
 media_origin="https://media.oldscks.com"
 cd "$root"
 
-if [[ -n "$(git status --porcelain)" ]]; then
-  echo "Çalışma ağacı temiz değil; önce commit edin." >&2
-  exit 1
+ref="${1:-HEAD}"
+commit="$(git rev-parse --short "$ref^{commit}")"
+if [[ "$ref" == "HEAD" ]]; then
+  if [[ -n "$(git status --porcelain)" ]]; then
+    echo "Çalışma ağacı temiz değil; önce commit edin." >&2
+    exit 1
+  fi
+else
+  # Eski bir commit: geçici çalışma ağacında derlenir, bağımlılıklar bu klasörden bağlanır.
+  worktree="$(mktemp -d /tmp/oldsocks-paket-agac-${commit}.XXXXXX)"
+  git worktree add --detach "$worktree" "$commit" >/dev/null
+  cleanup_worktree() { git -C "$root" worktree remove --force "$worktree" >/dev/null 2>&1 || true; }
+  trap cleanup_worktree EXIT
+  ln -s "$root/backend/node_modules" "$worktree/backend/node_modules"
+  ln -s "$root/frontend/node_modules" "$worktree/frontend/node_modules"
+  cd "$worktree"
 fi
-commit="$(git rev-parse --short HEAD)"
+echo "==> Paketlenen commit: $commit"
 
 echo "==> Backend testleri"
 (cd backend && npm test >/tmp/oldsocks-paket-backend-test.log 2>&1) || {
@@ -50,8 +67,8 @@ if grep -RqsE 'localhost:5050|localhost:5173|127\.0\.0\.1:5050' frontend/dist; t
 fi
 
 stage="$(mktemp -d /tmp/oldsocks-paket-${commit}.XXXXXX)"
-trap 'rm -rf "$stage"' EXIT
-git archive HEAD backend deploy | tar -xf - -C "$stage"
+trap 'rm -rf "$stage"; if declare -f cleanup_worktree >/dev/null; then cleanup_worktree; fi' EXIT
+git archive "$commit" backend deploy | tar -xf - -C "$stage"
 mkdir -p "$stage/frontend"
 cp -R frontend/dist "$stage/frontend/dist"
 cat > "$stage/RELEASE.txt" <<EOF
