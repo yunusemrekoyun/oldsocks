@@ -75,6 +75,14 @@ const OrderSchema = new mongoose.Schema(
       notifyCustomer: { type: Boolean, default: false },
     },
     cancelledMailSentAt: { type: Date, default: null },
+    // Mesafeli satış: ödeme adımında alınan onaylar (hangi metin, ne zaman, nereden).
+    consent: {
+      preInformationAcceptedAt: { type: Date, default: null },
+      distanceSalesAcceptedAt: { type: Date, default: null },
+      version: { type: String, default: null, maxlength: 40 },
+      ip: { type: String, default: null, maxlength: 64 },
+      userAgent: { type: String, default: null, maxlength: 300 },
+    },
 
     campaign: {
       campaignId: { type: mongoose.Types.ObjectId, ref: "CartCampaign", default: null },

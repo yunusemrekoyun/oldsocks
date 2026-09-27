@@ -52,6 +52,30 @@ function normalizeEmail(value) {
   return String(value || "").trim().toLowerCase();
 }
 
+// Mesafeli satış: ön bilgilendirme ve sözleşme onayı olmadan ödeme başlatılmaz.
+// Onay, metin sürümü, zaman, IP ve tarayıcı bilgisiyle siparişe yazılır.
+function readConsent(req) {
+  const consent = req.body?.consent;
+  const version = typeof consent?.version === "string" ? consent.version.trim() : "";
+  if (consent?.preInformation !== true || consent?.distanceSales !== true || !/^[\w.-]{1,40}$/.test(version)) {
+    return null;
+  }
+  const now = new Date();
+  return {
+    preInformationAcceptedAt: now,
+    distanceSalesAcceptedAt: now,
+    version,
+    ip: String(getClientIp(req) || "").slice(0, 64) || null,
+    userAgent: String(req.get("user-agent") || "").slice(0, 300) || null,
+  };
+}
+
+const CONSENT_REQUIRED = {
+  code: "CONSENT_REQUIRED",
+  message:
+    "Devam etmek için ön bilgilendirme formunu ve mesafeli satış sözleşmesini onaylayın. Sayfa açık kaldıysa yenileyip tekrar deneyin.",
+};
+
 function normalizeTrPhone(value) {
   const digits = String(value || "").replace(/\D/g, "");
 
@@ -168,6 +192,8 @@ exports.startGuestPaymentSession = async (req, res) => {
   try {
     const { cartItems, address, guest, selectedCampaignId, couponCode } =
       req.body || {};
+    const consent = readConsent(req);
+    if (!consent) return res.status(400).json(CONSENT_REQUIRED);
     const normalizedGuest = {
       firstName: String(guest?.firstName || "").trim(),
       lastName: String(guest?.lastName || "").trim(),
@@ -307,6 +333,7 @@ exports.startGuestPaymentSession = async (req, res) => {
         postalCode: normalizedAddress.postalCode,
       },
       conversationId,
+      consent,
       status: "pending",
       iyzInit: null,
       shipping: {
@@ -338,6 +365,8 @@ exports.startPaymentSession = async (req, res) => {
   try {
     const { cartItems, addressId, selectedCampaignId, couponCode } =
       req.body;
+    const consent = readConsent(req);
+    if (!consent) return res.status(400).json(CONSENT_REQUIRED);
     const userId = req.user.userId;
     const userDoc = await User.findById(userId).lean();
 
@@ -451,6 +480,7 @@ exports.startPaymentSession = async (req, res) => {
         postalCode,
       },
       conversationId,
+      consent,
       status: "pending",
       iyzInit: null,
       shipping: {

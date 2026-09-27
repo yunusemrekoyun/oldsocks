@@ -28,8 +28,6 @@ export default function Cart() {
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
 
-  // Tek onay (KVKK + sözleşme)
-  const [consentChecked, setConsentChecked] = useState(false);
 
   // Kampanya/pricing preview
   const [pricingSummary, setPricingSummary] = useState(null);
@@ -516,36 +514,9 @@ export default function Cart() {
               <span>{formatTry(grandTotal)}</span>
             </div>
 
-            {/* Tek onay kutusu (KVKK + Sözleşme) */}
-            <div className="mt-4 text-sm">
-              <label className="flex items-start gap-2">
-                <input
-                  type="checkbox"
-                  checked={consentChecked}
-                  onChange={(e) => setConsentChecked(e.target.checked)}
-                />
-                <span>
-                  <a
-                    href="/kvkk"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-primary underline"
-                  >
-                    KVKK Aydınlatma Metni
-                  </a>{" "}
-                  ve{" "}
-                  <a
-                    href="/agreement"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-primary underline"
-                  >
-                    Mesafeli Satış Sözleşmesi
-                  </a>{" "}
-                  ’ni okudum, onaylıyorum.
-                </span>
-              </label>
-            </div>
+            <p className="mt-4 text-xs text-dark2">
+              Ön bilgilendirme formu ve sözleşme onayı ödeme adımında alınır.
+            </p>
 
             {/* Butonlar */}
             <div className="mt-5 flex flex-col sm:flex-row gap-3">
@@ -557,12 +528,7 @@ export default function Cart() {
               </button>
               <button
                 onClick={handleCheckout}
-                disabled={!consentChecked}
-                className={`flex-1 sm:flex-none sm:min-w-[180px] px-6 py-3 rounded-full font-semibold transition ${
-                  !consentChecked
-                    ? "bg-gray-400 cursor-not-allowed text-white"
-                    : "bg-dark1 text-white hover:bg-dark2"
-                }`}
+                className="flex-1 sm:flex-none sm:min-w-[180px] px-6 py-3 rounded-full font-semibold transition bg-dark1 text-white hover:bg-dark2"
               >
                 Ödeme Yap
               </button>

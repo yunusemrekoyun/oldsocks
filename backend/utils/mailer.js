@@ -348,6 +348,13 @@ async function resolveOrderContext(order) {
   };
 }
 
+// Siparişte kayıtlı mesafeli satış onayı (varsa) e-postada belgelenir.
+function consentLine(order) {
+  const consent = order?.consent;
+  if (!consent?.distanceSalesAcceptedAt) return null;
+  return `Ön Bilgilendirme Formu ve Mesafeli Satış Sözleşmesi ${formatDate(consent.distanceSalesAcceptedAt)} tarihinde onaylandı (metin sürümü: ${consent.version || "-"}). Sözleşme: ${frontendOrigin}/agreement`;
+}
+
 function buildOrderCustomerHtml(order, context) {
   const bodyHtml = `
     <p style="margin:0 0 20px;font-size:15px;line-height:1.8;color:#374151;">
@@ -378,6 +385,11 @@ function buildOrderCustomerHtml(order, context) {
         ${escapeHtml(context.addressText || "-")}
       </div>
     </div>
+    ${
+      consentLine(order)
+        ? `<p style="margin:20px 0 0;font-size:13px;line-height:1.7;color:#6b7280;">${escapeHtml(consentLine(order))}</p>`
+        : ""
+    }
   `;
 
   return baseEmailLayout({
@@ -438,6 +450,8 @@ function buildOrderCustomerText(order, context) {
     context.customerEmail || "-",
     context.customerPhone,
     context.addressText || "-",
+    consentLine(order) ? "" : null,
+    consentLine(order),
   ]
     .filter(Boolean)
     .join("\n");

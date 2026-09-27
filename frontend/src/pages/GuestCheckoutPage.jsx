@@ -6,6 +6,8 @@ import ToastAlert from "../components/ui/ToastAlert";
 import api from "../../api";
 import { formatTry } from "../utils/currency";
 import usePageMeta from "../hooks/usePageMeta";
+import OrderConsent from "../components/legal/OrderConsent";
+import { LEGAL_VERSION } from "../legal/store";
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/i;
 const GUEST_FIELD_KEYS = [
@@ -81,6 +83,8 @@ export default function GuestCheckoutPage() {
   const navigate = useNavigate();
 
   const [loading, setLoading] = useState(false);
+  const [consent, setConsent] = useState({ preInformation: false, distanceSales: false });
+  const consentOk = consent.preInformation && consent.distanceSales;
   const [buyer, setBuyer] = useState({
     firstName: "",
     lastName: "",
@@ -257,6 +261,10 @@ export default function GuestCheckoutPage() {
   };
 
   const startGuestPayment = async () => {
+    if (!consentOk) {
+      setToast({ type: "error", msg: "Devam etmek için ön bilgilendirme formunu ve sözleşmeyi onaylayın." });
+      return;
+    }
     if (Object.keys(validationErrors).length > 0) {
       markAllTouched();
       focusFirstInvalidField(validationErrors);
@@ -288,6 +296,7 @@ export default function GuestCheckoutPage() {
           city: address.city.trim(),
           postalCode: address.postalCode?.trim() || "",
         },
+        consent: { ...consent, version: LEGAL_VERSION },
       };
 
       const { data } = await api.post("/payment/start-guest", payload);
@@ -657,6 +666,24 @@ export default function GuestCheckoutPage() {
           </div>
         )}
 
+        <OrderConsent
+          items={items}
+          totals={{
+            subTotal: displaySubTotal,
+            discount: displayCampaignDiscount + displayCouponDiscount,
+            shippingFee: displayShippingFee,
+            grandTotal: displayGrandTotal,
+          }}
+          address={address}
+          buyer={{
+            name: `${buyer.firstName} ${buyer.lastName}`.trim(),
+            email: buyer.email,
+            phone: buyer.phone,
+          }}
+          value={consent}
+          onChange={setConsent}
+        />
+
         <div className="mt-6 flex gap-3">
           <button
             onClick={() => navigate(-1)}
@@ -666,9 +693,9 @@ export default function GuestCheckoutPage() {
           </button>
           <button
             onClick={startGuestPayment}
-            disabled={loading}
+            disabled={loading || !consentOk}
             className={`w-2/3 py-3 rounded text-white transition ${
-              loading
+              loading || !consentOk
                 ? "bg-gray-400 cursor-not-allowed"
                 : "bg-dark1 hover:bg-dark2"
             }`}

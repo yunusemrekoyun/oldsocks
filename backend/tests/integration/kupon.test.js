@@ -3,7 +3,7 @@ const assert = require("node:assert/strict");
 const crypto = require("node:crypto");
 const bcrypt = require("bcrypt");
 const mongoose = require("mongoose");
-const { startTestServer, paytrCallback, postJson } = require("./helpers");
+const { startTestServer, paytrCallback, postJson, CONSENT } = require("./helpers");
 
 let server;
 let adminToken;
@@ -82,6 +82,7 @@ function startGuest(productId, email, couponCode) {
     address,
     guest: guest(email),
     couponCode,
+    consent: CONSENT,
   });
 }
 

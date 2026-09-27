@@ -2,7 +2,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const mongoose = require("mongoose");
 const crypto = require("node:crypto");
-const { startTestServer, paytrCallback, postJson, mailsTo } = require("./helpers");
+const { startTestServer, paytrCallback, postJson, mailsTo, CONSENT } = require("./helpers");
 
 let server;
 let Order;
@@ -63,6 +63,7 @@ async function startGuestOrder(productId, qty = 1, guestOverride = {}) {
     cartItems: [{ id: String(productId), size: "M", qty }],
     address,
     guest: { ...guest, ...guestOverride },
+    consent: CONSENT,
   });
   assert.equal(res.status, 200, JSON.stringify(res.data));
   const order = await Order.findOne({ conversationId: res.data.conversationId });
@@ -233,4 +234,43 @@ test("eksik tutarlı ödemede yöneticiye inceleme uyarısı gider", async () =>
   const alerts = (await mailsTo("yonetici@oldscks.local")).filter((m) => m.Subject.includes(order.orderNumber));
   assert.equal(alerts.length, 1);
   assert.match(alerts[0].Subject, /incelemede/);
+});
+
+test("sözleşme onayı olmadan ödeme başlatılmaz; onay siparişe kaydedilir", async () => {
+  const productId = await seedProduct({ stock: 3 });
+  const email = `onay-${crypto.randomBytes(4).toString("hex")}@test.local`;
+  const body = {
+    cartItems: [{ id: String(productId), size: "M", qty: 1 }],
+    address,
+    guest: { ...guest, email },
+  };
+  const none = await postJson(server.base, "/api/v1/payment/start-guest", body);
+  assert.equal(none.status, 400);
+  assert.equal(none.data.code, "CONSENT_REQUIRED");
+  const half = await postJson(server.base, "/api/v1/payment/start-guest", {
+    ...body,
+    consent: { preInformation: true, distanceSales: false, version: "x" },
+  });
+  assert.equal(half.status, 400);
+
+  const ok = await postJson(server.base, "/api/v1/payment/start-guest", { ...body, consent: CONSENT }, {
+    "User-Agent": "onay-testi/1.0",
+  });
+  assert.equal(ok.status, 200, JSON.stringify(ok.data));
+  const order = await Order.findOne({ conversationId: ok.data.conversationId });
+  assert.equal(order.consent.version, CONSENT.version);
+  assert.ok(order.consent.preInformationAcceptedAt instanceof Date);
+  assert.ok(order.consent.distanceSalesAcceptedAt instanceof Date);
+  assert.equal(order.consent.userAgent, "onay-testi/1.0");
+  assert.ok(order.consent.ip);
+
+  // Onay kaydı sipariş onay e-postasında yer alır.
+  await paytrCallback(server.base, {
+    merchantOid: ok.data.conversationId,
+    totalAmount: Math.round(order.totalPrice * 100),
+  });
+  const mails = await mailsTo(email, { waitMs: 5000 });
+  const confirmation = mails.find((m) => m.Subject.includes(order.orderNumber));
+  assert.ok(confirmation, "onay e-postası gelmedi");
+  assert.match(confirmation.Text, /Mesafeli Satış Sözleşmesi .* onaylandı \(metin sürümü: test-2026-09-27\)/);
 });

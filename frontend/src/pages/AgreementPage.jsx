@@ -2,6 +2,7 @@
 import React from "react";
 import { Link } from "react-router-dom";
 import usePageMeta from "../hooks/usePageMeta";
+import { legalVersionLabel } from "../legal/store";
 
 export default function AgreementPage() {
   usePageMeta({ title: "Mesafeli Satış Sözleşmesi" });
@@ -18,7 +19,8 @@ export default function AgreementPage() {
         : "https://oldsocks.com",
   };
 
-  const today = new Date().toLocaleDateString("tr-TR");
+  // Metnin yürürlük tarihi; her gün "bugün" gösterilmez.
+  const today = legalVersionLabel();
 
   const Section = ({ id, title, children }) => (
     <section id={id} className="scroll-mt-24">

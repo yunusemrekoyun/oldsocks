@@ -137,7 +137,10 @@ async function postJson(base, pathName, body, headers = {}) {
   return { status: res.status, data };
 }
 
-module.exports = { startTestServer, paytrCallback, paytrHash, postJson };
+// Ödeme başlatma uçlarının istediği mesafeli satış onayı.
+const CONSENT = { preInformation: true, distanceSales: true, version: "test-2026-09-27" };
+
+module.exports = { startTestServer, paytrCallback, paytrHash, postJson, CONSENT };
 
 // Yerel Mailpit (dev/yerel-ortam.sh) API'si: belirli alıcıya giden e-postaları getirir.
 const MAILPIT_API = process.env.TEST_MAILPIT_API || "http://127.0.0.1:8126/api/v1";

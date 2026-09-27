@@ -9,6 +9,8 @@ import ToastAlert from "../components/ui/ToastAlert";
 import api from "../../api";
 import { formatTry } from "../utils/currency";
 import PageLoading from "../components/common/PageLoading";
+import OrderConsent from "../components/legal/OrderConsent";
+import { LEGAL_VERSION } from "../legal/store";
 import usePageMeta from "../hooks/usePageMeta";
 
 function getPhoneDigits(value) {
@@ -48,6 +50,9 @@ export default function CheckoutPage() {
   const [shipLoading, setShipLoading] = useState(true);
   // null: henüz bilinmiyor, "": profilde telefon yok
   const [profilePhone, setProfilePhone] = useState(null);
+  const [profile, setProfile] = useState(null);
+  const [consent, setConsent] = useState({ preInformation: false, distanceSales: false });
+  const consentOk = consent.preInformation && consent.distanceSales;
   const [phoneInput, setPhoneInput] = useState("");
   const [phoneError, setPhoneError] = useState("");
 
@@ -192,7 +197,9 @@ export default function CheckoutPage() {
     api
       .get("/users/me")
       .then(({ data }) => {
-        if (alive) setProfilePhone(String(data?.phone || ""));
+        if (!alive) return;
+        setProfilePhone(String(data?.phone || ""));
+        setProfile(data || null);
       })
       .catch(() => {
         // Bilinmiyorsa alanı gösterme; sunucu eksik bilgiyi zaten bildirir.
@@ -257,6 +264,10 @@ export default function CheckoutPage() {
       setToast({ type: "error", msg: "Lütfen bir adres seçin." });
       return;
     }
+    if (!consentOk) {
+      setToast({ type: "error", msg: "Devam etmek için ön bilgilendirme formunu ve sözleşmeyi onaylayın." });
+      return;
+    }
     const needsPhone = profilePhone === "";
     if (needsPhone && getPhoneDigits(phoneInput).length !== 10) {
       setPhoneError("Telefon numarasını 10 haneli girin.");
@@ -281,6 +292,7 @@ export default function CheckoutPage() {
         addressId: selectedAddress,
         selectedCampaignId: selectedCampaignId || null,
         couponCode: selectedCouponCode || null,
+        consent: { ...consent, version: LEGAL_VERSION },
       });
 
       if (data?.conversationId) {
@@ -518,11 +530,29 @@ export default function CheckoutPage() {
           </div>
         )}
 
+        <OrderConsent
+          items={items}
+          totals={{
+            subTotal: displaySubTotal,
+            discount: displayCampaignDiscount + displayCouponDiscount,
+            shippingFee: displayShippingFee,
+            grandTotal: displayGrandTotal,
+          }}
+          address={addresses.find((a) => a._id === selectedAddress)}
+          buyer={{
+            name: [profile?.firstName, profile?.lastName].filter(Boolean).join(" "),
+            email: profile?.email,
+            phone: profile?.phone,
+          }}
+          value={consent}
+          onChange={setConsent}
+        />
+
         <button
           onClick={() => attemptPayment(false)}
-          disabled={loading}
+          disabled={loading || !consentOk}
           className={`mt-6 w-full py-3 rounded text-white transition ${
-            loading ? "bg-gray-400" : "bg-dark1 hover:bg-dark2"
+            loading || !consentOk ? "bg-gray-400 cursor-not-allowed" : "bg-dark1 hover:bg-dark2"
           }`}
         >
           {loading ? "Yönlendiriliyor…" : "Ödemeye Geç"}
