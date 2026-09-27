@@ -8,6 +8,10 @@ const AppliedSchema = new mongoose.Schema(
       required: true,
     },
     previousDiscount: { type: Number, default: 0 },
+    // Kural uygulanmadan önceki satış fiyatı ve kuralın yazdığı fiyat. Kural
+    // kalkınca, fiyat bu arada elle değiştirilmediyse previousPrice aynen geri gelir.
+    previousPrice: { type: Number, default: null },
+    appliedPrice: { type: Number, default: null },
   },
   { _id: false }
 );

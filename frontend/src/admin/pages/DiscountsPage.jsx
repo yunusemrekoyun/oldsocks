@@ -130,8 +130,8 @@ export default function DiscountsPage() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!form.title.trim()) return notify("İndirim adı zorunlu.", "error");
-    if (form.discountRate < 0 || form.discountRate > 100)
-      return notify("İndirim yüzdesi 0-100 olmalı.", "error");
+    if (!(form.discountRate > 0 && form.discountRate < 100))
+      return notify("İndirim yüzdesi 0'dan büyük, 100'den küçük olmalı.", "error");
     if (form.targetIds.length === 0)
       return notify("En az bir hedef seçmelisiniz.", "error");
 
@@ -163,7 +163,7 @@ export default function DiscountsPage() {
           "error"
         );
       } else {
-        notify("İşlem tamamlanamadı.", "error");
+        notify(err?.response?.data?.message || "İşlem tamamlanamadı.", "error");
       }
     }
   };
@@ -395,8 +395,8 @@ export default function DiscountsPage() {
                   </label>
                   <input
                     type="number"
-                    min={0}
-                    max={100}
+                    min={1}
+                    max={99}
                     className="w-full border rounded-lg px-3 py-2"
                     value={form.discountRate}
                     onChange={(e) =>

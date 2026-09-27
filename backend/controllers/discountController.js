@@ -7,9 +7,6 @@ const Category = require("../models/Category");
 
 const oid = (x) => new mongoose.Types.ObjectId(String(x || ""));
 
-// Artık sadece isActive’e bakıyoruz
-const isActiveNow = (d) => Boolean(d.isActive);
-
 // Kök kategorilerden tüm alt dalları (descendants) topla
 async function getDescendantCategoryIds(rootIds) {
   const seen = new Set(rootIds.map(String));
@@ -77,80 +74,160 @@ async function findConflicts(discountId, targetProductIds) {
 
 const { invalidateCatalog } = require("../services/catalogCache");
 
-async function applyDiscount(discount) {
-  const rate = Number(discount.discountRate || 0) || 0;
-  const productIds = await getAffectedProductIds(discount);
+const round2 = (n) => Math.round(Number(n || 0) * 100) / 100;
 
-  // Çakışma kontrolü
-  const conflicts = await findConflicts(discount._id, productIds);
-  if (conflicts.length) {
-    const err = new Error("Çakışan aktif indirim(ler) var.");
-    err.status = 409;
-    err.details = { conflictingProductIds: conflicts };
-    throw err;
-  }
-
-  if (!productIds.length) {
-    discount.appliedProducts = [];
-    await discount.save();
-    return { applied: 0 };
-  }
-
-  // Önceki manual indirimi kaydet
-  const products = await Product.find({ _id: { $in: productIds } })
-    .select("_id discount")
-    .lean();
-
-  const factor = (100 - rate) / 100;
-  await Product.updateMany({ _id: { $in: productIds } }, [
-    {
-      $set: {
-        discount: rate,
-        price: { $round: [{ $multiply: ["$originalPrice", factor] }, 2] },
-      },
-    },
-  ]);
-
-  discount.appliedProducts = products.map((p) => ({
-    product: p._id,
-    previousDiscount: Number(p.discount || 0),
-  }));
-  await discount.save();
-
-  return { applied: products.length };
+function discountPercent(price, originalPrice) {
+  return originalPrice > 0 && price < originalPrice
+    ? round2(100 - (price / originalPrice) * 100)
+    : 0;
 }
 
-async function unapplyDiscount(discount) {
-  const applied = discount.appliedProducts || [];
-  if (!applied.length) return { reverted: 0 };
+function conflictError(conflicts) {
+  const err = new Error("Çakışan aktif indirim(ler) var.");
+  err.status = 409;
+  err.details = { conflictingProductIds: conflicts };
+  return err;
+}
 
+function badRequest(message) {
+  const err = new Error(message);
+  err.status = 400;
+  return err;
+}
+
+function validateRule(rule) {
+  if (!String(rule.title || "").trim()) throw badRequest("İndirim adı zorunlu.");
+  const rate = Number(rule.discountRate);
+  if (!Number.isFinite(rate) || rate <= 0 || rate >= 100) {
+    throw badRequest("İndirim yüzdesi 0'dan büyük, 100'den küçük olmalı.");
+  }
+  if (!["product", "category", "subcategory"].includes(rule.selectionType)) {
+    throw badRequest("Geçersiz selectionType.");
+  }
+  if (!Array.isArray(rule.targetIds) || rule.targetIds.length === 0) {
+    throw badRequest("targetIds boş olamaz.");
+  }
+}
+
+function parseTargetIds(value) {
+  if (!Array.isArray(value)) throw badRequest("targetIds boş olamaz.");
+  return value.map((id) => {
+    if (!mongoose.isValidObjectId(id)) throw badRequest("Geçersiz hedef kimliği.");
+    return oid(id);
+  });
+}
+
+// Kural ürünün fiyat alanlarını değiştirir ama önceki satış fiyatını saklar.
+// Kural hiçbir ürünün fiyatını yükseltmez: elle girilmiş fiyat zaten daha
+// düşükse o fiyat korunur.
+async function applyToProducts(productIds, rate, session) {
+  if (!productIds.length) return [];
+  const products = await Product.find({ _id: { $in: productIds } })
+    .select("_id price originalPrice discount")
+    .session(session)
+    .lean();
+  const factor = (100 - rate) / 100;
+  const entries = products.map((p) => {
+    const originalPrice = Number(p.originalPrice || 0);
+    const previousPrice = Number(p.price || 0);
+    const appliedPrice = Math.min(previousPrice, round2(originalPrice * factor));
+    return {
+      product: p._id,
+      previousDiscount: Number(p.discount || 0),
+      previousPrice,
+      appliedPrice,
+      originalPrice,
+    };
+  });
+  await Product.bulkWrite(
+    entries.map((e) => ({
+      updateOne: {
+        filter: { _id: e.product },
+        update: {
+          $set: {
+            price: e.appliedPrice,
+            discount: discountPercent(e.appliedPrice, e.originalPrice),
+          },
+        },
+      },
+    })),
+    { session }
+  );
+  return entries.map(({ originalPrice: _omit, ...entry }) => entry);
+}
+
+// Kuralın yazdığı fiyat hâlâ yerindeyse önceki fiyatı geri koyar. Kural açıkken
+// fiyat elle değiştirildiyse yöneticinin girdiği fiyata dokunulmaz.
+async function revertProducts(entries, session) {
+  if (!entries.length) return;
+  const products = await Product.find({ _id: { $in: entries.map((e) => e.product) } })
+    .select("_id price originalPrice")
+    .session(session)
+    .lean();
+  const byId = new Map(products.map((p) => [String(p._id), p]));
   const ops = [];
-  for (const ap of applied) {
-    const prev = Number(ap.previousDiscount || 0);
-    const factorPrev = (100 - prev) / 100;
+  for (const entry of entries) {
+    const product = byId.get(String(entry.product));
+    if (!product) continue;
+    const originalPrice = Number(product.originalPrice || 0);
+    let restored;
+    if (entry.previousPrice == null) {
+      // Bu sürümden önce uygulanmış kural: eski hesapla geri al.
+      restored = round2(originalPrice * ((100 - Number(entry.previousDiscount || 0)) / 100));
+    } else if (round2(product.price) === round2(entry.appliedPrice)) {
+      restored = Math.min(Number(entry.previousPrice), originalPrice);
+    } else {
+      continue;
+    }
     ops.push({
       updateOne: {
-        filter: { _id: ap.product },
-        update: [
-          {
-            $set: {
-              discount: prev,
-              price: {
-                $round: [{ $multiply: ["$originalPrice", factorPrev] }, 2],
-              },
-            },
-          },
-        ],
+        filter: { _id: product._id },
+        update: { $set: { price: restored, discount: discountPercent(restored, originalPrice) } },
       },
     });
   }
-  if (ops.length) await Product.bulkWrite(ops);
+  if (ops.length) await Product.bulkWrite(ops, { session });
+}
 
-  const reverted = applied.length;
-  discount.appliedProducts = [];
-  await discount.save();
+async function inTransaction(work) {
+  const session = await mongoose.startSession();
+  try {
+    let result;
+    await session.withTransaction(async () => {
+      result = await work(session);
+    });
+    return result;
+  } finally {
+    await session.endSession();
+  }
+}
+
+// Kuralın ürünlere yansımasını baştan kurar: eski uygulamayı geri alır, kural
+// aktifse güncel hedeflere yeniden uygular, kuralı kaydeder. Hepsi tek işlemde.
+async function syncRule(rule, { wasApplied }) {
+  let productIds = [];
+  if (rule.isActive) {
+    productIds = await getAffectedProductIds(rule);
+    const conflicts = await findConflicts(rule._id, productIds);
+    if (conflicts.length) throw conflictError(conflicts);
+  }
+  const previous = wasApplied ? (rule.appliedProducts || []).map((e) => e.toObject?.() ?? e) : [];
+  await inTransaction(async (session) => {
+    await revertProducts(previous, session);
+    rule.appliedProducts = rule.isActive
+      ? await applyToProducts(productIds, Number(rule.discountRate), session)
+      : [];
+    await rule.save({ session });
+  });
   invalidateCatalog();
-  return { reverted };
+  return rule;
+}
+
+function sendError(res, err, fallback, label) {
+  if (err.status === 409) return res.status(409).json({ message: err.message, ...err.details });
+  if (err.status === 400) return res.status(400).json({ message: err.message });
+  console.error(`${label} error:`, err);
+  return res.status(500).json({ message: fallback });
 }
 
 /* ================== CRUD ================== */
@@ -158,45 +235,20 @@ async function unapplyDiscount(discount) {
 // POST /discounts
 exports.createDiscount = async (req, res) => {
   try {
-    const {
-      title,
-      discountRate,
-      selectionType, // "product" | "category" | "subcategory"
-      targetIds = [],
-      isActive = false,
-    } = req.body;
-
-    if (!title?.trim())
-      return res.status(400).json({ message: "İndirim adı zorunlu." });
-    if (discountRate == null)
-      return res.status(400).json({ message: "İndirim yüzdesi zorunlu." });
-    if (!["product", "category", "subcategory"].includes(selectionType)) {
-      return res.status(400).json({ message: "Geçersiz selectionType." });
-    }
-    if (!Array.isArray(targetIds) || targetIds.length === 0) {
-      return res.status(400).json({ message: "targetIds boş olamaz." });
-    }
-
-    const doc = await Discount.create({
-      title: title.trim(),
+    const { title, discountRate, selectionType, targetIds, isActive = false } = req.body || {};
+    const doc = new Discount({
+      title: String(title || "").trim(),
       discountRate: Number(discountRate),
       selectionType,
-      targetIds: targetIds.map(oid),
+      targetIds: parseTargetIds(targetIds),
       isActive: Boolean(isActive),
       appliedProducts: [],
     });
-
-    if (isActiveNow(doc)) {
-      await applyDiscount(doc);
-    }
-
+    validateRule(doc);
+    await syncRule(doc, { wasApplied: false });
     res.status(201).json(doc);
   } catch (err) {
-    console.error("createDiscount error:", err);
-    if (err.status === 409) {
-      return res.status(409).json({ message: err.message, ...err.details });
-    }
-    res.status(500).json({ message: "İndirim oluşturulamadı." });
+    sendError(res, err, "İndirim oluşturulamadı.", "createDiscount");
   }
 };
 
@@ -208,6 +260,9 @@ exports.listDiscounts = async (_req, res) => {
 
 // GET /discounts/:id
 exports.getDiscount = async (req, res) => {
+  if (!mongoose.isValidObjectId(req.params.id)) {
+    return res.status(404).json({ message: "İndirim bulunamadı." });
+  }
   const d = await Discount.findById(req.params.id);
   if (!d) return res.status(404).json({ message: "İndirim bulunamadı." });
   res.json(d);
@@ -216,190 +271,63 @@ exports.getDiscount = async (req, res) => {
 // PUT /discounts/:id  (alanları güncelle + uzlaştır)
 exports.updateDiscount = async (req, res) => {
   try {
+    if (!mongoose.isValidObjectId(req.params.id)) {
+      return res.status(404).json({ message: "İndirim bulunamadı." });
+    }
     const d = await Discount.findById(req.params.id);
     if (!d) return res.status(404).json({ message: "İndirim bulunamadı." });
 
-    const wasActive = isActiveNow(d);
+    const wasApplied = Boolean(d.appliedProducts?.length);
+    const body = req.body || {};
+    if (body.title !== undefined) d.title = String(body.title || "").trim();
+    if (body.discountRate !== undefined) d.discountRate = Number(body.discountRate);
+    if (body.selectionType !== undefined) d.selectionType = body.selectionType;
+    if (body.targetIds !== undefined) d.targetIds = parseTargetIds(body.targetIds);
+    if (body.isActive !== undefined) d.isActive = Boolean(body.isActive);
+    validateRule(d);
 
-    // Alanları güncelle
-    if (req.body.title !== undefined)
-      d.title = String(req.body.title || "").trim();
-    if (req.body.discountRate !== undefined)
-      d.discountRate = Number(req.body.discountRate);
-    if (req.body.selectionType !== undefined)
-      d.selectionType = req.body.selectionType;
-    if (req.body.targetIds !== undefined)
-      d.targetIds = req.body.targetIds.map(oid);
-    if (req.body.isActive !== undefined)
-      d.isActive = Boolean(req.body.isActive);
-
-    await d.save();
-
-    const isActiveAfter = isActiveNow(d);
-
-    // 1) Eskiden aktifti, artık değil → geri al
-    if (wasActive && !isActiveAfter) {
-      await unapplyDiscount(d);
-      return res.json(d);
-    }
-
-    // 2) Eskiden pasifti, şimdi aktif → uygula
-    if (!wasActive && isActiveAfter) {
-      await applyDiscount(d);
-      return res.json(d);
-    }
-
-    // 3) İki durumda da aktif → hedef set ve oranı senkronize et
-    if (isActiveAfter) {
-      const newIds = (await getAffectedProductIds(d)).map(String);
-      const appliedIds = new Set(
-        (d.appliedProducts || []).map((ap) => String(ap.product))
-      );
-
-      const toRemove = (d.appliedProducts || []).filter(
-        (ap) => !newIds.includes(String(ap.product))
-      );
-      const toKeepIds = (d.appliedProducts || [])
-        .filter((ap) => newIds.includes(String(ap.product)))
-        .map((ap) => ap.product);
-      const toAddIds = newIds.filter((id) => !appliedIds.has(id)).map(oid);
-
-      // 3a) Setten çıkanları geri al
-      if (toRemove.length) {
-        const ops = [];
-        for (const ap of toRemove) {
-          const prev = Number(ap.previousDiscount || 0);
-          const factorPrev = (100 - prev) / 100;
-          ops.push({
-            updateOne: {
-              filter: { _id: ap.product },
-              update: [
-                {
-                  $set: {
-                    discount: prev,
-                    price: {
-                      $round: [
-                        { $multiply: ["$originalPrice", factorPrev] },
-                        2,
-                      ],
-                    },
-                  },
-                },
-              ],
-            },
-          });
-        }
-        if (ops.length) await Product.bulkWrite(ops);
-        d.appliedProducts = (d.appliedProducts || []).filter((ap) =>
-          newIds.includes(String(ap.product))
-        );
-      }
-
-      // 3b) Eklenecekler için çakışma + uygula
-      if (toAddIds.length) {
-        const conflicts = await findConflicts(d._id, toAddIds);
-        if (conflicts.length) {
-          const err = new Error("Çakışan aktif indirim(ler) var.");
-          err.status = 409;
-          err.details = { conflictingProductIds: conflicts };
-          throw err;
-        }
-
-        const newProducts = await Product.find({ _id: { $in: toAddIds } })
-          .select("_id discount")
-          .lean();
-
-        if (newProducts.length) {
-          const rate = Number(d.discountRate || 0);
-          const factor = (100 - rate) / 100;
-
-          await Product.updateMany({ _id: { $in: toAddIds } }, [
-            {
-              $set: {
-                discount: rate,
-                price: {
-                  $round: [{ $multiply: ["$originalPrice", factor] }, 2],
-                },
-              },
-            },
-          ]);
-
-          d.appliedProducts.push(
-            ...newProducts.map((p) => ({
-              product: p._id,
-              previousDiscount: Number(p.discount || 0),
-            }))
-          );
-        }
-      }
-
-      // 3c) Kalanlarda oran değiştiyse güncelle
-      if (toKeepIds.length) {
-        const rate = Number(d.discountRate || 0);
-        const factor = (100 - rate) / 100;
-        await Product.updateMany({ _id: { $in: toKeepIds } }, [
-          {
-            $set: {
-              discount: rate,
-              price: { $round: [{ $multiply: ["$originalPrice", factor] }, 2] },
-            },
-          },
-        ]);
-      }
-
-      await d.save();
-    }
-
+    await syncRule(d, { wasApplied });
     res.json(d);
   } catch (err) {
-    console.error("updateDiscount error:", err);
-    if (err.status === 409) {
-      return res.status(409).json({ message: err.message, ...err.details });
-    }
-    res.status(500).json({ message: "İndirim güncellenemedi." });
+    sendError(res, err, "İndirim güncellenemedi.", "updateDiscount");
   }
 };
 
 // PUT /discounts/:id/toggle  { isActive: true/false }
 exports.toggleDiscount = async (req, res) => {
   try {
+    if (!mongoose.isValidObjectId(req.params.id)) {
+      return res.status(404).json({ message: "İndirim bulunamadı." });
+    }
     const d = await Discount.findById(req.params.id);
     if (!d) return res.status(404).json({ message: "İndirim bulunamadı." });
 
-    const wasActive = isActiveNow(d);
-
-    d.isActive = Boolean(req.body.isActive);
-    await d.save();
-
-    const isActiveAfter = isActiveNow(d);
-
-    if (wasActive && !isActiveAfter) await unapplyDiscount(d);
-    else if (!wasActive && isActiveAfter) await applyDiscount(d);
-
+    const wasApplied = Boolean(d.appliedProducts?.length);
+    d.isActive = Boolean(req.body?.isActive);
+    await syncRule(d, { wasApplied });
     res.json(d);
   } catch (err) {
-    console.error("toggleDiscount error:", err);
-    if (err.status === 409) {
-      return res.status(409).json({ message: err.message, ...err.details });
-    }
-    res.status(500).json({ message: "İndirim güncellenemedi." });
+    sendError(res, err, "İndirim güncellenemedi.", "toggleDiscount");
   }
 };
 
 // DELETE /discounts/:id
 exports.deleteDiscount = async (req, res) => {
   try {
+    if (!mongoose.isValidObjectId(req.params.id)) {
+      return res.status(404).json({ message: "İndirim bulunamadı." });
+    }
     const d = await Discount.findById(req.params.id);
     if (!d) return res.status(404).json({ message: "İndirim bulunamadı." });
 
-    // aktifken silinirse geri al
-    if (d.appliedProducts?.length) {
-      await unapplyDiscount(d);
-    }
-    await Discount.findByIdAndDelete(d._id);
+    const applied = (d.appliedProducts || []).map((e) => e.toObject?.() ?? e);
+    await inTransaction(async (session) => {
+      await revertProducts(applied, session);
+      await Discount.deleteOne({ _id: d._id }, { session });
+    });
+    invalidateCatalog();
     res.json({ message: "İndirim silindi." });
   } catch (err) {
-    console.error("deleteDiscount error:", err);
-    res.status(500).json({ message: "İndirim silinemedi." });
+    sendError(res, err, "İndirim silinemedi.", "deleteDiscount");
   }
 };
