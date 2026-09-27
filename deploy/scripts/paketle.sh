@@ -21,6 +21,13 @@ echo "==> Backend testleri"
   exit 1
 }
 
+echo "==> Entegrasyon testleri (yerel MongoDB: dev/yerel-ortam.sh baslat)"
+(cd backend && npm run test:integration >/tmp/oldsocks-paket-integration.log 2>&1) || {
+  tail -30 /tmp/oldsocks-paket-integration.log >&2
+  echo "Entegrasyon testleri başarısız veya yerel MongoDB kapalı (dev/yerel-ortam.sh baslat)." >&2
+  exit 1
+}
+
 echo "==> Arayüz: lint, testler, üretim derlemesi"
 (
   cd frontend
