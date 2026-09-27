@@ -94,8 +94,8 @@ if (process.env.NODE_ENV !== "test") {
 }
 
 /* --- Rate Limit Helpers --- */
-const skipPreflight = (req) =>
-  req.method === "OPTIONS" || req.method === "HEAD";
+// HEAD isteği GET işleyicisini tam çalıştırır (yalnız gövde gönderilmez); bu yüzden sayılır.
+const skipPreflight = (req) => req.method === "OPTIONS";
 const keyByIp = (req) => ipKeyGenerator(req.ip);
 
 /* 7) Rate limit (rotaya göre) */
@@ -103,7 +103,7 @@ const keyByIp = (req) => ipKeyGenerator(req.ip);
 /**
  * Genel limit (catch-all)
  * - 10 dakikada 1200 istek/IP
- * - OPTIONS/HEAD sayılmaz
+ * - OPTIONS sayılmaz
  * - Başarılı istekler de sayılır; aksi halde botlar limiti aşabilir
  */
 const generalLimiter = rateLimit({
