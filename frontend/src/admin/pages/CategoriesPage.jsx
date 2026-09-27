@@ -107,8 +107,11 @@ export default function CategoriesPage() {
       await api.delete(`/categories/${id}`);
       setCats((xs) => xs.filter((c) => c._id !== id));
       setToast({ msg: "Kategori silindi.", type: "success" });
-    } catch {
-      setToast({ msg: "Kategori silinemedi.", type: "error" });
+    } catch (err) {
+      setToast({
+        msg: err?.response?.data?.message || "Kategori silinemedi.",
+        type: "error",
+      });
     }
   };
 
@@ -342,6 +345,16 @@ export default function CategoriesPage() {
         <Window title="Onayla" onClose={() => setDeleteId(null)}>
           <div className="space-y-5 text-sm">
             <p>Bu kategoriyi silmek istediğinize emin misiniz?</p>
+            {(() => {
+              const target = cats.find((c) => c._id === deleteId);
+              const children = cats.filter((c) => String(c.parent?._id || c.parent || "") === String(deleteId));
+              const names = children.length ? children.map((c) => c.name) : (target?.children || []).map((c) => c.name);
+              return names.length ? (
+                <p className="text-red-700">
+                  Alt kategorileri de silinecek: <b>{names.join(", ")}</b>
+                </p>
+              ) : null;
+            })()}
             <div className="flex flex-col sm:flex-row justify-end gap-3">
               <button
                 onClick={() => setDeleteId(null)}

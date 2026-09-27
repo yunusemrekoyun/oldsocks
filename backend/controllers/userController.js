@@ -1,4 +1,5 @@
 // backend/controllers/userController.js
+const mongoose = require("mongoose");
 const User = require("../models/User");
 const PasswordResetToken = require("../models/PasswordResetToken");
 const bcrypt = require("bcrypt");
@@ -284,6 +285,13 @@ exports.updateUser = async (req, res) => {
 
 exports.deleteUser = async (req, res) => {
   try {
+    if (!mongoose.isValidObjectId(req.params.id)) {
+      return res.status(400).json({ message: "Geçersiz kullanıcı kimliği." });
+    }
+    // Yöneticinin kendini silmesi paneli yönetilemez bırakabilir.
+    if (String(req.params.id) === String(req.user?.userId)) {
+      return res.status(400).json({ message: "Kendi hesabınızı buradan silemezsiniz." });
+    }
     const result = await User.findByIdAndDelete(req.params.id);
     if (!result)
       return res.status(404).json({ message: "Kullanıcı bulunamadı." });

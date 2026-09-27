@@ -15,6 +15,7 @@ import {
 } from "react-icons/fa";
 import useUnseenOrders from "../../hooks/useUnseenOrders";
 import ToastAlert from "../../components/ui/ToastAlert";
+import ConfirmDialog from "../../components/ui/ConfirmDialog";
 import OrderDetailsModal from "../modals/OrderDetailsModal";
 
 const STATUS_LABELS = {
@@ -120,6 +121,19 @@ export default function OrdersPage() {
     window.addEventListener("focus", doSeen);
     return () => window.removeEventListener("focus", doSeen);
   }, [markSeen]);
+
+  const [paidConfirmId, setPaidConfirmId] = useState(null);
+
+  // Elle "Ödeme alındı" yapmak stoğu düşer ve geri alınamaz; PayTR kaydı olmadan yapılmamalı.
+  const requestStatusUpdate = (id) => {
+    const order = orders.find((o) => o._id === id);
+    if (!order) return;
+    if (order.selectedStatus === "paid" && order.status !== "paid") {
+      setPaidConfirmId(id);
+      return;
+    }
+    updateStatus(id);
+  };
 
   const updateStatus = async (id) => {
     const order = orders.find((o) => o._id === id);
@@ -629,7 +643,7 @@ export default function OrdersPage() {
 
                       {changed ? (
                         <button
-                          onClick={() => updateStatus(order._id)}
+                          onClick={() => requestStatusUpdate(order._id)}
                           disabled={updatingId === order._id}
                           className="px-4 py-2 rounded-lg bg-dark1 text-white hover:bg-dark2 transition disabled:opacity-60 w-full sm:w-auto"
                         >
@@ -658,6 +672,21 @@ export default function OrdersPage() {
           onClose={() => setToast(null)}
         />
       )}
+
+      <ConfirmDialog
+        open={Boolean(paidConfirmId)}
+        title="Ödeme alındı olarak işaretle"
+        message={`Sipariş #${orders.find((o) => o._id === paidConfirmId)?.orderNumber || ""} ödenmiş sayılacak ve stoktan düşülecek. Bu işlem geri alınamaz. Ödemeyi PayTR panelinde görmediyseniz işaretlemeyin.`}
+        confirmLabel="Ödeme alındı"
+        tone="warning"
+        loading={updatingId === paidConfirmId}
+        onConfirm={async () => {
+          const id = paidConfirmId;
+          await updateStatus(id);
+          setPaidConfirmId(null);
+        }}
+        onCancel={() => setPaidConfirmId(null)}
+      />
     </div>
   );
 }
