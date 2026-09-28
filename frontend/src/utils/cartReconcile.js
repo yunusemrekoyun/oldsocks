@@ -24,9 +24,12 @@ export function sanitizeCartItems(value) {
   return [...seen.values()];
 }
 
+// notices: olaylar (çıkarılan ürün, değişen fiyat) — birikebilir.
+// stockNotices: satırların şu anki stok durumu — her kontrolde baştan oluşturulur.
 export function reconcileCart(items, results) {
   const byKey = new Map((results || []).map((r) => [cartKey(r.id, r.size), r]));
   const notices = [];
+  const stockNotices = [];
   let changed = false;
   const next = [];
 
@@ -47,7 +50,7 @@ export function reconcileCart(items, results) {
     }
     let updated = item;
     if (result.status === "insufficient") {
-      notices.push(
+      stockNotices.push(
         result.available > 0
           ? `${label}: şu an ${result.available} adet var. Ödemeye geçmek için adedi azaltın ya da biraz sonra tekrar deneyin.`
           : `${label} şu an stokta yok; son adetler başka bir müşterinin ödeme adımında olabilir. Biraz sonra tekrar deneyebilirsiniz.`
@@ -61,5 +64,5 @@ export function reconcileCart(items, results) {
     next.push(updated);
   }
 
-  return { items: changed ? next : items, notices, changed };
+  return { items: changed ? next : items, notices, stockNotices, changed };
 }

@@ -26,16 +26,17 @@ test("silinen ürün çıkarılır, stok aşımında adet korunup bildirilir, fi
     { id: B, size: "L", qty: 1, price: 50, name: "Gömlek" },
     { id: C, size: "", qty: 1, price: 70, name: "Şapka" },
   ];
-  const { items: next, notices, changed } = reconcileCart(items, [
+  const { items: next, notices, stockNotices, changed } = reconcileCart(items, [
     { id: A, size: "M", status: "insufficient", available: 2, price: 90 },
     { id: B, size: "L", status: "missing" },
     { id: C, size: "", status: "ok", available: 5, price: 70 },
   ]);
   assert.equal(changed, true);
   assert.deepEqual(next.map((i) => [i.id, i.qty, i.price]), [[A, 3, 90], [C, 1, 70]]);
-  assert.equal(notices.length, 3);
+  assert.equal(notices.length, 2);
   assert.match(notices.join(" "), /Gömlek \(L\) artık satışta değil/);
-  assert.match(notices.join(" "), /Çorap \(M\): şu an 2 adet var/);
+  assert.deepEqual(stockNotices.length, 1);
+  assert.match(stockNotices[0], /Çorap \(M\): şu an 2 adet var/);
 });
 
 test("stokta kalmayan ürün sepette kalır (başka müşterinin ayrımında olabilir); değişiklik yoksa aynı dizi döner", () => {
@@ -46,7 +47,8 @@ test("stokta kalmayan ürün sepette kalır (başka müşterinin ayrımında ola
   const soldOut = reconcileCart(items, [{ id: A, size: "M", status: "insufficient", available: 0, price: 100 }]);
   assert.equal(soldOut.changed, false);
   assert.equal(soldOut.items, items);
-  assert.match(soldOut.notices[0], /şu an stokta yok/);
+  assert.deepEqual(soldOut.notices, []);
+  assert.match(soldOut.stockNotices[0], /şu an stokta yok/);
   const removed = reconcileCart(items, [{ id: A, size: "M", status: "size_missing", available: 0 }]);
   assert.deepEqual(removed.items, []);
 });

@@ -132,22 +132,25 @@ async function releaseCustomerPendingOrders({ userId, previousConversationId, ol
 // ödeme ekranından sepete dönerse ayrım sürer (başka sekmede ödeme formu açık olabilir);
 // sepet ve ödeme adımı bu adetleri müşteriye mevcut sayar. Yeni ödeme başlatılınca bu
 // oturum kapanır. Süresi dolmuş ama henüz geri verilmemiş ayrım da sayılır: stok hâlâ
-// düşülüdür ve yeni ödeme onu da kapatır. Üye isteğinde başka bir hesabın oturumu sayılmaz
-// (üyenin ödeme başlatması onu kapatmaz).
+// düşülüdür ve yeni ödeme onu da kapatır. Üyede hesabın kendi açık oturumları da sayılır
+// (başka cihazda ya da çıkış yapıp yeniden girdiyse; üyenin ödeme başlatması hepsini
+// kapatır), başka bir hesabın oturumu sayılmaz.
 async function heldQuantities(conversationId, { userId = null } = {}) {
   const held = new Map();
-  if (typeof conversationId !== "string" || !conversationId || conversationId.length > 64) return held;
-  const order = await Order.findOne({
-    conversationId,
-    status: "pending",
-    stockUpdated: true,
-    ...(userId ? { user: { $in: [null, userId] } } : {}),
-  })
+  const conditions = [];
+  if (typeof conversationId === "string" && conversationId && conversationId.length <= 64) {
+    conditions.push(userId ? { conversationId, user: { $in: [null, userId] } } : { conversationId });
+  }
+  if (userId) conditions.push({ user: userId });
+  if (!conditions.length) return held;
+  const orders = await Order.find({ status: "pending", stockUpdated: true, $or: conditions })
     .select("items.productId items.size items.qty")
     .lean();
-  for (const item of order?.items || []) {
-    const key = `${item.productId}|${item.size || ""}`;
-    held.set(key, (held.get(key) || 0) + (Number(item.qty) || 0));
+  for (const order of orders) {
+    for (const item of order.items || []) {
+      const key = `${item.productId}|${item.size || ""}`;
+      held.set(key, (held.get(key) || 0) + (Number(item.qty) || 0));
+    }
   }
   return held;
 }

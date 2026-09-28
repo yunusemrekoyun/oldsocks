@@ -28,9 +28,13 @@ async function applyStockChanges(order, options = {}) {
     if (!productId) continue;
     const quantity = Number(qty);
     if (!Number.isFinite(quantity) || quantity <= 0) continue;
-    // Beden satırı kimliği varsa onunla (yönetici bedenin adını değiştirmiş olabilir; stok
-    // geri eklenirken de kimlik kullanılır), yoksa (eski siparişler) adıyla bulunur.
-    const row = sizeId ? { _id: sizeId } : { size: size ? String(size) : "" };
+    // Beden satırı, stoğun geri eklendiği gibi bulunur: kimliği hâlâ üründe varsa onunla
+    // (yönetici bedenin adını değiştirmiş olabilir), yoksa (satır silinip yeniden eklendi ya
+    // da eski sipariş) adıyla.
+    const rowStillThere =
+      sizeId &&
+      (await Product.exists({ _id: productId, "sizes._id": sizeId }).session(options.session || null));
+    const row = rowStillThere ? { _id: sizeId } : { size: size ? String(size) : "" };
     ops.push({
       updateOne: {
         filter: {

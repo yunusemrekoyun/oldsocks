@@ -1,5 +1,5 @@
 // src/components/cart/Cart.jsx
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useCart } from "../../context/useCart";
 import { useAuth } from "../../context/AuthContext";
 import { useNavigate } from "react-router-dom";
@@ -7,7 +7,6 @@ import CartItem from "./CartItem";
 import { FaShoppingCart } from "react-icons/fa";
 import AuthRequiredModal from "../auth/AuthRequireModal";
 import api from "../../../api";
-import publicApi from "../../../publicApi";
 import { formatTry } from "../../utils/currency";
 import ConfirmDialog from "../ui/ConfirmDialog";
 import CartRecommendations from "./CartRecommendations";
@@ -42,27 +41,40 @@ export default function Cart() {
 
   // Sunucuyla eşitleme: güncel fiyat, stok ve satıştan kalkan ürünler
   const [stockByKey, setStockByKey] = useState(null); // Map<cartKey, available> | null
-  const [cartNotices, setCartNotices] = useState([]);
+  const [cartNotices, setCartNotices] = useState([]); // olaylar: çıkarılan ürün, değişen fiyat
+  const [stockNotices, setStockNotices] = useState([]); // anlık stok durumu, her kontrolde yenilenir
+  const [stockTick, setStockTick] = useState(0);
+  const lastStockCheck = useRef(0);
   const linesKey = items.map((i) => `${cartKey(i.id, i.size)}:${i.qty}:${i.price}`).join("|");
+
+  // Oturum açıksa kimlikle gider: üyenin kendi açık ödeme oturumu (başka cihazda ya da
+  // yeniden giriş öncesi) mevcut sayılır. Misafirde bu tarayıcının oturumu (heldBy) sayılır.
+  const checkStock = (lines) => {
+    lastStockCheck.current = Date.now();
+    return api
+      .post("/cart-campaigns/check", {
+        cartItems: lines.map(({ id, size, qty }) => ({ id, size, qty })),
+        heldBy: previousCheckout(),
+      })
+      .then(({ data }) => (Array.isArray(data?.items) ? data.items : []));
+  };
+
+  const applyStock = (results) => {
+    const fresh = new Map(results.map((r) => [cartKey(r.id, r.size), r.available ?? 0]));
+    setStockByKey(fresh);
+    const { items: next, notices, stockNotices: current, changed } = reconcileCart(items, results);
+    setStockNotices(current);
+    if (notices.length) setCartNotices((prev) => [...new Set([...prev, ...notices])]);
+    if (changed) replaceItems(next);
+    return fresh;
+  };
 
   useEffect(() => {
     if (!items.length) return undefined;
     let alive = true;
-    publicApi
-      .post("/cart-campaigns/check", {
-        cartItems: items.map(({ id, size, qty }) => ({ id, size, qty })),
-        // Ödeme ekranından dönüldüyse kendi ayırdığı adetler tükendi görünmesin.
-        heldBy: previousCheckout(),
-      })
-      .then(({ data }) => {
-        if (!alive) return;
-        const results = Array.isArray(data?.items) ? data.items : [];
-        setStockByKey(new Map(results.map((r) => [cartKey(r.id, r.size), r.available ?? 0])));
-        const { items: next, notices, changed } = reconcileCart(items, results);
-        if (notices.length) {
-          setCartNotices((prev) => [...new Set([...prev, ...notices])]);
-        }
-        if (changed) replaceItems(next);
+    checkStock(items)
+      .then((results) => {
+        if (alive) applyStock(results);
       })
       .catch(() => {
         // Eşitleme yapılamazsa sepet olduğu gibi kalır; ödeme adımı yine sunucuda doğrulanır.
@@ -72,7 +84,21 @@ export default function Cart() {
     };
     // linesKey sepet satırlarını temsil eder; items her render'da yeni dizi olabilir.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [linesKey]);
+  }, [linesKey, stockTick]);
+
+  // Sayfaya dönülünce stok yeniden kontrol edilir: başka müşterinin ayrımı bitmiş olabilir.
+  useEffect(() => {
+    const refresh = () => {
+      if (document.visibilityState !== "visible" || Date.now() - lastStockCheck.current < 5000) return;
+      setStockTick((n) => n + 1);
+    };
+    window.addEventListener("focus", refresh);
+    document.addEventListener("visibilitychange", refresh);
+    return () => {
+      window.removeEventListener("focus", refresh);
+      document.removeEventListener("visibilitychange", refresh);
+    };
+  }, []);
 
   // Kargo metodu (tek kayıt varsayımı)
   const [shipping, setShipping] = useState(null); // { _id, name, fee, freeShippingThreshold }
@@ -215,18 +241,26 @@ export default function Cart() {
 
   // Stok kontrolü geldiyse adedi mevcut stoğu aşan satır varken ödemeye geçilmez; satır
   // sepette kalır (stok başka bir müşterinin ayrımından dönebilir).
-  const shortLines = stockByKey
-    ? items.filter((item) => {
-        const available = stockByKey.get(cartKey(item.id, item.size));
-        return available !== undefined && item.qty > available;
-      })
-    : [];
+  const shortOf = (stock) =>
+    stock
+      ? items.filter((item) => {
+          const available = stock.get(cartKey(item.id, item.size));
+          return available !== undefined && item.qty > available;
+        })
+      : [];
+  const shortLines = shortOf(stockByKey);
   const [checkoutBlocked, setCheckoutBlocked] = useState(false);
 
-  const handleCheckout = () => {
+  const handleCheckout = async () => {
     if (shortLines.length) {
-      setCheckoutBlocked(true);
-      return;
+      // Engellemeden önce stok yeniden kontrol edilir; arada dönmüş olabilir.
+      const fresh = await checkStock(items)
+        .then(applyStock)
+        .catch(() => stockByKey);
+      if (shortOf(fresh).length) {
+        setCheckoutBlocked(true);
+        return;
+      }
     }
     setCheckoutBlocked(false);
     if (!isLoggedIn) {
@@ -284,19 +318,22 @@ export default function Cart() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8">
         {/* Ürün listesi */}
         <section className="lg:col-span-2">
-          {cartNotices.length > 0 && (
+          {stockNotices.length + cartNotices.length > 0 && (
             <div
               role="status"
               className="mb-4 flex items-start justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900"
             >
               <ul className="space-y-1">
-                {cartNotices.map((notice) => (
+                {[...stockNotices, ...cartNotices].map((notice) => (
                   <li key={notice}>{notice}</li>
                 ))}
               </ul>
               <button
                 type="button"
-                onClick={() => setCartNotices([])}
+                onClick={() => {
+                  setCartNotices([]);
+                  setStockNotices([]);
+                }}
                 className="shrink-0 font-medium underline underline-offset-2"
               >
                 Tamam

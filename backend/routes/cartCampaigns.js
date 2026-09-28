@@ -5,7 +5,7 @@ const ctrl = require("../controllers/cartCampaignController");
 
 // Public
 router.post("/preview", attachUserIfPresent, ctrl.previewCartPricing);
-router.post("/check", ctrl.checkCartItems);
+router.post("/check", attachUserIfPresent, ctrl.checkCartItems);
 router.get("/header", ctrl.listHeaderCampaigns);
 
 // Admin

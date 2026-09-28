@@ -349,3 +349,38 @@ test("yönetici bekleyen siparişi ödendi yapınca ödeme zamanı kaydedilir (e
   assert.equal(after.status, "paid");
   assert.ok(after.paymentReceivedAt);
 });
+
+test("ayrım sırasında beden satırı silinip aynı adla yeniden eklenirse geç ödeme ve yönetici onayı yeni satırdan düşer", async () => {
+  const recreate = (productId, stock) =>
+    Products.updateOne({ _id: productId }, { $set: { sizes: [{ _id: new mongoose.Types.ObjectId(), size: "M", stock }] } });
+  const expire = async (conversationId) => {
+    await Orders.updateOne({ conversationId }, { $set: { stockReservedUntil: new Date(Date.now() - 1000) } });
+    return waitFor(async () => (await Orders.findOne({ conversationId })).status === "cancelled");
+  };
+
+  // Geç gelen ödeme
+  const late = await seedProduct(1);
+  const a = await start(late, uniq("yeniden-satir"));
+  assert.equal(a.status, 200);
+  await recreate(late, 0);
+  assert.ok(await expire(a.data.conversationId));
+  assert.equal(await stockOf(late), 1);
+  const orderA = await Orders.findOne({ conversationId: a.data.conversationId });
+  await paytrCallback(server.base, { merchantOid: a.data.conversationId, totalAmount: Math.round(orderA.totalPrice * 100) });
+  assert.equal((await Orders.findOne({ _id: orderA._id })).status, "paid");
+  assert.equal(await stockOf(late), 0);
+
+  // İncelemedeki siparişi yönetici onaylar
+  const review = await seedProduct(1);
+  const b = await start(review, uniq("yeniden-satir-onay"));
+  assert.ok(await expire(b.data.conversationId));
+  await Orders.updateOne(
+    { conversationId: b.data.conversationId },
+    { $set: { status: "payment_review", cancelReason: "stock_unavailable_after_payment", paymentReceivedAt: new Date() } }
+  );
+  await recreate(review, 3);
+  const orderB = await Orders.findOne({ conversationId: b.data.conversationId });
+  const approved = await admin("PUT", `/orders/${orderB._id}/status`, { status: "paid" });
+  assert.equal(approved.status, 200, JSON.stringify(approved.data));
+  assert.equal(await stockOf(review), 2);
+});

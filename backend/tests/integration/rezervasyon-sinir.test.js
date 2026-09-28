@@ -200,3 +200,16 @@ test("aynı tarayıcıda başka hesaba geçen üyenin önizlemesi önceki hesab�
   assert.equal(other.status, 409);
   assert.match(other.data.message, /stok/i);
 });
+
+test("çıkış yapıp yeniden giren üyenin kendi ayrımı sepette mevcut sayılır", async () => {
+  const product = await seedProduct();
+  await mongoose.connection.collection("products").updateOne({ _id: product }, { $set: { "sizes.0.stock": 1 } });
+  const member = await memberLogin(`yeniden-giris-${crypto.randomBytes(3).toString("hex")}@sinir.test`);
+  assert.equal((await startMember(member, product)).status, 200);
+  const cartItems = [{ id: String(product), size: "M", qty: 1 }];
+  const anonymous = await postJson(server.base, "/api/v1/cart-campaigns/check", { cartItems });
+  assert.equal(anonymous.data.items[0].available, 0);
+  const own = await postJson(server.base, "/api/v1/cart-campaigns/check", { cartItems }, { Authorization: `Bearer ${member.token}` });
+  assert.equal(own.data.items[0].status, "ok");
+  assert.equal(own.data.items[0].available, 1);
+});
