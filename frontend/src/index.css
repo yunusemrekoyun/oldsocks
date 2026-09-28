@@ -2,6 +2,11 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Sayfa zemini açıkça beyaz: bazı uygulama içi tarayıcılar tanımsız zemini koyu gösterir. */
+html {
+  background-color: #fff;
+}
+
 .storefront-font-classic {
   --storefront-body-font: Arial, Helvetica, sans-serif;
   --storefront-heading-font: "Playfair Display", Georgia, serif;

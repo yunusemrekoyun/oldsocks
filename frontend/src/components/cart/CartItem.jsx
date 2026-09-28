@@ -60,107 +60,88 @@ export default function CartItem({ item, available }) {
 
   const outOfStock = !loadingStock && maxStock !== Infinity && maxStock === 0;
 
-  return (
-    <div className="bg-white rounded-xl shadow-md transition hover:shadow-lg">
-      {/* Üst içerik */}
-      <div className="flex flex-col sm:flex-row items-center justify-between gap-4 px-4 py-5">
-        {/* Sol: Görsel + İsim */}
-        <div className="flex items-center gap-4 w-full sm:w-auto">
-          <Link to={`/product-details/${item.id}`}>
-            <img
-              src={item.image}
-              alt={item.name}
-              className="w-24 h-24 sm:w-28 sm:h-28 object-cover rounded-md border border-gray-200"
-            />
-          </Link>
+  const details = [item.size && `Beden: ${item.size}`, item.color && `Renk: ${item.color}`]
+    .filter(Boolean)
+    .join(" · ");
 
-          <div>
+  return (
+    <div className="rounded-xl bg-white p-3 shadow-md transition hover:shadow-lg sm:p-4">
+      <div className="flex gap-3 sm:gap-4">
+        <Link to={`/product-details/${item.id}`} className="shrink-0">
+          <img
+            src={item.image}
+            alt={item.name}
+            className="h-24 w-20 rounded-lg border border-gray-200 object-cover sm:h-28 sm:w-24"
+          />
+        </Link>
+
+        <div className="flex min-w-0 flex-1 flex-col">
+          {/* Ad + kaldır */}
+          <div className="flex items-start gap-2">
             <Link
               to={`/product-details/${item.id}`}
-              className="block text-base sm:text-lg font-semibold text-dark1 mb-1 hover:text-primary transition"
+              className="line-clamp-2 min-w-0 flex-1 text-[15px] font-semibold leading-snug text-dark1 transition hover:text-primary sm:text-lg"
             >
               {item.name}
             </Link>
-            {item.size && (
-              <p className="text-sm text-gray-500">Beden: {item.size}</p>
-            )}
-            {item.color && (
-              <p className="text-sm text-gray-500">Renk: {item.color}</p>
-            )}
-
-            {/* TOPLAM STOK GÖSTERİMİ KALDIRILDI */}
-            {!loadingStock && outOfStock && (
-              <p className="mt-1 text-[12px] text-red-600">Şu an stokta yok</p>
-            )}
-            {!loadingStock && !outOfStock && item.qty > maxStock && (
-              <p className="mt-1 text-[12px] text-red-600">Şu an {maxStock} adet var</p>
-            )}
-          </div>
-        </div>
-
-        {/* Orta: Qty + Fiyat */}
-        <div className="flex flex-col-reverse sm:flex-row items-center gap-3 sm:gap-6 w-full sm:w-auto">
-          {/* Adet kontrolü */}
-          <div className="flex items-center">
             <button
-              onClick={dec}
-              disabled={item.qty <= 1 || outOfStock}
-              className="p-2 border border-light2 rounded-l-lg hover:bg-light1 transition disabled:opacity-40"
-              aria-label="Adeti azalt"
+              type="button"
+              onClick={() => removeFromCart(item.id, item.size)}
+              className="-mr-1 -mt-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-red-600 transition hover:bg-red-50 hover:text-red-700"
+              aria-label="Ürünü sepetten kaldır"
+              title="Ürünü sepetten kaldır"
             >
-              <FaMinus className="text-dark2" />
-            </button>
-            <input
-              type="text"
-              readOnly
-              value={item.qty}
-              className="w-16 text-center border-t border-b border-light2 text-dark1 px-2 bg-white"
-              aria-label="Adet"
-            />
-            <button
-              onClick={inc}
-              disabled={outOfStock}
-              className="p-2 border border-light2 rounded-r-lg hover:bg-light1 transition disabled:opacity-40"
-              aria-label="Adeti artır"
-            >
-              <FaPlus className="text-dark2" />
+              <FaTrash size={15} />
             </button>
           </div>
+          {details && <p className="mt-0.5 text-sm text-gray-500">{details}</p>}
+          {!loadingStock && outOfStock && (
+            <p className="mt-1 text-[12px] text-red-600">Şu an stokta yok</p>
+          )}
+          {!loadingStock && !outOfStock && item.qty > maxStock && (
+            <p className="mt-1 text-[12px] text-red-600">Şu an {maxStock} adet var</p>
+          )}
 
-          {/* Fiyat bilgileri */}
-          <div className="flex flex-col items-start sm:items-end text-sm sm:text-base gap-1 w-full sm:w-auto">
-            <p className="text-gray-600">
-              Fiyat:{" "}
-              <span className="text-dark1 font-medium">
-                {formatTry(item.price)}
-              </span>
-            </p>
-            <p className="text-dark1 font-semibold">
-              Toplam: {formatTry(Number(item.price) * Number(item.qty))}
-            </p>
+          {/* Adet + tutar */}
+          <div className="mt-auto flex items-end justify-between gap-3 pt-2">
+            <div className="flex items-center">
+              <button
+                type="button"
+                onClick={dec}
+                disabled={item.qty <= 1 || outOfStock}
+                className="flex h-9 w-9 items-center justify-center rounded-l-lg border border-light2 transition hover:bg-light1 disabled:opacity-40"
+                aria-label="Adeti azalt"
+              >
+                <FaMinus className="text-xs text-dark2" />
+              </button>
+              <input
+                type="text"
+                readOnly
+                value={item.qty}
+                className="h-9 w-10 border-y border-light2 bg-white text-center text-sm text-dark1"
+                aria-label="Adet"
+              />
+              <button
+                type="button"
+                onClick={inc}
+                disabled={outOfStock}
+                className="flex h-9 w-9 items-center justify-center rounded-r-lg border border-light2 transition hover:bg-light1 disabled:opacity-40"
+                aria-label="Adeti artır"
+              >
+                <FaPlus className="text-xs text-dark2" />
+              </button>
+            </div>
+            <div className="text-right">
+              <p className="font-semibold text-dark1">{formatTry(Number(item.price) * Number(item.qty))}</p>
+              {item.qty > 1 && <p className="text-xs text-gray-500">{formatTry(item.price)} / adet</p>}
+            </div>
           </div>
+
+          {/* Stok sınırı uyarısı; boşken yer kaplamaz */}
+          <p className="text-[12px] leading-4 text-red-600" aria-live="polite">
+            {warn}
+          </p>
         </div>
-
-        {/* Sağ: Kaldır */}
-        <button
-          onClick={() => removeFromCart(item.id, item.size)}
-          className="text-red-600 hover:text-red-700 transition"
-          aria-label="Ürünü sepetten kaldır"
-          title="Ürünü sepetten kaldır"
-        >
-          <FaTrash size={18} />
-        </button>
-      </div>
-
-      {/* Alt: sabit yükseklikli uyarı bandı */}
-      <div
-        className={`px-4 pb-3 -mt-2 text-[13px] text-red-600 transition-opacity duration-200 ${
-          warn ? "opacity-100" : "opacity-0"
-        }`}
-        style={{ minHeight: 20 }}
-        aria-live="polite"
-      >
-        {warn || "."}
       </div>
     </div>
   );

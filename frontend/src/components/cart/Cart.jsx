@@ -39,7 +39,7 @@ export default function Cart() {
   const [couponInput, setCouponInput] = useState(selectedCouponCode || "");
   const [couponError, setCouponError] = useState(null);
 
-  // Öneriler masaüstünde sol sütunda, mobilde sayfanın altında (tek kopya).
+  // Öneriler masaüstünde sol sütunda ızgara, telefonda satırlarla özet arasında şerit (tek kopya).
   const [isDesktop, setIsDesktop] = useState(() =>
     typeof window !== "undefined" && window.matchMedia("(min-width: 1024px)").matches
   );
@@ -353,8 +353,8 @@ export default function Cart() {
               />
             ))}
           </div>
-          {/* Masaüstünde öneriler satırların altındaki boşlukta */}
-          {isDesktop && <CartRecommendations inline />}
+          {/* Masaüstünde satırların altındaki boşlukta; telefonda sipariş özetinden önce */}
+          <CartRecommendations inline={isDesktop} />
         </section>
 
         {/* Özet kartı */}
@@ -604,8 +604,6 @@ export default function Cart() {
           </div>
         </aside>
       </div>
-
-      {!isDesktop && <CartRecommendations />}
 
       {showLoginModal && (
         <AuthRequiredModal
