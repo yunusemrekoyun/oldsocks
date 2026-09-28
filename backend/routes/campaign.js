@@ -31,5 +31,11 @@ router.patch(
   allowRoles("admin"),
   ctrl.setActiveCampaign
 );
+router.patch(
+  "/:id/deactivate",
+  verifyToken,
+  allowRoles("admin"),
+  ctrl.deactivateCampaign
+);
 
 module.exports = router;

@@ -89,9 +89,10 @@ async function syncMini(campaign) {
 
 exports.createMiniCampaign = async (req, res) => {
   try {
+    // Slot boşsa kampanya kaydedilir ama sitede görünmez (yayında değil).
     const slot = parseSlot(req.body.slot);
-    if (!req.body.title || !slot) {
-      return res.status(400).json({ message: "Başlık ve 1 veya 2 numaralı slot zorunludur." });
+    if (!req.body.title) {
+      return res.status(400).json({ message: "Başlık zorunludur." });
     }
     const products = parseArrayField(req.body.products);
     const categories = parseArrayField(req.body.categories);
@@ -102,7 +103,7 @@ exports.createMiniCampaign = async (req, res) => {
       min: 1,
       max: 1,
     });
-    await MiniCampaign.updateMany({ slot }, { $set: { slot: null } });
+    if (slot) await MiniCampaign.updateMany({ slot }, { $set: { slot: null } });
     const campaign = await MiniCampaign.create({
       title: req.body.title,
       slot,
@@ -150,16 +151,18 @@ exports.updateMiniCampaign = async (req, res) => {
     const campaign = await MiniCampaign.findById(req.params.id);
     if (!campaign) return res.status(404).json({ message: "Mini kampanya bulunamadı." });
     const slot = parseSlot(req.body.slot);
-    if (!req.body.title || !slot) {
-      return res.status(400).json({ message: "Başlık ve 1 veya 2 numaralı slot zorunludur." });
+    if (!req.body.title) {
+      return res.status(400).json({ message: "Başlık zorunludur." });
     }
     const products = parseArrayField(req.body.products);
     const categories = parseArrayField(req.body.categories);
     await validateTargets(products, categories);
-    await MiniCampaign.updateMany(
-      { slot, _id: { $ne: campaign._id } },
-      { $set: { slot: null } }
-    );
+    if (slot) {
+      await MiniCampaign.updateMany(
+        { slot, _id: { $ne: campaign._id } },
+        { $set: { slot: null } }
+      );
+    }
     campaign.title = req.body.title;
     campaign.slot = slot;
     campaign.products = products;
@@ -212,6 +215,18 @@ exports.setActiveMiniCampaign = async (req, res) => {
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: "Slot güncellenemedi." });
+  }
+};
+
+exports.deactivateMiniCampaign = async (req, res) => {
+  try {
+    const result = await MiniCampaign.updateOne({ _id: req.params.id }, { $set: { slot: null } });
+    if (!result.matchedCount) return res.status(404).json({ message: "Mini kampanya bulunamadı." });
+    invalidateMiniCampaigns();
+    res.json({ message: "Mini kampanya yayından kaldırıldı." });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Mini kampanya yayından kaldırılamadı." });
   }
 };
 

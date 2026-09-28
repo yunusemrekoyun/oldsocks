@@ -206,6 +206,22 @@ export default function MiniCampaignsPage() {
   /* ---------------- silme ---------------- */
   const triggerDelete = (id) => setDeleteId(id);
 
+  // Slota alır (oradaki kampanya yayından düşer) ya da slot boşaltıp yayından kaldırır.
+  const handleSlot = async (id, slot) => {
+    try {
+      if (slot) await api.patch(`/mini-campaigns/${id}/activate?slot=${slot}`);
+      else await api.patch(`/mini-campaigns/${id}/deactivate`);
+      const { data } = await api.get("/mini-campaigns");
+      setItems(data);
+      setToast({
+        msg: slot ? `Mini kampanya ${slot === 1 ? "Slot 1'e" : "Slot 2'ye"} alındı.` : "Mini kampanya yayından kaldırıldı.",
+        type: "success",
+      });
+    } catch (err) {
+      setToast({ msg: err.response?.data?.message || "Slot güncellenemedi.", type: "error" });
+    }
+  };
+
   const handleDeleteConfirmed = async () => {
     const id = deleteId;
     setDeleteId(null);
@@ -257,7 +273,6 @@ export default function MiniCampaignsPage() {
 
   const isValid =
     (form.title || "").trim().length > 0 &&
-    form.slot &&
     selectionType &&
     selectionCount > 0 &&
     (Boolean(form.imageUrl) || Boolean(form.imageFile) || Boolean(form._id));
@@ -268,9 +283,8 @@ export default function MiniCampaignsPage() {
 
     if (!(form.title || "").trim()) errs.title = "Başlık zorunludur.";
 
-    if (!form.slot) {
-      errs.slot = "Slot seçimi zorunludur.";
-    } else if (!["1", "2"].includes(form.slot)) {
+    // Boş slot = kaydedilir ama sitede görünmez.
+    if (form.slot && !["1", "2"].includes(form.slot)) {
       errs.slot = "Slot sadece 1 veya 2 olabilir.";
     } else if (
       (form._id == null && form.slot === "1" && slot1Taken) ||
@@ -333,7 +347,7 @@ export default function MiniCampaignsPage() {
     const ok = validateAndSetErrors();
     if (!ok) {
       setToast({
-        msg: "Lütfen zorunlu alanları doldurun: Başlık, Slot, Seçim ve Görsel.",
+        msg: "Lütfen zorunlu alanları doldurun: Başlık, Seçim ve Görsel.",
         type: "error",
       });
       return;
@@ -510,6 +524,7 @@ export default function MiniCampaignsPage() {
                 <div className="absolute top-2 left-2 flex gap-2">
                   {Number(c.slot) === 1 && <Badge color="blue">Slot 1</Badge>}
                   {Number(c.slot) === 2 && <Badge color="green">Slot 2</Badge>}
+                  {!c.slot && <Badge>Yayında değil</Badge>}
                 </div>
               </div>
 
@@ -517,6 +532,21 @@ export default function MiniCampaignsPage() {
                 <Typography variant="h6" className="line-clamp-1 break-words">
                   {c.title}
                 </Typography>
+
+                {/* Yayın: slota al / yayından kaldır */}
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  {c.slot ? (
+                    <Button size="sm" variant="outlined" className="px-3 normal-case" onClick={() => handleSlot(c._id, null)}>
+                      Yayından kaldır
+                    </Button>
+                  ) : (
+                    [1, 2].map((n) => (
+                      <Button key={n} size="sm" variant="outlined" className="px-3 normal-case" onClick={() => handleSlot(c._id, n)}>
+                        {n === 1 ? "Slot 1'e al" : "Slot 2'ye al"}
+                      </Button>
+                    ))
+                  )}
+                </div>
 
                 {/* Mobil aksiyonlar: düzenle/sil (hover yok) */}
                 <div className="mt-3 flex items-center justify-end gap-2 md:hidden">
@@ -579,8 +609,9 @@ export default function MiniCampaignsPage() {
           <div className="rounded-md border border-amber-200 bg-amber-50 text-amber-900 p-3 mb-4 text-sm flex items-start gap-2">
             <ExclamationTriangleIcon className="w-5 h-5 mt-0.5 shrink-0" />
             <div>
-              <b>Zorunlu alanlar:</b> Başlık, Slot, Seçim Türü ve en az bir
+              <b>Zorunlu alanlar:</b> Başlık, Seçim Türü ve en az bir
               seçim. Yeni kayıt oluştururken Kapak Görseli de zorunludur.
+              Slot seçilmezse kampanya kaydedilir ama sitede görünmez.
             </div>
           </div>
 
@@ -609,8 +640,8 @@ export default function MiniCampaignsPage() {
 
               {/* slot */}
               <div>
-                <label className="block mb-2 font-medium">Slot *</label>
-                <div className="grid grid-cols-2 gap-2">
+                <label className="block mb-2 font-medium">Slot</label>
+                <div className="grid grid-cols-3 gap-2">
                   <button
                     type="button"
                     onClick={() => {
@@ -650,6 +681,20 @@ export default function MiniCampaignsPage() {
                     }`}
                   >
                     Slot 2 {slot2Taken && form._id == null ? "(Dolu)" : ""}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setForm((f) => ({ ...f, slot: "" }));
+                      setFieldErrors((er) => ({ ...er, slot: "" }));
+                    }}
+                    className={`border rounded-lg py-2 text-sm ${
+                      !form.slot
+                        ? "border-blue-500 bg-blue-50"
+                        : "border-gray-200 hover:bg-gray-50"
+                    }`}
+                  >
+                    Yayında değil
                   </button>
                 </div>
                 {fieldErrors.slot && (

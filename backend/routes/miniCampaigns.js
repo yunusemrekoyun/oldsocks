@@ -43,5 +43,12 @@ router.patch(
   allowRoles("admin"),
   ctrl.setActiveMiniCampaign
 );
+// Yayından kaldır (slot boşalır)
+router.patch(
+  "/:id/deactivate",
+  verifyToken,
+  allowRoles("admin"),
+  ctrl.deactivateMiniCampaign
+);
 
 module.exports = router;

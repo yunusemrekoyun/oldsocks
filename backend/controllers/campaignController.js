@@ -210,6 +210,18 @@ exports.setActiveCampaign = async (req, res) => {
   }
 };
 
+exports.deactivateCampaign = async (req, res) => {
+  try {
+    const result = await Campaign.updateOne({ _id: req.params.id }, { $set: { isActive: false } });
+    if (!result.matchedCount) return res.status(404).json({ message: "Kampanya bulunamadı." });
+    activeCampaignCache.invalidate();
+    res.json({ message: "Kampanya pasif yapıldı." });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Kampanya pasif yapılamadı." });
+  }
+};
+
 exports.getActiveCampaign = async (_req, res) => {
   try {
     const result = await activeCampaignCache.get(async () => {

@@ -15,6 +15,7 @@ import {
   PencilIcon,
   TrashIcon,
   CheckIcon,
+  XMarkIcon,
   MagnifyingGlassIcon,
   FunnelIcon,
   ArrowUpTrayIcon,
@@ -387,14 +388,16 @@ export default function CampaignsPage() {
     }
   };
 
-  const handleActivate = async (id) => {
+  // Aktifse pasife alır, pasifse aktif eder (aynı anda tek kampanya aktif olur).
+  const handleToggleActive = async (campaign) => {
+    const turnOff = Boolean(campaign.isActive);
     try {
-      await api.patch(`/campaigns/${id}/activate`);
+      await api.patch(`/campaigns/${campaign._id}/${turnOff ? "deactivate" : "activate"}`);
       const { data } = await api.get("/campaigns");
       setCampaigns(data);
-      setToast({ msg: "Kampanya aktif edildi.", type: "success" });
+      setToast({ msg: turnOff ? "Kampanya pasif yapıldı." : "Kampanya aktif edildi.", type: "success" });
     } catch {
-      setToast({ msg: "Aktif etme işlemi başarısız.", type: "error" });
+      setToast({ msg: turnOff ? "Pasif yapma işlemi başarısız." : "Aktif etme işlemi başarısız.", type: "error" });
     }
   };
 
@@ -553,15 +556,15 @@ export default function CampaignsPage() {
                 <div className="mt-4 flex items-center justify-end gap-2">
                   {/* Desktop aksiyonları */}
                   <div className="hidden md:flex items-center gap-2">
-                    <Tooltip content="Aktif Yap">
+                    <Tooltip content={c.isActive ? "Pasif Yap" : "Aktif Yap"}>
                       <Button
                         size="sm"
                         variant="outlined"
-                        onClick={() => handleActivate(c._id)}
+                        onClick={() => handleToggleActive(c)}
                         className="px-3"
-                        aria-label="Aktif Yap"
+                        aria-label={c.isActive ? "Pasif Yap" : "Aktif Yap"}
                       >
-                        <CheckIcon className="w-4 h-4" />
+                        {c.isActive ? <XMarkIcon className="w-4 h-4" /> : <CheckIcon className="w-4 h-4" />}
                       </Button>
                     </Tooltip>
 
@@ -590,12 +593,12 @@ export default function CampaignsPage() {
                       Düzenle
                     </button>
                     <button
-                      onClick={() => handleActivate(c._id)}
+                      onClick={() => handleToggleActive(c)}
                       className="flex-1 inline-flex items-center justify-center gap-1 px-2.5 py-1.5 rounded border text-xs hover:bg-gray-50"
-                      title="Aktif Yap"
+                      title={c.isActive ? "Pasif Yap" : "Aktif Yap"}
                     >
-                      <CheckIcon className="w-4 h-4" />
-                      Aktif
+                      {c.isActive ? <XMarkIcon className="w-4 h-4" /> : <CheckIcon className="w-4 h-4" />}
+                      {c.isActive ? "Pasif Yap" : "Aktif Yap"}
                     </button>
                     <button
                       onClick={() => triggerDelete(c._id)}
