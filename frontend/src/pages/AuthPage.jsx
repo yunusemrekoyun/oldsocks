@@ -12,9 +12,12 @@ export default function AuthPage() {
   const location = useLocation();
   const redirectTo = location.state?.from;
 
+  // Hesap sayfası kendi kenar boşluklarını ve zeminini verir.
+  if (isLoggedIn) return <UserAccountLayout />;
+
   return (
     <div className="min-h-screen p-10">
-      {isLoggedIn ? <UserAccountLayout /> : <Auth redirectTo={redirectTo} />}
+      <Auth redirectTo={redirectTo} />
     </div>
   );
 }

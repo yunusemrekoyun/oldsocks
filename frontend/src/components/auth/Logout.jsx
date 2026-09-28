@@ -6,7 +6,8 @@ import api from "../../../api";
 import { AuthContext } from "../../context/AuthContext";
 import { clearCheckout } from "../../utils/checkoutSession";
 
-// variant="menu": hesap sayfası kenar menüsündeki tam genişlik düğme.
+// variant="menu": hesap sayfası kenar menüsündeki tam genişlik düğme;
+// variant="row": telefonda profil sekmesindeki liste satırı.
 const Logout = ({ variant = "icon" }) => {
   const navigate = useNavigate();
   const { setIsLoggedIn } = useContext(AuthContext);
@@ -26,6 +27,19 @@ const Logout = ({ variant = "icon" }) => {
       navigate("/auth");
     }
   };
+
+  if (variant === "row") {
+    return (
+      <button
+        type="button"
+        onClick={handleLogout}
+        className="flex w-full items-center gap-3 px-4 py-3.5 text-left text-[15px] font-medium text-dark1 transition hover:bg-light1/60 sm:px-5"
+      >
+        <FaSignOutAlt className="text-sm text-dark2" />
+        Çıkış Yap
+      </button>
+    );
+  }
 
   if (variant === "menu") {
     return (

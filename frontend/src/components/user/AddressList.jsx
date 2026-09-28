@@ -32,7 +32,7 @@ const ConfirmModal = ({ open, onClose, onConfirm, message }) => {
 
 /* Basit iskelet loader */
 const SkeletonCard = () => (
-  <div className="rounded-xl border border-light2 bg-white p-4 animate-pulse">
+  <div className="animate-pulse rounded-2xl bg-white p-4 shadow-sm ring-1 ring-black/5">
     <div className="h-4 w-32 bg-light2 rounded mb-3" />
     <div className="h-3 w-full bg-light2 rounded mb-2" />
     <div className="h-3 w-2/3 bg-light2 rounded mb-2" />
@@ -96,33 +96,31 @@ export default function AddressList() {
 
   /* ———— UI ———— */
 
-  return (
-    <div className="bg-white rounded-2xl shadow-sm border border-light2 overflow-hidden">
-      {/* Header / Action bar */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 px-5 py-4 bg-light1/60 border-b border-light2">
-        <div>
-          <h3 className="text-lg font-semibold text-dark1">Adreslerim</h3>
-          <p className="text-sm text-gray-600">
-            Gönderim ve fatura adreslerinizi burada yönetin.
-          </p>
-        </div>
+  const openNew = () => {
+    setEditingAddr(null);
+    setShowForm(true);
+  };
 
-        {!showForm && (
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between gap-3 px-1">
+        <div className="min-w-0">
+          <h2 className="text-lg font-semibold text-dark1">Adreslerim</h2>
+          <p className="text-sm text-dark2">Gönderim ve fatura adresleriniz.</p>
+        </div>
+        {!showForm && addresses.length > 0 && (
           <button
-            onClick={() => {
-              setEditingAddr(null);
-              setShowForm(true);
-            }}
-            className="inline-flex items-center justify-center px-4 py-2 rounded-lg bg-dark1 text-white hover:bg-dark2 transition w-full sm:w-auto"
+            type="button"
+            onClick={openNew}
+            className="shrink-0 rounded-full bg-dark1 px-4 py-2 text-sm font-semibold text-white transition hover:bg-dark2"
           >
-            + Yeni Adres Ekle
+            + Yeni adres
           </button>
         )}
       </div>
 
-      {/* Form alanı */}
       {showForm && (
-        <div className="px-5 py-4 border-b border-light2">
+        <div className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-black/5 sm:p-5">
           <AddressForm
             address={editingAddr}
             onSuccess={onFormSuccess}
@@ -134,61 +132,39 @@ export default function AddressList() {
         </div>
       )}
 
-      {/* İçerik */}
-      <div className="p-5">
-        {/* Hata */}
-        {error && (
-          <div className="mb-4 rounded-lg border border-red-200 bg-red-50 text-red-700 px-3 py-2">
-            {error}
-          </div>
-        )}
+      {error && <div className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
 
-        {/* Yükleniyor */}
-        {loading && (
-          <div className="grid gap-4 sm:grid-cols-1 md:grid-cols-2">
-            <SkeletonCard />
-            <SkeletonCard />
-          </div>
-        )}
+      {loading && (
+        <div className="grid gap-3 md:grid-cols-2">
+          <SkeletonCard />
+          <SkeletonCard />
+        </div>
+      )}
 
-        {/* Boş durum */}
-        {!loading && !addresses.length && (
-          <div className="text-center py-12">
-            <div className="mx-auto mb-3 h-12 w-12 rounded-full bg-light1 flex items-center justify-center">
-              <span className="text-2xl">📍</span>
-            </div>
-            <h4 className="text-dark1 font-semibold mb-1">
-              Kayıtlı adres bulunamadı
-            </h4>
-            <p className="text-gray-600 text-sm mb-4">
-              Alışverişi hızlandırmak için adres ekleyin.
-            </p>
-            <button
-              onClick={() => {
-                setEditingAddr(null);
-                setShowForm(true);
-              }}
-              className="px-4 py-2 rounded-lg bg-dark1 text-white hover:bg-dark2 transition"
-            >
-              Adres Ekle
-            </button>
+      {!loading && !addresses.length && !showForm && (
+        <div className="rounded-2xl bg-white px-6 py-10 text-center shadow-sm ring-1 ring-black/5">
+          <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-light1">
+            <span className="text-2xl">📍</span>
           </div>
-        )}
+          <h3 className="mb-1 font-semibold text-dark1">Kayıtlı adres yok</h3>
+          <p className="mb-5 text-sm text-dark2">Alışverişi hızlandırmak için bir adres ekleyin.</p>
+          <button
+            type="button"
+            onClick={openNew}
+            className="rounded-full bg-dark1 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-dark2"
+          >
+            Adres ekle
+          </button>
+        </div>
+      )}
 
-        {/* Adres kartları */}
-        {!loading && addresses.length > 0 && (
-          <div className="grid gap-4 sm:grid-cols-1 md:grid-cols-2">
-            {addresses.map((addr) => (
-              <AddressCard
-                key={addr._id}
-                addr={addr}
-                onEdit={handleEdit}
-                onDelete={triggerDelete}
-              />
-            ))}
-          </div>
-        )}
-      </div>
+      {!loading && addresses.length > 0 && (
+        <div className="grid gap-3 md:grid-cols-2">
+          {addresses.map((addr) => (
+            <AddressCard key={addr._id} addr={addr} onEdit={handleEdit} onDelete={triggerDelete} />
+          ))}
+        </div>
+      )}
 
       {/* Sil onay modalı */}
       <ConfirmModal
