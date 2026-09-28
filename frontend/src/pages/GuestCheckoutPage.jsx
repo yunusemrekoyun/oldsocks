@@ -504,7 +504,6 @@ export default function GuestCheckoutPage() {
               onChange={(e) => setBuyerField("identityNumber", normalizeIdentityNumber(e.target.value))}
               onBlur={() => touchField("identityNumber")}
               inputMode="numeric"
-              maxLength={11}
               placeholder="11 haneli T.C. Kimlik No"
             />
             <p className="mt-1 text-xs text-dark2">Girilecekse sadece rakam ve 11 hane olmalı.</p>
