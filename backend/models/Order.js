@@ -17,7 +17,9 @@ const GuestSchema = new mongoose.Schema(
     lastName: { type: String, trim: true, maxlength: 80 },
     email: { type: String, trim: true, maxlength: 100 },
     phone: { type: String, trim: true, maxlength: 20 },
+    identityNumber: { type: String, trim: true },
     registrationAddress: { type: String, trim: true, maxlength: 500 },
+    identityFallbackUsed: { type: Boolean, default: false },
   },
   { _id: false }
 );
@@ -108,6 +110,8 @@ const OrderSchema = new mongoose.Schema(
       shippingFee: { type: Number, default: 0 },
       grandTotal: { type: Number, default: 0 },
     },
+
+    identityFallbackUsed: { type: Boolean, default: false },
 
     cancelReason: { type: String, default: null },
     cancelledAt: { type: Date, default: null },
