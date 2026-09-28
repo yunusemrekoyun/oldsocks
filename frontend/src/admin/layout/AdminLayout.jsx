@@ -36,6 +36,7 @@ import {
   SparklesIcon,
   BoltIcon,
   DocumentTextIcon,
+  ScaleIcon,
 } from "@heroicons/react/24/solid";
 import "../admin.css";
 import usePageMeta from "../../hooks/usePageMeta";
@@ -155,6 +156,11 @@ export default function AdminLayout({ children }) {
             label: "Site İçeriği",
             icon: <DocumentTextIcon className="w-5 h-5" />,
             path: "/admin/site-content",
+          },
+          {
+            label: "Yasal Metinler",
+            icon: <ScaleIcon className="w-5 h-5" />,
+            path: "/admin/legal",
           },
           {
             label: "Kampanyalar",
@@ -502,6 +508,10 @@ export default function AdminLayout({ children }) {
       shipping: "Kargo",
       "cart-campaigns": "Sepet Kampanyaları",
       coupons: "Kuponlar",
+      legal: "Yasal Metinler",
+      "site-content": "Site İçeriği",
+      storefront: "Ana Sayfa Düzeni",
+      backups: "Yedekler",
     };
     return parts.map((p) => map[p] || p);
   }, [location.pathname]);

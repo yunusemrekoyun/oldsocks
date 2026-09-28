@@ -1,8 +1,17 @@
 import React from "react";
 import usePageMeta from "../hooks/usePageMeta";
+import useLegalDocuments from "../hooks/useLegalDocuments";
+import LegalDocumentView from "../components/legal/LegalDocumentView";
+import PageLoading from "../components/common/PageLoading";
 
 export default function CookiePolicyPage() {
   usePageMeta({ title: "Çerez Politikası" });
+  // Yönetim panelinden yayınlanmış metin varsa o gösterilir; yoksa aşağıdaki ilk metin.
+  const { documents, loading: legalLoading } = useLegalDocuments();
+  const published = documents?.["cookies"];
+  if (legalLoading) return <PageLoading />;
+  if (published) return <LegalDocumentView doc={published} />;
+
   return (
     <section className="container mx-auto px-4 py-10 max-w-3xl">
       <h1 className="text-2xl font-semibold mb-4">Çerez Politikası</h1>

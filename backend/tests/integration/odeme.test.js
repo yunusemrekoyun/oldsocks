@@ -258,7 +258,7 @@ test("sözleşme onayı olmadan ödeme başlatılmaz; onay siparişe kaydedilir"
   });
   assert.equal(ok.status, 200, JSON.stringify(ok.data));
   const order = await Order.findOne({ conversationId: ok.data.conversationId });
-  assert.equal(order.consent.version, CONSENT.version);
+  assert.equal(order.consent.version, "ön bilgilendirme: ilk metin, sözleşme: ilk metin");
   assert.ok(order.consent.preInformationAcceptedAt instanceof Date);
   assert.ok(order.consent.distanceSalesAcceptedAt instanceof Date);
   assert.equal(order.consent.userAgent, "onay-testi/1.0");
@@ -272,5 +272,5 @@ test("sözleşme onayı olmadan ödeme başlatılmaz; onay siparişe kaydedilir"
   const mails = await mailsTo(email, { waitMs: 5000 });
   const confirmation = mails.find((m) => m.Subject.includes(order.orderNumber));
   assert.ok(confirmation, "onay e-postası gelmedi");
-  assert.match(confirmation.Text, /Mesafeli Satış Sözleşmesi .* onaylandı \(metin sürümü: test-2026-09-27\)/);
+  assert.match(confirmation.Text, /Mesafeli Satış Sözleşmesi .* onaylandı \(metin sürümü: ön bilgilendirme: ilk metin, sözleşme: ilk metin\)/);
 });

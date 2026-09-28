@@ -15,6 +15,7 @@ const {
   supersedePendingCouponOrders,
 } = require("../services/cartPricingService");
 const { recordCouponUsageForOrder } = require("../utils/couponUsageService");
+const { consentVersionLabel } = require("../services/legalDocuments");
 
 /* Frontend base (ilk origin) */
 const FRONTEND_BASE = (() => {
@@ -53,8 +54,9 @@ function normalizeEmail(value) {
 }
 
 // Mesafeli satış: ön bilgilendirme ve sözleşme onayı olmadan ödeme başlatılmaz.
-// Onay, metin sürümü, zaman, IP ve tarayıcı bilgisiyle siparişe yazılır.
-function readConsent(req) {
+// Onay; o an yayındaki metin sürümleri (sunucu belirler), zaman, IP ve tarayıcı
+// bilgisiyle siparişe yazılır.
+async function readConsent(req) {
   const consent = req.body?.consent;
   const version = typeof consent?.version === "string" ? consent.version.trim() : "";
   if (consent?.preInformation !== true || consent?.distanceSales !== true || !/^[\w.-]{1,40}$/.test(version)) {
@@ -64,7 +66,7 @@ function readConsent(req) {
   return {
     preInformationAcceptedAt: now,
     distanceSalesAcceptedAt: now,
-    version,
+    version: await consentVersionLabel(),
     ip: String(getClientIp(req) || "").slice(0, 64) || null,
     userAgent: String(req.get("user-agent") || "").slice(0, 300) || null,
   };
@@ -192,7 +194,7 @@ exports.startGuestPaymentSession = async (req, res) => {
   try {
     const { cartItems, address, guest, selectedCampaignId, couponCode } =
       req.body || {};
-    const consent = readConsent(req);
+    const consent = await readConsent(req);
     if (!consent) return res.status(400).json(CONSENT_REQUIRED);
     const normalizedGuest = {
       firstName: String(guest?.firstName || "").trim(),
@@ -365,7 +367,7 @@ exports.startPaymentSession = async (req, res) => {
   try {
     const { cartItems, addressId, selectedCampaignId, couponCode } =
       req.body;
-    const consent = readConsent(req);
+    const consent = await readConsent(req);
     if (!consent) return res.status(400).json(CONSENT_REQUIRED);
     const userId = req.user.userId;
     const userDoc = await User.findById(userId).lean();

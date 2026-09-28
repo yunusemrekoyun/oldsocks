@@ -54,6 +54,7 @@ const MediaMaintenancePage = lazy(() => import("./admin/pages/MediaMaintenancePa
 const BackupsPage = lazy(() => import("./admin/pages/BackupsPage"));
 const StorefrontPage = lazy(() => import("./admin/pages/StorefrontPage"));
 const SiteContentPage = lazy(() => import("./admin/pages/SiteContentPage"));
+const LegalDocumentsPage = lazy(() => import("./admin/pages/LegalDocumentsPage"));
 
 // Sayfa parçası inerken alt bilgi ekranın altında kalsın; sayfa gelince
 // alt bilgi aşağı itilip yerleşim kaymasın (CLS).
@@ -138,6 +139,7 @@ export default function App() {
               <Route path="hero-videos" element={<HeroVideoPage />} />
               <Route path="storefront" element={<StorefrontPage />} />
               <Route path="site-content" element={<SiteContentPage />} />
+              <Route path="legal" element={<LegalDocumentsPage />} />
               <Route path="shipping" element={<ShippingMethodsPage />} />
               <Route path="announcement-bar" element={<AnnouncementBarPage />} />
               <Route path="media-maintenance" element={<MediaMaintenancePage />} />

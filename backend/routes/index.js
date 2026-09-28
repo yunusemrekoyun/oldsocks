@@ -67,6 +67,7 @@ router.use("/newsletter", require("./newsletter"));
 router.use("/shipping", require("./shipping"));
 router.use("/cart-campaigns", require("./cartCampaigns"));
 router.use("/coupons", require("./coupons"));
+router.use("/legal", require("./legal"));
 /* --- İNDİRİM KURALLARI (YENİ) --- */
 // /api/v1/discount-rules altında hizmet verir
 // router.use("/discount-rules", require("./discountRuleRoutes"));

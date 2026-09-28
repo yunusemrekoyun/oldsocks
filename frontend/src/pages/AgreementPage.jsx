@@ -2,10 +2,16 @@
 import React from "react";
 import { Link } from "react-router-dom";
 import usePageMeta from "../hooks/usePageMeta";
+import useLegalDocuments from "../hooks/useLegalDocuments";
+import LegalDocumentView from "../components/legal/LegalDocumentView";
+import PageLoading from "../components/common/PageLoading";
 import { legalVersionLabel } from "../legal/store";
 
 export default function AgreementPage() {
   usePageMeta({ title: "Mesafeli Satış Sözleşmesi" });
+  // Yönetim panelinden yayınlanmış metin varsa o gösterilir; yoksa aşağıdaki ilk metin.
+  const { documents, loading: legalLoading } = useLegalDocuments();
+  const published = documents?.["distance-sales"];
   // Mağaza bilgileri (footer ile uyumlu tut)
   const STORE = {
     brand: "OLDSOCKS",
@@ -33,6 +39,9 @@ export default function AgreementPage() {
       <hr className="my-6 border-light2/70" />
     </section>
   );
+
+  if (legalLoading) return <PageLoading />;
+  if (published) return <LegalDocumentView doc={published} />;
 
   return (
     <main className="bg-light1 text-dark1 min-h-screen">

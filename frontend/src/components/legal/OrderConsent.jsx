@@ -1,11 +1,19 @@
 import React from "react";
 import { STORE, legalVersionLabel } from "../../legal/store";
 import { formatTry } from "../../utils/currency";
+import useLegalDocuments from "../../hooks/useLegalDocuments";
+import { LegalBody } from "./LegalDocumentView";
 
 // Ödeme adımı: sipariş bilgileriyle doldurulmuş ön bilgilendirme ve iki ayrı onay.
 // Onaylar sunucuya gönderilir ve siparişe kaydedilir.
 export default function OrderConsent({ items, totals, address, buyer, value, onChange }) {
   const set = (key) => (e) => onChange({ ...value, [key]: e.target.checked });
+  // Yönetim panelinden yayınlanan ön bilgilendirme metni varsa sabit paragrafın yerine geçer.
+  const { documents } = useLegalDocuments();
+  const preInfo = documents?.["pre-information"];
+  const textDate = preInfo?.publishedAt
+    ? new Date(preInfo.publishedAt).toLocaleDateString("tr-TR")
+    : legalVersionLabel();
   const addressText = [address?.mainaddress, address?.street, address?.district, address?.city, address?.postalCode]
     .map((part) => String(part || "").trim())
     .filter(Boolean)
@@ -51,20 +59,29 @@ export default function OrderConsent({ items, totals, address, buyer, value, onC
             </p>
             <p>Ödeme kredi veya banka kartıyla, PayTR güvenli ödeme sayfasında alınır.</p>
           </section>
-          <section>
-            <h4 className="font-semibold text-dark1">Teslimat ve cayma hakkı</h4>
-            <p>
-              Sipariş, yasal azami süre olan 30 gün içinde teslim edilir. Ürünü teslim aldığınız
-              günden itibaren 14 gün içinde gerekçe göstermeden cayma hakkınız vardır. Şikâyet ve
-              itirazlarınız için Tüketici Hakem Heyetleri ve Tüketici Mahkemeleri yetkilidir.
-            </p>
-          </section>
+          {preInfo ? (
+            <section>
+              <h4 className="font-semibold text-dark1">{preInfo.title}</h4>
+              <div className="mt-2 max-h-64 overflow-y-auto rounded border border-light2 bg-white p-3">
+                <LegalBody body={preInfo.body} />
+              </div>
+            </section>
+          ) : (
+            <section>
+              <h4 className="font-semibold text-dark1">Teslimat ve cayma hakkı</h4>
+              <p>
+                Sipariş, yasal azami süre olan 30 gün içinde teslim edilir. Ürünü teslim aldığınız
+                günden itibaren 14 gün içinde gerekçe göstermeden cayma hakkınız vardır. Şikâyet ve
+                itirazlarınız için Tüketici Hakem Heyetleri ve Tüketici Mahkemeleri yetkilidir.
+              </p>
+            </section>
+          )}
           <p className="text-xs">
             Ayrıntılar{" "}
             <a href="/agreement" target="_blank" rel="noopener noreferrer" className="underline">
               Mesafeli Satış Sözleşmesi
             </a>
-            ’nde. Metin tarihi: {legalVersionLabel()}.
+            ’nde. Metin tarihi: {textDate}.
           </p>
         </div>
       </details>

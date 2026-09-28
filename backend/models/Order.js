@@ -79,7 +79,7 @@ const OrderSchema = new mongoose.Schema(
     consent: {
       preInformationAcceptedAt: { type: Date, default: null },
       distanceSalesAcceptedAt: { type: Date, default: null },
-      version: { type: String, default: null, maxlength: 40 },
+      version: { type: String, default: null, maxlength: 200 },
       ip: { type: String, default: null, maxlength: 64 },
       userAgent: { type: String, default: null, maxlength: 300 },
     },

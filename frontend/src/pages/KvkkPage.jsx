@@ -2,10 +2,16 @@
 import React from "react";
 import { Link } from "react-router-dom";
 import usePageMeta from "../hooks/usePageMeta";
+import useLegalDocuments from "../hooks/useLegalDocuments";
+import LegalDocumentView from "../components/legal/LegalDocumentView";
+import PageLoading from "../components/common/PageLoading";
 import { legalVersionLabel } from "../legal/store";
 
 export default function KvkkPage() {
   usePageMeta({ title: "KVKK Aydınlatma Metni" });
+  // Yönetim panelinden yayınlanmış metin varsa o gösterilir; yoksa aşağıdaki ilk metin.
+  const { documents, loading: legalLoading } = useLegalDocuments();
+  const published = documents?.["kvkk"];
   const STORE = {
     brand: "OLDSOCKS",
     companyTitle: "OLDSOCKS",
@@ -32,6 +38,9 @@ export default function KvkkPage() {
       <hr className="my-6 border-light2/70" />
     </section>
   );
+
+  if (legalLoading) return <PageLoading />;
+  if (published) return <LegalDocumentView doc={published} />;
 
   return (
     <main className="bg-light1 text-dark1 min-h-screen">
