@@ -98,10 +98,12 @@ function reservationRefusal(err) {
 }
 
 // Yöneticinin iptal ettiği ya da otomatik tamamlanamayan siparişe ödeme geldi: para
-// alındı, sessizce geçme; incelemeye al ve yöneticiye haber ver.
+// alındı, sessizce geçme; incelemeye al ve yöneticiye haber ver. Ödemesi zaten işlenmiş
+// (aynı paymentId) ya da iade kaydı olan sipariş için gelen bildirim, iade edilmiş
+// ödemenin tekrarıdır: sipariş olduğu gibi kalır.
 async function markPaidAfterCancel(orderId, paymentId) {
   const updated = await Order.findOneAndUpdate(
-    { _id: orderId, status: "cancelled" },
+    { _id: orderId, status: "cancelled", paymentId: { $ne: paymentId }, "refund.at": null },
     {
       $set: {
         status: "payment_review",

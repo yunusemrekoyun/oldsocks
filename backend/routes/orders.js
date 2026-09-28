@@ -5,12 +5,17 @@ const { verifyToken } = require("../middleware/auth");
 const orderCtrl = require("../controllers/orderController");
 const { allowRoles } = require("../middleware/roles");
 
+// Sipariş kimliği tahminini sınırlar: yalnız bulunamayan/geçersiz kimlik (404/400) sayılır.
+// Sonuç sayfası onay gecikince sık sorar; bekleyen ya da ödenmiş siparişin sorgusu
+// müşteriyi kilitlemesin.
 const confirmLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 20,
   standardHeaders: true,
   legacyHeaders: false,
   keyGenerator: (req) => ipKeyGenerator(req.ip),
+  skipSuccessfulRequests: true,
+  requestWasSuccessful: (req, res) => ![400, 404].includes(res.statusCode),
 });
 // Admin hepsi görsün:
 router.get("/all", verifyToken, allowRoles("admin"), orderCtrl.getAllOrders);

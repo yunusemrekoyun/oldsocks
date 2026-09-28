@@ -206,6 +206,8 @@ exports.updateOrderStatus = async (req, res) => {
     if (status === "paid") {
       try {
         order = await finalizeOrderPayment(order._id);
+        // Yönetici ödemenin alındığını onayladı; e-posta gönderilemezse tarama yeniden dener.
+        order.paymentReceivedAt ||= new Date();
         console.log("[OrderController] Admin manuel paid → stok güncellendi.");
       } catch (error) {
         if (

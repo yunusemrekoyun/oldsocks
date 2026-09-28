@@ -3,7 +3,7 @@ const assert = require("node:assert/strict");
 const crypto = require("node:crypto");
 const bcrypt = require("bcrypt");
 const mongoose = require("mongoose");
-const { startTestServer, postJson, mailsTo } = require("./helpers");
+const { startTestServer, postJson, mailsTo, paytrCallback } = require("./helpers");
 
 let server;
 let adminToken;
@@ -211,4 +211,23 @@ test("terk edilen ödeme oturumunun otomatik kapatılması müşteriye e-posta g
   await Orders.updateOne({ "guest.email": to }, { $set: { cancelledAt: new Date(Date.now() - 60_000), cancelReason: "payment_abandoned" } });
   await new Promise((r) => setTimeout(r, 1200));
   assert.equal((await mailsTo(to, { waitMs: 0 })).length, 0);
+});
+
+test("iade edilip iptal edilen siparişe PayTR aynı bildirimi yeniden gönderirse sipariş değişmez", async () => {
+  const productId = await seedProduct(3);
+  const { _id } = await seedOrder({
+    guestEmail: email("tekrar-bildirim"),
+    items: [{ productId, name: "Çorap", price: 100, qty: 1, size: "M" }],
+  });
+  const order = await Orders.findOne({ _id });
+  await Orders.updateOne({ _id }, { $set: { paymentId: order.conversationId } });
+  assert.equal((await cancel(_id, { refundAmount: 100, note: "İade", restock: true, notifyCustomer: false })).status, 200);
+  const stock = await stockOf(productId, "M");
+  const res = await paytrCallback(server.base, { merchantOid: order.conversationId, totalAmount: 10000 });
+  assert.equal(res.text, "OK");
+  const after = await Orders.findOne({ _id });
+  assert.equal(after.status, "cancelled");
+  assert.equal(after.cancelReason, "admin_cancelled");
+  assert.equal(after.reviewAlertSentAt ?? null, null);
+  assert.equal(await stockOf(productId, "M"), stock);
 });

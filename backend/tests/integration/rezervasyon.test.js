@@ -338,3 +338,14 @@ test("ayrım sırasında adı değişen bedene geç gelen ödeme stoğu aynı be
   assert.equal((await Orders.findOne({ _id: order._id })).status, "paid");
   assert.equal(await stockOf(productId), 0);
 });
+
+test("yönetici bekleyen siparişi ödendi yapınca ödeme zamanı kaydedilir (e-posta taraması kapsar)", async () => {
+  const productId = await seedProduct(2);
+  const res = await start(productId, uniq("elle-odendi"));
+  const order = await Orders.findOne({ conversationId: res.data.conversationId });
+  const update = await admin("PUT", `/orders/${order._id}/status`, { status: "paid" });
+  assert.equal(update.status, 200, JSON.stringify(update.data));
+  const after = await Orders.findOne({ _id: order._id });
+  assert.equal(after.status, "paid");
+  assert.ok(after.paymentReceivedAt);
+});
