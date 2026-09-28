@@ -312,3 +312,15 @@ test("üye aynı anda iki ödeme başlatırsa yalnız en yeni oturum stok tutar"
   assert.equal(pending.length, 1);
   assert.equal(await stockOf(productId), 2);
 });
+
+test("ayrım açıkken bedenin adı değişse de ayrım bitince adet aynı bedene geri eklenir", async () => {
+  const productId = await seedProduct(5);
+  const res = await start(productId, uniq("adi-degisen"));
+  assert.equal(res.status, 200);
+  const order = await Orders.findOne({ conversationId: res.data.conversationId });
+  assert.ok(order.items[0].sizeId);
+  await Products.updateOne({ _id: productId }, { $set: { "sizes.0.size": "Medium" } });
+  await paytrCallback(server.base, { merchantOid: res.data.conversationId, status: "failed", totalAmount: 0 });
+  const product = await Products.findOne({ _id: productId });
+  assert.deepEqual(product.sizes.map((s) => [s.size, s.stock]), [["Medium", 5]]);
+});

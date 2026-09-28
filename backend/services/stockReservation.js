@@ -87,7 +87,11 @@ async function releaseReservation(orderId, reason) {
     if (!order || order.status !== "pending") return false;
     let didRestore = false;
     if (order.stockUpdated) {
-      await restoreStock(order, { session });
+      const { skipped } = await restoreStock(order, { session });
+      // Ürün ya da beden silinmişse adet geri eklenemez; sessizce kaybolmasın.
+      if (skipped.length) {
+        console.warn("[stock] ayrım bırakılırken geri eklenemeyen kalemler:", { orderId: String(order._id), skipped });
+      }
       order.stockUpdated = false;
       didRestore = true;
     }

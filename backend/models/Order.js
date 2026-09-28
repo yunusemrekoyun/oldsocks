@@ -8,6 +8,9 @@ const OrderItemSchema = new mongoose.Schema({
   originalPrice: { type: Number, default: null },
   qty: { type: Number, required: true },
   size: { type: String },
+  // Beden satırının kimliği: yönetici bedenin adını değiştirse de iade/ayrım bitişinde
+  // stok doğru satıra geri eklenir.
+  sizeId: { type: mongoose.Types.ObjectId, default: null },
   color: { type: String },
 });
 

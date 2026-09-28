@@ -57,19 +57,29 @@ async function applyStockChanges(order, options = {}) {
   }
 }
 
-// İptal edilen siparişin adetlerini stoğa geri ekler. Silinmiş ürün veya kaldırılmış
-// beden atlanır; atlanan kalemler döndürülür.
+// İptal edilen siparişin adetlerini stoğa geri ekler. Beden önce satır kimliğiyle (adı
+// sonradan değişmiş olabilir), yoksa adıyla bulunur. Silinmiş ürün veya kaldırılmış beden
+// atlanır; atlanan kalemler döndürülür.
 async function restoreStock(order, options = {}) {
   const items = Array.isArray(order?.items) ? order.items : [];
   const skipped = [];
   for (const item of items) {
     const quantity = Number(item.qty);
     if (!item.productId || !Number.isFinite(quantity) || quantity <= 0) continue;
-    const result = await Product.updateOne(
-      { _id: item.productId, "sizes.size": item.size ? String(item.size) : "" },
-      { $inc: { "sizes.$.stock": quantity } },
-      { session: options.session }
-    );
+    const inc = { $inc: { "sizes.$.stock": quantity } };
+    let result = { modifiedCount: 0 };
+    if (item.sizeId) {
+      result = await Product.updateOne({ _id: item.productId, "sizes._id": item.sizeId }, inc, {
+        session: options.session,
+      });
+    }
+    if (!result.modifiedCount) {
+      result = await Product.updateOne(
+        { _id: item.productId, "sizes.size": item.size ? String(item.size) : "" },
+        inc,
+        { session: options.session }
+      );
+    }
     if (!result.modifiedCount) skipped.push({ name: item.name, size: item.size || "", qty: quantity });
   }
   return { skipped };

@@ -478,6 +478,7 @@ async function calculateCartPricing(rawItems, options = {}) {
       originalPrice: normalizedOriginalPrice,
       qty: entry.qty,
       size: sizeRecord.size || "",
+      sizeId: sizeRecord._id || null,
       // Renk ürün varyantının sunucudaki kaydından gelir; istemci sipariş
       // içeriğini serbest bir renk metniyle değiştiremez.
       color: product.color ?? "",
