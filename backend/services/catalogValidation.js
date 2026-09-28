@@ -58,6 +58,30 @@ function parseProductPricing(input = {}) {
   return { originalPrice, price, discount };
 }
 
+// Ürün formu açıkken stok değişmiş olabilir (satış, ödeme adımında ayrım veya iadesi).
+// Form her satır için açıldığı andaki stoğu (loadedStock) gönderir; yöneticinin
+// girdiği değer mutlak yazılmaz, yaptığı değişiklik (yeni - açılıştaki) güncel stoğa
+// eklenir. loadedStock yoksa (yeni satır, eski istemci) girilen değer aynen yazılır.
+function mergeStockEdits(parsedSizes, rawSizes, currentSizes) {
+  let rows = rawSizes;
+  if (typeof rows === "string") {
+    try {
+      rows = JSON.parse(rows);
+    } catch {
+      return parsedSizes;
+    }
+  }
+  if (!Array.isArray(rows)) return parsedSizes;
+  const key = (value) => String(value || "").trim().toLocaleLowerCase("tr-TR");
+  const current = new Map((currentSizes || []).map((s) => [key(s?.size), Number(s?.stock) || 0]));
+  return parsedSizes.map((item, index) => {
+    const loaded = Number(rows[index]?.loadedStock);
+    const now = current.get(key(item.size));
+    if (!Number.isSafeInteger(loaded) || loaded < 0 || now === undefined) return item;
+    return { ...item, stock: Math.max(0, now + (item.stock - loaded)) };
+  });
+}
+
 function parseArray(value, label) {
   if (Array.isArray(value)) return value;
   if (typeof value === "string" && value.trim()) {
@@ -119,6 +143,7 @@ function parseProductSizes(raw) {
 }
 
 module.exports = {
+  mergeStockEdits,
   CatalogValidationError,
   parseProductPricing,
   parseProductSizes,

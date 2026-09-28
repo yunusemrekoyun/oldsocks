@@ -82,6 +82,7 @@ const RELEASED_REASONS = Object.freeze([
   "reservation_expired",
   "session_replaced",
   "coupon_session_replaced",
+  "customer_left",
 ]);
 
 /**
@@ -103,8 +104,13 @@ async function finalizeOrderPayment(orderId, { allowReleased = false } = {}) {
       }
 
       if (order.status === "paid" && order.stockUpdated) return;
+      // Kuponlu sipariş otomatik tamamlanmaz: kupon hakkı arada başka siparişte
+      // kullanılmış olabilir; yönetici inceler.
       const released =
-        allowReleased && order.status === "cancelled" && RELEASED_REASONS.includes(order.cancelReason);
+        allowReleased &&
+        order.status === "cancelled" &&
+        RELEASED_REASONS.includes(order.cancelReason) &&
+        !order.coupon?.couponId;
       if (!["pending", "payment_review", "paid"].includes(order.status) && !released) {
         throw new OrderPaymentStateError();
       }

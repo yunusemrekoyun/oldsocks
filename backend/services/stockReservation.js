@@ -61,17 +61,52 @@ async function releaseReservation(orderId, reason) {
   return restored;
 }
 
-// Aynı müşterinin (üye kimliği veya e-posta) önceki bekleyen ödeme oturumlarını kapatır;
-// müşteri yeniden denediğinde kendi ayırdığı son adet ona engel olmasın.
-async function releaseCustomerPendingOrders({ userId, email }) {
-  const identity = [
-    ...(userId ? [{ user: userId }] : []),
-    ...(email ? [{ "guest.email": String(email).trim().toLowerCase() }] : []),
-  ];
-  if (!identity.length) return 0;
-  const pending = await Order.find({ status: "pending", $or: identity }).select("_id").lean();
+// Müşterinin önceki bekleyen ödeme oturumunu kapatır; yeniden denediğinde kendi ayırdığı
+// son adet ona engel olmasın. Üyelerde hesaba bağlı tüm oturumlar; misafirde yalnız aynı
+// tarayıcının bildirdiği oturum (conversationId + aynı e-posta). E-posta tek başına yetmez:
+// başkasının e-postasını yazan biri onun oturumunu kapatamasın.
+async function releaseCustomerPendingOrders({ userId, email, previousConversationId, olderThan } = {}) {
+  let filter;
+  if (userId) {
+    filter = { status: "pending", user: userId };
+  } else if (typeof previousConversationId === "string" && previousConversationId && email) {
+    filter = {
+      status: "pending",
+      conversationId: previousConversationId.slice(0, 64),
+      "guest.email": String(email).trim().toLowerCase(),
+    };
+  } else {
+    return 0;
+  }
+  // Yeni sipariş oluştuktan sonra çağrılırsa yalnız ondan eski oturumlar kapanır
+  // (aynı anda iki başlatmada ikisi birden kapanmasın).
+  if (olderThan) filter._id = { $lt: olderThan };
+  const pending = await Order.find(filter).select("_id").lean();
   for (const { _id } of pending) await releaseReservation(_id, "session_replaced");
   return pending.length;
+}
+
+// Müşteri ödeme ekranından sepete / ödeme adımına döndü: o oturumun ayırdığı stok bırakılır.
+async function releaseOwnCheckout(conversationId) {
+  if (typeof conversationId !== "string" || !conversationId || conversationId.length > 64) return false;
+  const order = await Order.findOne({ conversationId, status: "pending" }).select("_id").lean();
+  if (!order) return false;
+  await releaseReservation(order._id, "customer_left");
+  return true;
+}
+
+// Aynı IP'den aynı anda açık tutulabilecek stok ayrımı sayısı (sahte e-postalarla tüm
+// stoğun tutulmasını zorlaştırır).
+const HOLDS_PER_IP = Math.max(1, Number(process.env.STOCK_HOLDS_PER_IP) || 3);
+async function holdLimitReached(ip) {
+  if (!ip) return false;
+  const active = await Order.countDocuments({
+    status: "pending",
+    stockUpdated: true,
+    stockReservedUntil: { $gt: new Date() },
+    "consent.ip": ip,
+  });
+  return active >= HOLDS_PER_IP;
 }
 
 async function releaseExpiredReservations(limit = 50) {
@@ -90,6 +125,9 @@ async function releaseExpiredReservations(limit = 50) {
 
 module.exports = {
   HOLD_MINUTES,
+  HOLDS_PER_IP,
+  holdLimitReached,
+  releaseOwnCheckout,
   PAYTR_TIMEOUT_MINUTES,
   createOrderWithReservation,
   releaseReservation,

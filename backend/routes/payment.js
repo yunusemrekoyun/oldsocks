@@ -35,6 +35,7 @@ router.get(
 );
 
 router.post("/start-guest", paymentCtrl.startGuestPaymentSession);
+router.post("/release", paymentCtrl.releaseCheckout);
 
 router.post("/callback/paytr", paymentCtrl.paytrCallback);
 router.post("/mock-complete", paymentCtrl.mockComplete);

@@ -7,6 +7,7 @@ const {
   CatalogValidationError,
   parseProductPricing,
   parseProductSizes,
+  mergeStockEdits,
   requiredText,
 } = require("../services/catalogValidation");
 const {
@@ -189,7 +190,7 @@ exports.updateProduct = async (req, res) => {
     });
     const sizes =
       req.body.sizes !== undefined
-        ? parseProductSizes(req.body.sizes)
+        ? mergeStockEdits(parseProductSizes(req.body.sizes), req.body.sizes, existing.sizes)
         : parseProductSizes(existing.sizes);
     if (req.body.category && !(await Category.exists({ _id: req.body.category, archivedAt: null }))) {
       return res.status(400).json({ message: "Geçersiz kategori." });

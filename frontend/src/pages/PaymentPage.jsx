@@ -132,7 +132,12 @@ export default function PaymentPage() {
         redirectToCartWithError("Ödeme başlatılamadı. Lütfen tekrar deneyin.");
       } catch (e) {
         console.error("Ödeme formu yüklenemedi:", e);
-        redirectToCartWithError("Ödeme başlatılamadı. Lütfen tekrar deneyin.");
+        // 410: ürünlerin ayrım süresi doldu; sunucunun mesajı gösterilir.
+        redirectToCartWithError(
+          e?.response?.status === 410 && e?.response?.data?.message
+            ? e.response.data.message
+            : "Ödeme başlatılamadı. Lütfen tekrar deneyin."
+        );
       }
     })();
 

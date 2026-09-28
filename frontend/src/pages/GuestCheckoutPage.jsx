@@ -8,6 +8,7 @@ import { formatTry } from "../utils/currency";
 import usePageMeta from "../hooks/usePageMeta";
 import OrderConsent from "../components/legal/OrderConsent";
 import { LEGAL_VERSION } from "../legal/store";
+import { previousCheckout, rememberCheckout, releaseOwnCheckout } from "../utils/checkoutSession";
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/i;
 const GUEST_FIELD_KEYS = [
@@ -161,6 +162,8 @@ export default function GuestCheckoutPage() {
           EMAIL_REGEX.test(String(buyer.email || "").trim().toLowerCase())
             ? String(buyer.email || "").trim().toLowerCase()
             : null;
+        // Ödeme ekranından dönüldüyse kendi stok ayrımı önce bırakılır.
+        await releaseOwnCheckout();
         const { data } = await api.post("/cart-campaigns/preview", {
           cartItems: items,
           selectedCampaignId: selectedCampaignId || null,
@@ -297,9 +300,11 @@ export default function GuestCheckoutPage() {
           postalCode: address.postalCode?.trim() || "",
         },
         consent: { ...consent, version: LEGAL_VERSION },
+        previousConversationId: previousCheckout(),
       };
 
       const { data } = await api.post("/payment/start-guest", payload);
+      if (data?.conversationId) rememberCheckout(data.conversationId);
 
       if (data?.conversationId) {
         const serverSummary = data.summary || null;

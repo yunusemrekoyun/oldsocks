@@ -65,6 +65,8 @@ async function startTestServer(extraEnv = {}) {
     MEDIA_PUBLIC_BASE_URL: `http://127.0.0.1:${port}/media`,
     MEDIA_INLINE_WORKER: "false",
     BACKUP_KEY_FILE: path.join(tmp, "backup", "master.key"),
+    // Testler aynı yerel IP'den çok sayıda ödeme oturumu açar.
+    STOCK_HOLDS_PER_IP: "1000",
     ...extraEnv,
   };
   fs.writeFileSync(envFile, Object.entries(env).map(([k, v]) => `${k}=${v}`).join("\n"));

@@ -3,6 +3,7 @@ const mongoose = require("mongoose");
 const Order = require("../models/Order");
 const User = require("../models/User");
 const {
+  RELEASED_REASONS,
   finalizeOrderPayment,
   restoreStock,
   StockUnavailableError,
@@ -452,6 +453,10 @@ exports.confirmOrderPayment = async (req, res) => {
         message:
           "Ödemeniz alındı; siparişiniz stok veya tutar kontrolü için incelemeye alındı. Ekibimiz sizinle iletişime geçecek.",
       });
+    }
+    // Sistemin kapattığı oturuma geç gelen ödeme hâlâ tamamlanabilir: sonuç sayfası beklesin.
+    if (order.status === "cancelled" && RELEASED_REASONS.includes(order.cancelReason)) {
+      return res.status(409).json({ state: "pending", message: "Ödeme henüz onaylanmadı." });
     }
     if (order.status === "cancelled") {
       return res.status(409).json({

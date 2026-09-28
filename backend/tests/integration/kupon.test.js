@@ -76,13 +76,14 @@ async function seedCoupon(productId, extra = {}) {
   return code;
 }
 
-function startGuest(productId, email, couponCode) {
+function startGuest(productId, email, couponCode, previousConversationId) {
   return postJson(server.base, "/api/v1/payment/start-guest", {
     cartItems: [{ id: String(productId), size: "M", qty: 1 }],
     address,
     guest: guest(email),
     couponCode,
     consent: CONSENT,
+    previousConversationId,
   });
 }
 
@@ -165,7 +166,7 @@ test("kartı reddedilen müşteri aynı kuponla tekrar deneyebilir; eski oturum 
   const code = await seedCoupon(productId, { maxUses: 1 });
   const first = await startGuest(productId, "tekrar@test.local", code);
   assert.equal(first.status, 200, JSON.stringify(first.data));
-  const second = await startGuest(productId, "TEKRAR@test.local", code);
+  const second = await startGuest(productId, "TEKRAR@test.local", code, first.data.conversationId);
   assert.equal(second.status, 200, JSON.stringify(second.data));
 
   const old = await Orders.findOne({ conversationId: first.data.conversationId });

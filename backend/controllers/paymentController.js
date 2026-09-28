@@ -15,7 +15,9 @@ const { calculateCartPricing } = require("../services/cartPricingService");
 const {
   PAYTR_TIMEOUT_MINUTES,
   createOrderWithReservation,
+  holdLimitReached,
   releaseCustomerPendingOrders,
+  releaseOwnCheckout,
   releaseReservation,
 } = require("../services/stockReservation");
 const { recordCouponUsageForOrder } = require("../utils/couponUsageService");
@@ -84,6 +86,30 @@ const STOCK_TAKEN = {
     "Sepetinizdeki bir ürünün stoğu az önce tükendi ya da başka bir müşterinin ödemesi için ayrıldı. Sepetinizi kontrol edip tekrar deneyin.",
 };
 const stockTakenAsNull = (err) => (err instanceof StockUnavailableError ? null : Promise.reject(err));
+const TOO_MANY_HOLDS = {
+  code: "TOO_MANY_HOLDS",
+  message:
+    "Açık ödeme oturumunuz çok fazla. Mevcut ödemenizi tamamlayın ya da birkaç dakika sonra tekrar deneyin.",
+};
+
+// Yöneticinin iptal ettiği ya da otomatik tamamlanamayan siparişe ödeme geldi: para
+// alındı, sessizce geçme; incelemeye al ve yöneticiye haber ver.
+async function markPaidAfterCancel(orderId, paymentId) {
+  const updated = await Order.findOneAndUpdate(
+    { _id: orderId, status: "cancelled" },
+    {
+      $set: {
+        status: "payment_review",
+        paymentId,
+        paymentReceivedAt: new Date(),
+        cancelReason: "paid_after_cancel",
+      },
+    },
+    { new: true }
+  );
+  if (updated) queuePaymentReviewAlert(updated._id);
+  return updated;
+}
 
 const CONSENT_REQUIRED = {
   code: "CONSENT_REQUIRED",
@@ -274,8 +300,11 @@ exports.startGuestPaymentSession = async (req, res) => {
       });
     }
 
-    // Müşterinin önceki ödeme oturumu varsa kapatılır; ayırdığı stok yeni denemeye engel olmasın.
-    await releaseCustomerPendingOrders({ email: normalizedGuest.email });
+    // Aynı tarayıcının önceki ödeme oturumu kapatılır; ayırdığı stok yeni denemeye engel olmasın.
+    await releaseCustomerPendingOrders({
+      email: normalizedGuest.email,
+      previousConversationId: req.body?.previousConversationId,
+    });
 
     let pricing;
     try {
@@ -302,6 +331,8 @@ exports.startGuestPaymentSession = async (req, res) => {
     const orderNumber = Math.floor(1e9 + Math.random() * 9e9).toString();
 
     // 3) Order yarat (user YOK, guest DOLU)
+    if (await holdLimitReached(consent.ip)) return res.status(429).json(TOO_MANY_HOLDS);
+
     // Stok bu siparişe ayrılır (ödeme ekranı); yetmezse sipariş oluşmaz.
     const createdOrder = await createOrderWithReservation({
       orderNumber,
@@ -428,7 +459,7 @@ exports.startPaymentSession = async (req, res) => {
       });
     }
 
-    await releaseCustomerPendingOrders({ userId, email });
+    await releaseCustomerPendingOrders({ userId });
 
     let pricing;
     try {
@@ -456,6 +487,8 @@ exports.startPaymentSession = async (req, res) => {
     const orderNumber = Math.floor(1e9 + Math.random() * 9e9).toString();
 
     // Pending Order
+    if (await holdLimitReached(consent.ip)) return res.status(429).json(TOO_MANY_HOLDS);
+
     // Stok bu siparişe ayrılır (ödeme ekranı); yetmezse sipariş oluşmaz.
     const createdOrder = await createOrderWithReservation({
       orderNumber,
@@ -508,6 +541,8 @@ exports.startPaymentSession = async (req, res) => {
       },
     }).catch(stockTakenAsNull);
     if (!createdOrder) return res.status(409).json(STOCK_TAKEN);
+    // Aynı anda başlatılmış eski oturumu varsa (ikinci sekme) kapatılır; stok geri eklenir.
+    await releaseCustomerPendingOrders({ userId, olderThan: createdOrder._id });
 
     return res.json({
       conversationId,
@@ -544,6 +579,18 @@ exports.inlineCheckoutHtml = async (req, res) => {
     const order = await Order.findOne({ conversationId }).lean();
     if (!order || order.status !== "pending") {
       return res.status(404).json({ message: "Geçersiz sipariş." });
+    }
+    // Stok ayrılmış siparişte ödeme sayfası ayrım bitmeden kapanmalı; sayfa yenilense de
+    // kalan süreden uzun ödeme süresi verilmez.
+    let timeoutMinutes = PAYTR_TIMEOUT_MINUTES;
+    if (order.stockUpdated && order.stockReservedUntil) {
+      const leftMinutes = Math.floor((new Date(order.stockReservedUntil).getTime() - Date.now()) / 60000) - 3;
+      if (leftMinutes < 2) {
+        return res.status(410).json({
+          message: "Ödeme süresi doldu. Sepetinizden ödemeyi yeniden başlatın.",
+        });
+      }
+      timeoutMinutes = Math.min(PAYTR_TIMEOUT_MINUTES, leftMinutes);
     }
 
     const useMock =
@@ -708,7 +755,7 @@ exports.inlineCheckoutHtml = async (req, res) => {
       merchant_ok_url: okUrl,
       merchant_fail_url: failUrl,
       // Ödeme sayfası stok ayrımı bitmeden kapanır (bkz. services/stockReservation).
-      timeout_limit: String(PAYTR_TIMEOUT_MINUTES),
+      timeout_limit: String(timeoutMinutes),
       debug_on: process.env.NODE_ENV === "production" ? "0" : "1",
       lang: "tr",
       paytr_token,
@@ -751,6 +798,19 @@ exports.inlineCheckoutHtml = async (req, res) => {
 };
 
 /** MOCK tamamla (sadece geliştirme) */
+// POST /payment/release — müşteri ödeme ekranından ayrıldı (sepete / ödeme adımına döndü).
+// Yalnız oturumu başlatan tarayıcının bildiği conversationId ile çalışır.
+exports.releaseCheckout = async (req, res) => {
+  try {
+    const conversationId = typeof req.body?.conversationId === "string" ? req.body.conversationId.trim() : "";
+    const released = await releaseOwnCheckout(conversationId);
+    return res.json({ released });
+  } catch (e) {
+    console.error("[PAYMENT][release] Hata:", e);
+    return res.status(500).json({ message: "Ödeme oturumu kapatılamadı." });
+  }
+};
+
 exports.mockComplete = async (req, res) => {
   try {
     const isMockProvider =
@@ -841,16 +901,13 @@ exports.paytrCallback = async (req, res) => {
       // Sistemin kapattığı oturum (stok ayrımı süresi doldu, müşteri yeni ödeme başlattı)
       // için geç gelen ödeme: stok yeniden düşülmeye çalışılır, yetmezse incelemeye düşer.
       const releasedSession =
-        order.status === "cancelled" && RELEASED_REASONS.includes(order.cancelReason);
+        order.status === "cancelled" &&
+        RELEASED_REASONS.includes(order.cancelReason) &&
+        !order.coupon?.couponId;
       // Yöneticinin iptal ettiği siparişe ödeme geldiyse sessizce yok sayma: para alındı,
       // yönetici bilmeli.
       if (order.status === "cancelled" && !releasedSession) {
-        order.status = "payment_review";
-        order.paymentId = merchant_oid;
-        order.paymentReceivedAt = new Date();
-        order.cancelReason = "paid_after_cancel";
-        await order.save();
-        queuePaymentReviewAlert(order._id);
+        await markPaidAfterCancel(order._id, merchant_oid);
         return res.send("OK");
       }
 
@@ -874,11 +931,18 @@ exports.paytrCallback = async (req, res) => {
       }
 
       try {
-        order = await finalizeOrderPayment(order._id, { allowReleased: releasedSession });
+        // Serbest bırakılmış oturum kararı işlemin içinde, güncel kayda göre verilir:
+        // bildirim okunduktan sonra sipariş kapatılmış olabilir.
+        order = await finalizeOrderPayment(order._id, { allowReleased: true });
         order.paymentId = merchant_oid;
         order.paymentReceivedAt ||= new Date();
       } catch (e) {
-        if (e instanceof OrderPaymentStateError) return res.send("OK");
+        if (e instanceof OrderPaymentStateError) {
+          // Bu arada iptal edildiyse para alınmış bir sipariş sessizce kaybolmasın.
+          const current = await Order.findById(order._id).select("status").lean();
+          if (current?.status === "cancelled") await markPaidAfterCancel(order._id, merchant_oid);
+          return res.send("OK");
+        }
         if (!(e instanceof StockUnavailableError)) throw e;
         console.error("[PAYTR][callback] stock error:", e.message);
         order.status = "payment_review";

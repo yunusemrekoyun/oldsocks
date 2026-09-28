@@ -13,6 +13,7 @@ import {
   XCircleIcon,
 } from "@heroicons/react/24/solid";
 import usePageMeta from "../hooks/usePageMeta";
+import { forgetCheckout } from "../utils/checkoutSession";
 
 const POLL_INTERVAL_MS = 2000;
 const POLL_LIMIT_MS = 30000;
@@ -90,6 +91,8 @@ export default function PaymentResultPage() {
       if (!active) return;
       if (result.orderNumber) setOrderNumber(result.orderNumber);
       if (result.state === "paid" || result.state === "review") clearCartOnce();
+      // Başarısızsa oturum hatırlanır: müşteri sepete dönünce ayrım (varsa) bırakılır.
+      if (["paid", "review", "invalid"].includes(result.state)) forgetCheckout();
       if (result.state === "review" && result.message) setReviewMessage(result.message);
       setPhase(result.state);
     };

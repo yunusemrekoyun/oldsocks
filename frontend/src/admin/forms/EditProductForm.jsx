@@ -97,7 +97,8 @@ export default function EditProductForm({ product, onClose, onSaved }) {
         price: pricing.values.price,
         description: p.description || "",
         color: p.color || "",
-        sizes: (p.sizes || []).map((s) => ({ ...s, id: uuid() })),
+        // loadedStock: sunucu kaydederken aradaki satış/ayrımı korumak için değişikliği hesaplar.
+        sizes: (p.sizes || []).map((s) => ({ ...s, id: uuid(), loadedStock: s.stock })),
       });
       setIsSizeLess(
         Array.isArray(p.sizes) &&
