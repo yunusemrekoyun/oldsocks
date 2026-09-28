@@ -1,5 +1,6 @@
 // src/components/layout/Header.jsx
 import React, { useContext, useState, useEffect, useRef, useMemo } from "react";
+import { createPortal } from "react-dom";
 import { Link, useNavigate } from "react-router-dom";
 import {
   FaSearch,
@@ -443,8 +444,10 @@ const Header = () => {
       </div>
 
       {/* =================== Mobil Drawer =================== */}
-      {mobileMenuOpen && (
-        <div className="fixed inset-0 z-[60]">
+      {/* Kaydırınca header'a gelen bulanıklık (backdrop-filter) içindeki "fixed" öğeleri
+          header kutusuna hapseder; menü ve arama bu yüzden sayfa köküne taşınır. */}
+      {mobileMenuOpen && createPortal(
+        <div className="fixed inset-0 z-[1100]">
           {/* Backdrop */}
           <div
             className={`absolute inset-0 bg-black/40 backdrop-blur-sm transition-opacity ${
@@ -622,10 +625,11 @@ const Header = () => {
               ))}
             </nav>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
-      <SearchModal open={showSearch} onClose={() => setShowSearch(false)} />
+      {createPortal(<SearchModal open={showSearch} onClose={() => setShowSearch(false)} />, document.body)}
     </header>
   );
 };

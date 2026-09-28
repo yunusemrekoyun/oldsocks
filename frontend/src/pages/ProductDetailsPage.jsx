@@ -107,17 +107,22 @@ export default function ProductDetailsPage() {
 
   return (
     <>
-      <BreadCrumb category={product.category} name={product.name} />
+      {/* Telefonda ilk ekranda yalnız header ve ürün görseli olsun */}
+      <div className="hidden lg:block">
+        <BreadCrumb category={product.category} name={product.name} />
+      </div>
 
       <div className="mx-auto max-w-7xl px-4 pb-12 pt-2 sm:px-6 lg:px-8 lg:pt-6">
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-12 lg:gap-12">
-          {/* Görseller */}
-          <section className="lg:col-span-7" aria-label="Ürün görselleri">
+        <div className="grid grid-cols-1 lg:grid-cols-12 lg:gap-12">
+          {/* Görseller. Telefonda yerinde kalır, detay kartı üstüne kayarak gelir. */}
+          <section className="sticky top-[65px] lg:static lg:col-span-7" aria-label="Ürün görselleri">
             <ProductDetails product={product} />
           </section>
 
-          {/* Satın alma: kaydırırken masaüstünde sabit kalır */}
-          <aside className="lg:col-span-5">
+          {/* Satın alma. Telefonda görselin altından taşan kart (tutamaç + ad + fiyat ilk ekranda
+              görünür, "aşağıda devamı var" der); masaüstünde kaydırırken sabit kalır. */}
+          <aside className="product-sheet relative z-10 -mx-4 -mt-6 rounded-t-[1.75rem] bg-white px-4 pt-3 shadow-[0_-16px_30px_-22px_rgba(0,0,0,0.45)] sm:-mx-6 sm:px-6 lg:static lg:z-auto lg:col-span-5 lg:mx-0 lg:mt-0 lg:rounded-none lg:bg-transparent lg:px-0 lg:pt-0 lg:shadow-none">
+            <div aria-hidden="true" className="mx-auto mb-4 h-1.5 w-10 rounded-full bg-dark1/15 lg:hidden" />
             <div className="space-y-6 lg:sticky lg:top-24">
               <AddToCart
                 price={product.price}

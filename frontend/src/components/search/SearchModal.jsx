@@ -98,7 +98,7 @@ export default function SearchModal({ open, onClose }) {
       role="dialog"
       aria-modal="true"
       aria-label="Ürün arama"
-      className={`fixed inset-0 bg-black bg-opacity-50 backdrop-blur-sm flex items-center justify-center z-50 transition-opacity ${
+      className={`fixed inset-0 bg-black bg-opacity-50 backdrop-blur-sm flex items-center justify-center z-[1100] transition-opacity ${
         isClosing ? "fade-out" : "fade-in"
       }`}
     >

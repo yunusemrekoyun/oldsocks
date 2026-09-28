@@ -2,7 +2,8 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import { FaChevronLeft, FaChevronRight, FaTimes } from "react-icons/fa";
 import { getResponsiveImageProps } from "../../../utils/media";
 
-// Ürün galerisi. Mobilde parmakla kaydırılan tam genişlik görseller; masaüstünde tek görsel
+// Ürün galerisi. Mobilde header'ın altındaki ekranı dolduran, köşeleri yuvarlak ve parmakla
+// kaydırılan görseller (altta detay kartının üst kısmı görünür); masaüstünde tek görsel
 // ekran yüksekliğinde bütünüyle, birden çok görsel iki sütunlu ızgarada. Görsele
 // tıklayınca tam ekran görüntüleyici açılır.
 const SLIDE_IMAGE = { widths: [480, 640, 960, 1200], defaultWidth: 960, sizes: "100vw" };
@@ -58,7 +59,7 @@ function Viewer({ gallery, start, name, onClose }) {
   }, [go, index, onClose]);
 
   return (
-    <div className="fixed inset-0 z-[80] bg-black/95" role="dialog" aria-modal="true" aria-label={`${name} görselleri`}>
+    <div className="fixed inset-0 z-[1100] bg-black/95" role="dialog" aria-modal="true" aria-label={`${name} görselleri`}>
       <div
         ref={trackRef}
         onScroll={(event) => setIndex(Math.round(event.currentTarget.scrollLeft / event.currentTarget.clientWidth))}
@@ -133,12 +134,12 @@ export default function ProductDetails({ product }) {
 
   return (
     <div>
-      {/* Mobil ve tablet: kaydırmalı galeri */}
-      <div className="relative -mx-4 sm:mx-0 lg:hidden">
+      {/* Mobil ve tablet: kaydırmalı galeri. Yükseklik = ekran - header - detay kartının görünen kısmı */}
+      <div className="relative -mx-2 overflow-hidden rounded-[1.75rem] bg-light1 sm:mx-0 lg:hidden">
         <div
           ref={trackRef}
           onScroll={(event) => setActive(Math.round(event.currentTarget.scrollLeft / event.currentTarget.clientWidth))}
-          className="no-scrollbar flex snap-x snap-mandatory overflow-x-auto sm:rounded-2xl"
+          className="no-scrollbar flex h-[calc(100vh-10.5rem)] min-h-[22rem] snap-x snap-mandatory overflow-x-auto supports-[height:100svh]:h-[calc(100svh-10.5rem)]"
         >
           {gallery.map((image, i) => (
             <button
@@ -146,14 +147,14 @@ export default function ProductDetails({ product }) {
               type="button"
               onClick={() => setViewer(i)}
               aria-label={`${product.name} görsel ${i + 1}, büyüt`}
-              className="aspect-[3/4] w-full shrink-0 snap-center bg-light1"
+              className="h-full w-full shrink-0 snap-center bg-light1"
             >
               <Img image={image} preset={SLIDE_IMAGE} eager={i === 0} alt={`${product.name} görsel ${i + 1}`} className="h-full w-full object-cover" />
             </button>
           ))}
         </div>
         {gallery.length > 1 && (
-          <div className="absolute bottom-3 left-1/2 flex -translate-x-1/2 gap-1.5 rounded-full bg-black/25 px-2.5 py-1.5 backdrop-blur">
+          <div className="absolute bottom-10 left-1/2 flex -translate-x-1/2 gap-1.5 rounded-full bg-black/25 px-2.5 py-1.5 backdrop-blur">
             {gallery.map((_, i) => (
               <button
                 key={i}
