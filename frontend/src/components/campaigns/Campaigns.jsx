@@ -32,10 +32,10 @@ export default function Campaigns() {
     }
   };
 
-  if (loading) return <div className="py-10 text-center">Yükleniyor…</div>;
-
   const slot1 = slots.find((c) => c.slot === 1);
   const slot2 = slots.find((c) => c.slot === 2);
+  // Kampanya yoksa (veya yüklenirken) sayfada boş alan bırakma.
+  if (loading || (!slot1 && !slot2)) return null;
 
   return (
     <section className="container mx-auto px-4 py-12">

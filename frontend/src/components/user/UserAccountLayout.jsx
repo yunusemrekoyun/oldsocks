@@ -4,6 +4,7 @@ import { useLocation } from "react-router-dom";
 import UserAccount from "./UserAccount";
 import AddressList from "./AddressList";
 import OrdersList from "./OrdersList";
+import Logout from "../auth/Logout";
 
 export default function UserAccountLayout() {
   const location = useLocation();
@@ -34,6 +35,9 @@ export default function UserAccountLayout() {
               {t.label}
             </button>
           ))}
+          <div className="border-t border-light2 pt-2">
+            <Logout variant="menu" />
+          </div>
         </nav>
       </aside>
 

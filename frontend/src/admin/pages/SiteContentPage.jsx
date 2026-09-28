@@ -4,6 +4,23 @@ import { mediaErrorMessage, uploadMediaFile } from "../../services/mediaUpload";
 import defaultLogo from "../../assets/logo/logo.webp";
 import defaultVision from "../../assets/about/vision.webp";
 import defaultMission from "../../assets/about/mission.webp";
+import HeaderBrand from "../../components/layout/HeaderBrand";
+import { BRAND_FONTS } from "../../utils/brandFonts";
+import { getResponsiveImageProps } from "../../utils/media";
+
+const BRAND_MODES = [
+  ["both", "Logo ve yazı"],
+  ["text", "Yalnız yazı"],
+  ["logo", "Yalnız logo"],
+];
+const BRAND_STYLES = [
+  ["chrome", "Krom (gümüş)"],
+  ["dark", "Koyu"],
+];
+
+function Choice({ active, onClick, children, style }) {
+  return <button type="button" onClick={onClick} aria-pressed={active} style={style} className={`rounded-lg border px-3 py-2 text-sm transition ${active ? "border-gray-900 bg-gray-900 text-white" : "border-gray-300 bg-white text-gray-800 hover:border-gray-500"}`}>{children}</button>;
+}
 
 function ImageEditor({ label, current, fallback, file, onFile, onReset, hint }) {
   const [preview, setPreview] = useState("");
@@ -32,6 +49,48 @@ function ImageEditor({ label, current, fallback, file, onFile, onReset, hint }) 
       </div>
     </div>
   </div>;
+}
+
+function HeaderBrandEditor({ draft, setDraft, logoFile }) {
+  const header = draft.header || { mode: "both", text: "OLDSOCKS", font: "pirata", style: "chrome" };
+  const set = (patch) => setDraft((current) => ({ ...current, header: { ...header, ...patch } }));
+  const [filePreview, setFilePreview] = useState("");
+  useEffect(() => {
+    if (!logoFile) { setFilePreview(""); return undefined; }
+    const url = URL.createObjectURL(logoFile);
+    setFilePreview(url);
+    return () => URL.revokeObjectURL(url);
+  }, [logoFile]);
+  const logoProps = filePreview ? { src: filePreview } : getResponsiveImageProps(draft.logo || defaultLogo, { widths: [256], defaultWidth: 256, sizes: "56px" });
+  return <section className="space-y-5 rounded-xl border border-gray-200 bg-white p-5 sm:p-6">
+    <div>
+      <h2 className="text-lg font-semibold text-gray-900">Header markası</h2>
+      <p className="mt-1 text-sm text-gray-600">Sitenin üst menüsünün ortasında görünür. Logo, yazı ya da ikisi birlikte gösterilebilir.</p>
+    </div>
+    <div className="space-y-2">
+      <p className="text-sm font-medium text-gray-800">Gösterim</p>
+      <div className="flex flex-wrap gap-2">{BRAND_MODES.map(([key, label]) => <Choice key={key} active={header.mode === key} onClick={() => set({ mode: key })}>{label}</Choice>)}</div>
+    </div>
+    {header.mode !== "logo" && <>
+      <label className="block text-sm font-medium text-gray-800">Yazı
+        <input value={header.text} maxLength={30} onChange={(event) => set({ text: event.target.value })} className="mt-2 w-full max-w-sm rounded-lg border border-gray-300 px-3 py-2.5 text-base outline-none focus:border-gray-900" />
+      </label>
+      <div className="space-y-2">
+        <p className="text-sm font-medium text-gray-800">Yazı tipi</p>
+        <div className="flex flex-wrap gap-2">{Object.entries(BRAND_FONTS).map(([key, font]) => <Choice key={key} active={header.font === key} onClick={() => set({ font: key })} style={{ ...font.style, fontSize: 20 }}>{header.text.trim() || "OLDSOCKS"}</Choice>)}</div>
+      </div>
+      <div className="space-y-2">
+        <p className="text-sm font-medium text-gray-800">Görünüm</p>
+        <div className="flex flex-wrap gap-2">{BRAND_STYLES.map(([key, label]) => <Choice key={key} active={header.style === key} onClick={() => set({ style: key })}>{label}</Choice>)}</div>
+      </div>
+    </>}
+    <div>
+      <p className="text-sm font-medium text-gray-800">Önizleme</p>
+      <div className="mt-2 flex h-20 items-center justify-center rounded-lg border border-gray-200 bg-[#F3F3F3]">
+        <HeaderBrand header={{ ...header, text: header.text.trim() || "OLDSOCKS" }} logoProps={logoProps} />
+      </div>
+    </div>
+  </section>;
 }
 
 export default function SiteContentPage() {
@@ -75,6 +134,7 @@ export default function SiteContentPage() {
     try {
       const payload = {
         logoAssetId: draft.logoAssetId,
+        header: draft.header,
         footer: draft.footer,
         contact: draft.contact,
         about: {
@@ -120,6 +180,8 @@ export default function SiteContentPage() {
       </div>
       <ImageEditor key={`logo-${savedRevision}`} label="Site logosu" current={draft.logo} fallback={defaultLogo} file={files.logo} onFile={(file) => setFiles((current) => ({ ...current, logo: file }))} onReset={() => resetImage("logo")} hint="Şeffaf arka planlı PNG veya WebP en iyi sonucu verir." />
     </section>
+
+    <HeaderBrandEditor draft={draft} setDraft={setDraft} logoFile={files.logo} />
 
     <section className="space-y-6 rounded-xl border border-gray-200 bg-white p-5 sm:p-6">
       <div>

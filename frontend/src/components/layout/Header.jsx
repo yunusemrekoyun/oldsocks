@@ -2,8 +2,6 @@
 import React, { useContext, useState, useEffect, useRef, useMemo } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
-  FaInstagram,
-  FaFacebookF,
   FaSearch,
   FaShoppingCart,
   FaUser,
@@ -11,7 +9,6 @@ import {
   FaTimes,
 } from "react-icons/fa";
 import { ChevronDownIcon, ChevronRightIcon } from "@heroicons/react/24/solid";
-import Logout from "../auth/Logout";
 import { AuthContext } from "../../context/AuthContext";
 import { useCart } from "../../context/useCart";
 import SearchModal from "../search/SearchModal";
@@ -20,22 +17,27 @@ import logo from "../../assets/logo/logo.webp";
 import publicApi from "../../../publicApi";
 import { useSiteContent } from "../../context/siteContent";
 import { getResponsiveImageProps } from "../../utils/media";
+import HeaderBrand from "./HeaderBrand";
 
 const DISCOUNT_HOVER_KEY = "__discount_campaigns__";
-const fallbackLogo = (event) => {
-  event.currentTarget.removeAttribute("srcset");
-  if (!event.currentTarget.src.endsWith(logo)) event.currentTarget.src = logo;
-};
-
 const Header = () => {
   const { isLoggedIn } = useContext(AuthContext);
   const { items } = useCart();
   const siteContent = useSiteContent();
   const siteLogo = getResponsiveImageProps(siteContent?.logo || logo, {
-    widths: [256, 512, 640], defaultWidth: 640, sizes: "64px",
+    widths: [256, 512, 640], defaultWidth: 256, sizes: "56px",
   });
 
   const [showSearch, setShowSearch] = useState(false);
+
+  // Kaydırınca header üstte kalır; yarı saydam, bulanık zemine geçer ve incelir.
+  const [scrolled, setScrolled] = useState(false);
+  useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 12);
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
 
   // Mobil Drawer
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -170,37 +172,44 @@ const Header = () => {
     { label: "İletişim", path: "/contact" },
   ];
 
+  const iconButton =
+    "flex h-10 w-10 items-center justify-center rounded-full text-dark1 transition hover:bg-black/5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-dark1";
+
   return (
-    <header className="bg-light1 border-b border-light2 relative z-50">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-24">
-          {/* Sol: Logo + Menü */}
-          <div className="flex items-center gap-4">
-            {/* Hamburger - Mobil */}
+    <header
+      className={`sticky top-0 z-50 border-b transition-[background-color,box-shadow,border-color] duration-300 ${
+        scrolled
+          ? "border-transparent bg-light1/80 shadow-[0_10px_30px_-18px_rgba(0,0,0,0.45)] backdrop-blur-md supports-[backdrop-filter]:bg-light1/70"
+          : "border-light2 bg-light1"
+      }`}
+    >
+      <div className="max-w-7xl mx-auto px-2 sm:px-6 lg:px-8">
+        <div
+          className={`grid grid-cols-[1fr_auto_1fr] items-center gap-2 transition-[height] duration-300 ${
+            scrolled ? "h-14 lg:h-16" : "h-16 lg:h-20"
+          }`}
+        >
+          {/* Sol: mobilde menü ve arama, masaüstünde menü linkleri */}
+          <div className="flex min-w-0 items-center gap-0.5 sm:gap-1">
             <button
+              type="button"
               onClick={() => setMobileMenuOpen(true)}
-              className="lg:hidden text-dark2 text-xl"
+              className={`${iconButton} lg:hidden`}
               aria-label="Menüyü Aç"
             >
-              <FaBars />
+              <FaBars className="text-lg" />
+            </button>
+            <button
+              type="button"
+              className={`${iconButton} lg:hidden`}
+              onClick={() => setShowSearch(true)}
+              aria-label="Ürün ara"
+            >
+              <FaSearch className="text-[15px]" />
             </button>
 
-            <Link to="/" className="flex items-center">
-              <img
-                src={siteLogo.src}
-                srcSet={siteLogo.srcSet}
-                sizes={siteLogo.sizes}
-                onError={fallbackLogo}
-                alt="Oldsocks Logo"
-                width="256"
-                height="256"
-                decoding="async"
-                className="h-16 w-auto object-contain"
-              />
-            </Link>
-
             {/* Menü - Desktop */}
-            <nav className="hidden lg:flex gap-8 text-base font-normal text-dark2 relative">
+            <nav className="hidden lg:flex items-center gap-4 xl:gap-7 text-sm xl:text-[15px] font-medium tracking-wide text-dark2 relative">
               <Link to="/" className="hover:text-brand transition-colors">
                 Ana Sayfa
               </Link>
@@ -398,64 +407,37 @@ const Header = () => {
             </nav>
           </div>
 
-          {/* Sağ ikonlar */}
-          <div className="flex items-center space-x-4">
-            <div className="hidden md:flex space-x-3">
-              <a
-                href="https://www.instagram.com/oldscks/"
-                target="_blank"
-                rel="noopener noreferrer"
-                aria-label="Oldsocks Instagram hesabı"
-                className="w-10 h-10 flex items-center justify-center border border-light3 rounded-full hover:border-brand transition"
-              >
-                <FaInstagram className="text-dark2 hover:text-brand text-sm" />
-              </a>
-              <a
-                href="https://www.facebook.com/Oldsockscollection/"
-                target="_blank"
-                rel="noopener noreferrer"
-                aria-label="Oldsocks Facebook hesabı"
-                className="w-10 h-10 flex items-center justify-center border border-light3 rounded-full hover:border-brand transition"
-              >
-                <FaFacebookF className="text-dark2 hover:text-brand text-sm" />
-              </a>
-            </div>
+          {/* Orta: marka */}
+          <Link to="/" className="justify-self-center rounded-full px-1" aria-label="OLDSOCKS ana sayfa">
+            <HeaderBrand header={siteContent?.header} logoProps={siteLogo} compact={scrolled} />
+          </Link>
 
-            {/* Arama */}
+          {/* Sağ: arama (masaüstü), profil, sepet */}
+          <div className="flex items-center justify-end gap-0.5 sm:gap-1.5">
             <button
               type="button"
-              className="flex w-10 h-10 items-center justify-center border border-light3 rounded-full hover:border-brand transition cursor-pointer"
+              className={`${iconButton} hidden lg:flex`}
               onClick={() => setShowSearch(true)}
               aria-label="Ürün ara"
             >
-              <FaSearch className="text-dark2 hover:text-brand text-sm" />
+              <FaSearch className="text-[15px]" />
             </button>
-
-            {/* Sepet */}
+            <Link to="/profile" aria-label={isLoggedIn ? "Hesabım" : "Giriş yap"} className={iconButton}>
+              <FaUser className="text-[15px]" />
+            </Link>
             <Link
               to="/cart"
               id="cart-icon"
               aria-label={`Sepet${items.length ? `, ${items.length} ürün` : ""}`}
-              className="relative w-12 h-12 flex items-center justify-center bg-dark2 rounded-full hover:bg-brand transition"
+              className="relative ml-0.5 flex h-10 w-10 items-center justify-center rounded-full bg-dark1 text-white transition hover:bg-black focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-dark1"
             >
-              <FaShoppingCart className="text-white text-base" />
+              <FaShoppingCart className="text-[15px]" />
               {items.length > 0 && (
-                <span className="absolute -top-1 -right-1 bg-light1 text-dark1 text-[10px] font-bold w-5 h-5 rounded-full flex items-center justify-center shadow">
+                <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-white px-1 text-[10px] font-bold text-dark1 shadow ring-1 ring-black/10">
                   {items.length}
                 </span>
               )}
             </Link>
-
-            {/* Profil */}
-            <Link
-              to="/profile"
-              aria-label="Profil ve giriş"
-              className="w-12 h-12 flex items-center justify-center border border-light3 rounded-full hover:border-brand transition"
-            >
-              <FaUser className="text-dark2 hover:text-brand text-base" />
-            </Link>
-
-            {isLoggedIn && <Logout />}
           </div>
         </div>
       </div>
@@ -482,18 +464,9 @@ const Header = () => {
                 to="/"
                 onClick={() => setMobileMenuOpen(false)}
                 className="flex items-center"
+                aria-label="OLDSOCKS ana sayfa"
               >
-                <img
-                  src={siteLogo.src}
-                  srcSet={siteLogo.srcSet}
-                  sizes={siteLogo.sizes}
-                  onError={fallbackLogo}
-                  alt="Oldsocks Logo"
-                  width="256"
-                  height="256"
-                  decoding="async"
-                  className="h-10 w-auto object-contain"
-                />
+                <HeaderBrand header={siteContent?.header} logoProps={siteLogo} compact />
               </Link>
               <button
                 onClick={() => setMobileMenuOpen(false)}

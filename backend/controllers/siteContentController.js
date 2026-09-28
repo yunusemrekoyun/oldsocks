@@ -1,6 +1,6 @@
 const mongoose = require("mongoose");
 const SiteContent = require("../models/SiteContent");
-const { DEFAULT_SITE_CONTENT } = require("../models/SiteContent");
+const { DEFAULT_SITE_CONTENT, HEADER_BRAND_OPTIONS } = require("../models/SiteContent");
 const { publicAsset, requireReadyAssets, syncOwnerMediaReferences } = require("../services/media/assets");
 const { timedCache } = require("../services/timedCache");
 
@@ -24,6 +24,12 @@ function publicContent(doc) {
   return {
     logoAssetId: assetId(value.logoAsset),
     logo: publicAsset(value.logoAsset, "detail"),
+    header: {
+      mode: value.headerBrandMode || DEFAULT_SITE_CONTENT.header.mode,
+      text: value.headerBrandText || DEFAULT_SITE_CONTENT.header.text,
+      font: value.headerBrandFont || DEFAULT_SITE_CONTENT.header.font,
+      style: value.headerBrandStyle || DEFAULT_SITE_CONTENT.header.style,
+    },
     about: { vision: block("vision"), mission: block("mission"), history: block("history") },
     footer: {
       description: value.footerDescription ?? DEFAULT_SITE_CONTENT.footer.description,
@@ -109,6 +115,21 @@ exports.update = async (req, res) => {
     updates[`${key}Heading`] = heading;
     updates[`${key}Body`] = body;
   }
+
+  const header = { ...current.header, ...(input.header || {}) };
+  for (const key of ["mode", "font", "style"]) {
+    if (!HEADER_BRAND_OPTIONS[key].includes(header[key])) {
+      return res.status(400).json({ message: "Header marka ayarı geçersiz." });
+    }
+  }
+  header.text = String(header.text || "").trim();
+  if (!header.text || header.text.length > 30) {
+    return res.status(400).json({ message: "Header yazısı 1–30 karakter olmalı." });
+  }
+  updates.headerBrandMode = header.mode;
+  updates.headerBrandText = header.text;
+  updates.headerBrandFont = header.font;
+  updates.headerBrandStyle = header.style;
 
   const logoAssetId = input.logoAssetId === undefined ? current.logoAssetId : input.logoAssetId;
   const visionImageAssetId = input.about?.vision?.imageAssetId === undefined

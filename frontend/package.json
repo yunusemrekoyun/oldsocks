@@ -12,7 +12,10 @@
   "dependencies": {
     "@fontsource-variable/bodoni-moda": "5.3.0",
     "@fontsource-variable/manrope": "5.3.0",
+    "@fontsource/grenze-gotisch": "5.3.0",
+    "@fontsource/pirata-one": "5.3.0",
     "@fontsource/playfair-display": "5.3.0",
+    "@fontsource/unifrakturmaguntia": "5.3.0",
     "@headlessui/react": "^2.2.7",
     "@heroicons/react": "^2.2.0",
     "@material-tailwind/react": "^2.1.10",

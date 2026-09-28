@@ -4,6 +4,10 @@
 import "@fontsource/playfair-display/700.css";
 import "@fontsource-variable/manrope";
 import "@fontsource-variable/bodoni-moda";
+// Header markası için seçilebilen yazı tipleri (admin → Site İçeriği).
+import "@fontsource/pirata-one/400.css";
+import "@fontsource/grenze-gotisch/700.css";
+import "@fontsource/unifrakturmaguntia/400.css";
 import "./index.css";
 import { prefetchHero } from "./services/heroMedia";
 import { StrictMode } from "react";

@@ -1,5 +1,11 @@
 const mongoose = require("mongoose");
 
+const HEADER_BRAND_OPTIONS = Object.freeze({
+  mode: ["logo", "text", "both"],
+  font: ["pirata", "grenze", "fraktur"],
+  style: ["chrome", "dark"],
+});
+
 const DEFAULT_SITE_CONTENT = Object.freeze({
   vision: {
     heading: "Vizyonumuz",
@@ -19,6 +25,8 @@ const DEFAULT_SITE_CONTENT = Object.freeze({
     facebookUrl: "https://www.facebook.com/Oldsockscollection/",
     instagramUrl: "https://www.instagram.com/oldscks/",
   },
+  // Header'daki marka: logo görseli, yazı ya da ikisi birden.
+  header: { mode: "both", text: "OLDSOCKS", font: "pirata", style: "chrome" },
   contact: {
     address: "Alipaşa, Üçbey Sk. No:7, 43020 Kütahya Merkez/Kütahya",
     phone: "+90 541 428 29 89",
@@ -31,6 +39,10 @@ const assetField = { type: mongoose.Schema.Types.ObjectId, ref: "MediaAsset", de
 const siteContentSchema = new mongoose.Schema({
   key: { type: String, default: "main", unique: true, immutable: true },
   logoAsset: assetField,
+  headerBrandMode: { type: String, enum: ["logo", "text", "both"], default: DEFAULT_SITE_CONTENT.header.mode },
+  headerBrandText: { type: String, trim: true, maxlength: 30, default: DEFAULT_SITE_CONTENT.header.text },
+  headerBrandFont: { type: String, enum: ["pirata", "grenze", "fraktur"], default: DEFAULT_SITE_CONTENT.header.font },
+  headerBrandStyle: { type: String, enum: ["chrome", "dark"], default: DEFAULT_SITE_CONTENT.header.style },
   visionHeading: { type: String, trim: true, maxlength: 100, default: DEFAULT_SITE_CONTENT.vision.heading },
   visionBody: { type: String, trim: true, maxlength: 5000, default: DEFAULT_SITE_CONTENT.vision.body },
   visionImageAsset: assetField,
@@ -51,3 +63,4 @@ const siteContentSchema = new mongoose.Schema({
 
 module.exports = mongoose.model("SiteContent", siteContentSchema);
 module.exports.DEFAULT_SITE_CONTENT = DEFAULT_SITE_CONTENT;
+module.exports.HEADER_BRAND_OPTIONS = HEADER_BRAND_OPTIONS;
