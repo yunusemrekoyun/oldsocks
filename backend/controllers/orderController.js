@@ -30,8 +30,9 @@ function parseTracking(body) {
   return { carrier: carrier || null, trackingNumber: trackingNumber || null };
 }
 
+// Firma girilmezse Kargo ayarlarındaki yöntem adı kullanılır (alan en çok 60 karakter).
 function carrierFor(order, tracking) {
-  return tracking.carrier || order.shipping?.carrier || order.shipping?.name || null;
+  return tracking.carrier || order.shipping?.carrier || String(order.shipping?.name || "").slice(0, 60).trim() || null;
 }
 
 async function persistCouponUsage(order) {
@@ -49,17 +50,36 @@ function escapeRegex(value) {
 
 const ORDER_STATUSES = ["pending", "payment_review", "paid", "shipped", "completed", "cancelled"];
 
+// Ödemesi hiç alınmadan kapanan ödeme denemeleri (terk edilen, başarısız, süresi dolan,
+// yenisiyle değişen, yöneticinin iptal ettiği bekleyen). Ana listeyi doldurmasınlar diye
+// "Tamamlanmayan ödemeler" sekmesinde gösterilir.
+const UNPAID_CANCEL_REASONS = [
+  "payment_abandoned",
+  "payment_failed",
+  "reservation_expired",
+  "session_replaced",
+  "coupon_session_replaced",
+  "admin_cancelled_unpaid",
+];
+const UNPAID_FILTER = { status: "cancelled", cancelReason: { $in: UNPAID_CANCEL_REASONS }, paymentReceivedAt: null };
+const ACTIVE_FILTER = { status: { $ne: "pending" }, $nor: [UNPAID_FILTER] };
+const LIST_MODES = {
+  pending: { status: "pending" },
+  unpaid: UNPAID_FILTER,
+  active: ACTIVE_FILTER,
+};
+
 // Admin listesi: ?page verilirse sunucu tarafında sayfalanır, filtrelenir ve aranır.
 // Parametresiz çağrı eski davranışı (tüm siparişler, dizi) korur.
 async function getOrdersPage(req, res) {
   const page = Math.max(1, Number.parseInt(req.query.page, 10) || 1);
   const pageSize = Math.min(100, Math.max(5, Number.parseInt(req.query.pageSize, 10) || 20));
-  const mode = req.query.mode === "pending" ? "pending" : "active";
+  const mode = LIST_MODES[req.query.mode] ? req.query.mode : "active";
   const status = ORDER_STATUSES.includes(req.query.status) ? req.query.status : "";
   const sort = req.query.sort === "asc" ? { createdAt: 1 } : { createdAt: -1 };
   const q = typeof req.query.q === "string" ? req.query.q.trim().slice(0, 80) : "";
 
-  const filter = mode === "pending" ? { status: "pending" } : { status: { $ne: "pending" } };
+  const filter = { ...LIST_MODES[mode] };
   if (status && mode === "active" && status !== "pending") filter.status = status;
   if (q) {
     const pattern = new RegExp(escapeRegex(q), "i");
@@ -80,7 +100,7 @@ async function getOrdersPage(req, res) {
     ];
   }
 
-  const [items, total, pendingCount, activeCount] = await Promise.all([
+  const [items, total, pendingCount, activeCount, unpaidCount] = await Promise.all([
     Order.find(filter)
       .sort(sort)
       .skip((page - 1) * pageSize)
@@ -88,10 +108,11 @@ async function getOrdersPage(req, res) {
       .populate("user", "firstName lastName email")
       .populate("items.productId", "images name"),
     Order.countDocuments(filter),
-    Order.countDocuments({ status: "pending" }),
-    Order.countDocuments({ status: { $ne: "pending" } }),
+    Order.countDocuments(LIST_MODES.pending),
+    Order.countDocuments(ACTIVE_FILTER),
+    Order.countDocuments(UNPAID_FILTER),
   ]);
-  res.json({ items, total, page, pageSize, pendingCount, activeCount });
+  res.json({ items, total, page, pageSize, pendingCount, activeCount, unpaidCount });
 }
 
 exports.getAllOrders = async (req, res) => {
@@ -342,7 +363,7 @@ exports.updateOrderTracking = async (req, res) => {
 };
 
 const CUSTOMER_HIDDEN_FIELDS =
-  "-paytrInit -iyzInit -mailAttemptAt -statusMailAttemptAt -reviewAlertSentAt -adminSeenAt -customerMailSentAt -adminMailSentAt -orderMailSentAt -shippedMailSentAt -deliveredMailSentAt -stockHoldKey";
+  "-paytrInit -iyzInit -mailAttemptAt -statusMailAttemptAt -reviewAlertSentAt -adminSeenAt -customerMailSentAt -adminMailSentAt -orderMailSentAt -shippedMailSentAt -deliveredMailSentAt -stockHoldKey -mailAttempts -mailRetryAt -statusMailAttempts -statusMailRetryAt";
 
 exports.getMyOrders = async (req, res) => {
   const userId = req.user.userId;

@@ -35,11 +35,11 @@ const withDrafts = (o) => ({
   ...o,
   selectedStatus: o.status,
   // Firma girilmediyse Kargo ayarlarındaki yöntem adı (siparişte kayıtlı) kullanılır.
-  carrierDraft: o.shipping?.carrier || o.shipping?.name || "",
+  carrierDraft: o.shipping?.carrier || String(o.shipping?.name || "").slice(0, 60),
   trackingDraft: o.shipping?.trackingNumber || "",
 });
 const trackingChanged = (o) =>
-  o.carrierDraft.trim() !== (o.shipping?.carrier || o.shipping?.name || "") ||
+  o.carrierDraft.trim() !== (o.shipping?.carrier || String(o.shipping?.name || "").slice(0, 60)) ||
   o.trackingDraft.replace(/\s+/g, "") !== (o.shipping?.trackingNumber || "");
 
 const STATUS_LABELS = {
@@ -78,7 +78,7 @@ export default function OrdersPage() {
   const [loadError, setLoadError] = useState("");
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
-  const [counts, setCounts] = useState({ pending: 0, active: 0 });
+  const [counts, setCounts] = useState({ pending: 0, active: 0, unpaid: 0 });
   const [reloadKey, setReloadKey] = useState(0);
   const [updatingId, setUpdatingId] = useState(null);
   const [imageViewer, setImageViewer] = useState(null);
@@ -127,7 +127,7 @@ export default function OrdersPage() {
         if (!alive) return;
         setOrders(data.items.map(withDrafts));
         setTotal(data.total);
-        setCounts({ pending: data.pendingCount, active: data.activeCount });
+        setCounts({ pending: data.pendingCount, active: data.activeCount, unpaid: data.unpaidCount ?? 0 });
       })
       .catch((err) => {
         if (!alive) return;
@@ -406,7 +406,11 @@ export default function OrdersPage() {
           <div className="flex items-center gap-2 text-dark2 min-w-0">
             <FaBoxOpen />
             <h1 className="text-xl font-semibold text-dark1 truncate">
-              {listMode === "pending" ? "Bekleyen Siparişler" : "Siparişler"}
+              {listMode === "pending"
+                ? "Bekleyen Siparişler"
+                : listMode === "unpaid"
+                  ? "Tamamlanmayan Ödemeler"
+                  : "Siparişler"}
             </h1>
             <span className="text-xs bg-light1 text-dark2 px-2 py-0.5 rounded shrink-0">
               {total}
@@ -443,6 +447,21 @@ export default function OrdersPage() {
                 }`}
               >
                 Bekleyenler ({pendingCount})
+              </button>
+              <button
+                type="button"
+                title="Ödemesi alınmadan kapanan denemeler: terk edilen, başarısız ya da süresi dolan ödemeler"
+                onClick={() => {
+                  setListMode("unpaid");
+                  setStatusFilter("");
+                }}
+                className={`rounded-md px-3 py-2 text-sm font-medium transition ${
+                  listMode === "unpaid"
+                    ? "bg-gray-500 text-white"
+                    : "text-dark2 hover:bg-light1"
+                }`}
+              >
+                Tamamlanmayan ödemeler ({counts.unpaid})
               </button>
             </div>
 

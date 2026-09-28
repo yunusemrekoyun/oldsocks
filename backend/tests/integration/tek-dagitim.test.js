@@ -113,3 +113,44 @@ test("e-posta kaydı olmayan eski ödenmiş siparişe ve eski incelemeye toplu e
   assert.equal((await mailsTo(oldPaid, { waitMs: 0 })).length, 0);
   assert.equal((await Orders.findOne({ _id: oldReview })).reviewAlertSentAt ?? null, null);
 });
+
+test("ödemesi alınmadan kapanan denemeler ana sipariş listesine değil 'Tamamlanmayan ödemeler' sekmesine düşer", async () => {
+  const productId = await seedProduct(10);
+  const mark = `liste-${crypto.randomBytes(2).toString("hex")}`;
+  const ids = {
+    paid: await legacyOrder({ status: "paid", productId, guestEmail: email(`${mark}-odenmis`), extra: { paymentReceivedAt: new Date() } }),
+    abandoned: await legacyOrder({ status: "cancelled", productId, guestEmail: email(`${mark}-terk`), extra: { cancelReason: "payment_abandoned" } }),
+    refunded: await legacyOrder({
+      status: "cancelled", productId, guestEmail: email(`${mark}-iade`),
+      extra: { cancelReason: "admin_cancelled", paymentReceivedAt: new Date() },
+    }),
+    legacyCancelled: await legacyOrder({ status: "cancelled", productId, guestEmail: email(`${mark}-eski-iptal`) }),
+  };
+  const list = async (mode) => {
+    const res = await fetch(`${server.base}/api/v1/orders/all?page=1&pageSize=100&mode=${mode}&q=${mark}`, {
+      headers: { Authorization: `Bearer ${adminToken}` },
+    });
+    const data = await res.json();
+    return data.items.map((o) => String(o._id)).sort();
+  };
+  assert.deepEqual(await list("active"), [ids.paid, ids.refunded, ids.legacyCancelled].map(String).sort());
+  assert.deepEqual(await list("unpaid"), [String(ids.abandoned)]);
+});
+
+test("uzun adlı kargo yöntemiyle verilmiş sipariş, firma yazılmadan kargoya verilebilir", async () => {
+  const productId = await seedProduct(3);
+  const longName = "Standart Kargo — 1500 TL üzeri ücretsiz, 2-3 iş günü içinde teslim edilir ve takip edilir";
+  const id = await legacyOrder({
+    status: "paid", productId, stockUpdated: true, guestEmail: email("uzun-kargo"),
+    extra: { paymentReceivedAt: new Date(Date.now() - 10 * DAY), orderMailSentAt: new Date(), shipping: { name: longName, fee: 0 } },
+  });
+  const res = await fetch(`${server.base}/api/v1/orders/${id}/status`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${adminToken}` },
+    body: JSON.stringify({ status: "shipped" }),
+  });
+  assert.equal(res.status, 200, await res.text());
+  const order = await Orders.findOne({ _id: id });
+  assert.equal(order.status, "shipped");
+  assert.equal(order.shipping.carrier, longName.slice(0, 60).trim());
+});
