@@ -29,3 +29,12 @@ export function forgetCheckout(conversationId) {
     // yok say
   }
 }
+
+// Çıkış yapılınca: aynı tarayıcıyı kullanan sonraki kişi önceki hesabın oturumunu devralmasın.
+export function clearCheckout() {
+  try {
+    localStorage.removeItem(KEY);
+  } catch {
+    // yok say
+  }
+}

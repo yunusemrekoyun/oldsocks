@@ -2,6 +2,7 @@ import React, { useContext, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../../../api";
 import { AuthContext } from "../../context/AuthContext";
+import { clearCheckout } from "../../utils/checkoutSession";
 
 // KVKK: müşteri hesabını ve hesaba bağlı kişisel verilerini kendisi silebilir.
 export default function DeleteAccountForm() {
@@ -24,6 +25,7 @@ export default function DeleteAccountForm() {
     try {
       await api.delete("/users/me", { data: { password, confirm: true }, skipAuthRefresh: true });
       localStorage.removeItem("accessToken");
+      clearCheckout();
       setIsLoggedIn(false);
       navigate("/", { replace: true, state: { accountDeleted: true } });
     } catch (err) {

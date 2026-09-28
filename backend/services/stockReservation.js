@@ -132,11 +132,17 @@ async function releaseCustomerPendingOrders({ userId, previousConversationId, ol
 // ödeme ekranından sepete dönerse ayrım sürer (başka sekmede ödeme formu açık olabilir);
 // sepet ve ödeme adımı bu adetleri müşteriye mevcut sayar. Yeni ödeme başlatılınca bu
 // oturum kapanır. Süresi dolmuş ama henüz geri verilmemiş ayrım da sayılır: stok hâlâ
-// düşülüdür ve yeni ödeme onu da kapatır.
-async function heldQuantities(conversationId) {
+// düşülüdür ve yeni ödeme onu da kapatır. Üye isteğinde başka bir hesabın oturumu sayılmaz
+// (üyenin ödeme başlatması onu kapatmaz).
+async function heldQuantities(conversationId, { userId = null } = {}) {
   const held = new Map();
   if (typeof conversationId !== "string" || !conversationId || conversationId.length > 64) return held;
-  const order = await Order.findOne({ conversationId, status: "pending", stockUpdated: true })
+  const order = await Order.findOne({
+    conversationId,
+    status: "pending",
+    stockUpdated: true,
+    ...(userId ? { user: { $in: [null, userId] } } : {}),
+  })
     .select("items.productId items.size items.qty")
     .lean();
   for (const item of order?.items || []) {

@@ -37,19 +37,21 @@ export function reconcileCart(items, results) {
       continue;
     }
     const label = `${item.name || result.name || "Bir ürün"}${item.size ? ` (${item.size})` : ""}`;
-    const gone =
-      result.status === "missing" ||
-      result.status === "size_missing" ||
-      (result.status === "insufficient" && !(result.available > 0));
-    if (gone) {
+    // Yalnız ürün ya da beden kaldırıldıysa satır çıkarılır. Stok az ya da sıfırsa satır ve
+    // adet korunur: son adetler başka bir müşterinin ödeme adımında ayrılmış olabilir ve
+    // ödeme olmazsa en geç 20 dakikada geri döner. Ödeme adımı stoğu yine sunucuda denetler.
+    if (result.status === "missing" || result.status === "size_missing") {
       notices.push(`${label} artık satışta değil; sepetinizden çıkarıldı.`);
       changed = true;
       continue;
     }
     let updated = item;
     if (result.status === "insufficient") {
-      updated = { ...updated, qty: result.available };
-      notices.push(`${label}: stokta ${result.available} adet kaldı, adet güncellendi.`);
+      notices.push(
+        result.available > 0
+          ? `${label}: şu an ${result.available} adet var. Ödemeye geçmek için adedi azaltın ya da biraz sonra tekrar deneyin.`
+          : `${label} şu an stokta yok; son adetler başka bir müşterinin ödeme adımında olabilir. Biraz sonra tekrar deneyebilirsiniz.`
+      );
     }
     if (Number.isFinite(result.price) && Math.abs(result.price - Number(item.price)) >= 0.005) {
       updated = { ...updated, price: result.price };

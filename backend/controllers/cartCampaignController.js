@@ -286,14 +286,16 @@ exports.previewCartPricing = async (req, res) => {
       req.body || {};
     // Müşteri ödeme ekranından döndüyse kendi ayırdığı adetler ve kupon oturumu ona
     // engel sayılmaz; ödeme başlatılırken o oturum kapatılır.
+    const userId = req.user?.userId || null;
+    const held = await heldQuantities(heldBy, { userId });
     const pricing = await calculateCartPricing(cartItems, {
       selectedCampaignId,
       couponCode,
       customerEmail,
-      customerUserId: req.user?.userId || null,
+      customerUserId: userId,
       includeEligibleCampaigns: true,
-      held: await heldQuantities(heldBy),
-      heldConversationId: typeof heldBy === "string" ? heldBy.slice(0, 64) : null,
+      held,
+      heldConversationId: held.size ? String(heldBy).slice(0, 64) : null,
     });
     return res.json({
       summary: pricing.summary,

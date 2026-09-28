@@ -213,7 +213,22 @@ export default function Cart() {
   const freeShippingThreshold =
     pricingSummary?.freeShippingThreshold ?? shipping?.freeShippingThreshold ?? null;
 
+  // Stok kontrolü geldiyse adedi mevcut stoğu aşan satır varken ödemeye geçilmez; satır
+  // sepette kalır (stok başka bir müşterinin ayrımından dönebilir).
+  const shortLines = stockByKey
+    ? items.filter((item) => {
+        const available = stockByKey.get(cartKey(item.id, item.size));
+        return available !== undefined && item.qty > available;
+      })
+    : [];
+  const [checkoutBlocked, setCheckoutBlocked] = useState(false);
+
   const handleCheckout = () => {
+    if (shortLines.length) {
+      setCheckoutBlocked(true);
+      return;
+    }
+    setCheckoutBlocked(false);
     if (!isLoggedIn) {
       setShowLoginModal(true);
     } else {
@@ -522,6 +537,12 @@ export default function Cart() {
               Ön bilgilendirme formu ve sözleşme onayı ödeme adımında alınır.
             </p>
 
+            {checkoutBlocked && shortLines.length > 0 && (
+              <p role="alert" className="mt-4 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900">
+                Sepetinizdeki bazı ürünler şu an yeterli stokta değil. Adedi azaltın, ürünü çıkarın ya da biraz sonra
+                tekrar deneyin.
+              </p>
+            )}
             {/* Butonlar */}
             <div className="mt-5 flex flex-col sm:flex-row gap-3">
               <button

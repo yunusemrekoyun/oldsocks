@@ -180,3 +180,23 @@ test("bağlantı başına ayrım sayımı kendi indeksini kullanır", async () =
     .explain("queryPlanner");
   assert.match(JSON.stringify(plan.queryPlanner.winningPlan), new RegExp(indexName));
 });
+
+test("aynı tarayıcıda başka hesaba geçen üyenin önizlemesi önceki hesabın ayrımını saymaz", async () => {
+  const product = await seedProduct();
+  await mongoose.connection.collection("products").updateOne({ _id: product }, { $set: { "sizes.0.stock": 1 } });
+  const first = await memberLogin(`onceki-${crypto.randomBytes(3).toString("hex")}@sinir.test`);
+  const second = await memberLogin(`sonraki-${crypto.randomBytes(3).toString("hex")}@sinir.test`);
+  const a = await startMember(first, product);
+  assert.equal(a.status, 200);
+  const preview = (member) =>
+    postJson(
+      server.base,
+      "/api/v1/cart-campaigns/preview",
+      { cartItems: [{ id: String(product), size: "M", qty: 1 }], heldBy: a.data.conversationId },
+      { Authorization: `Bearer ${member.token}` }
+    );
+  assert.equal((await preview(first)).status, 200);
+  const other = await preview(second);
+  assert.equal(other.status, 409);
+  assert.match(other.data.message, /stok/i);
+});

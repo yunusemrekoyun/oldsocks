@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { FaSignOutAlt } from "react-icons/fa";
 import api from "../../../api";
 import { AuthContext } from "../../context/AuthContext";
+import { clearCheckout } from "../../utils/checkoutSession";
 
 const Logout = () => {
   const navigate = useNavigate();
@@ -18,6 +19,7 @@ const Logout = () => {
     } finally {
       // Access token'ı de temizle
       localStorage.removeItem("accessToken");
+      clearCheckout();
       setIsLoggedIn(false);
       // Giriş sayfasına yönlendir
       navigate("/auth");

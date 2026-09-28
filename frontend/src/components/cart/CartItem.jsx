@@ -90,7 +90,10 @@ export default function CartItem({ item, available }) {
 
             {/* TOPLAM STOK GÖSTERİMİ KALDIRILDI */}
             {!loadingStock && outOfStock && (
-              <p className="mt-1 text-[12px] text-red-600">Stokta yok</p>
+              <p className="mt-1 text-[12px] text-red-600">Şu an stokta yok</p>
+            )}
+            {!loadingStock && !outOfStock && item.qty > maxStock && (
+              <p className="mt-1 text-[12px] text-red-600">Şu an {maxStock} adet var</p>
             )}
           </div>
         </div>
