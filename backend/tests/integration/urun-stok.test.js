@@ -107,7 +107,8 @@ test("stoğu form açıkken değişen bedende yönetici güncel değeri görür;
   form[0].loadedStock = 4;
   assert.equal((await save(productId, form)).status, 200);
   assert.deepEqual(await stocks(productId), { M: 8 });
-  assert.equal((await save(productId, form)).status, 200);
+  // Yanıt kaybolup aynı form yeniden gönderilirse stok ikinci kez değişmez.
+  assert.equal((await save(productId, form)).status, 409);
   assert.deepEqual(await stocks(productId), { M: 8 });
 });
 

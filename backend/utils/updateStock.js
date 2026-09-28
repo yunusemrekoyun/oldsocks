@@ -24,18 +24,20 @@ async function applyStockChanges(order, options = {}) {
   if (!items.length) return;
 
   const ops = [];
-  for (const { productId, size, qty } of items) {
+  for (const { productId, size, sizeId, qty } of items) {
     if (!productId) continue;
     const quantity = Number(qty);
     if (!Number.isFinite(quantity) || quantity <= 0) continue;
-    const sizeKey = size ? String(size) : "";
+    // Beden satırı kimliği varsa onunla (yönetici bedenin adını değiştirmiş olabilir; stok
+    // geri eklenirken de kimlik kullanılır), yoksa (eski siparişler) adıyla bulunur.
+    const row = sizeId ? { _id: sizeId } : { size: size ? String(size) : "" };
     ops.push({
       updateOne: {
         filter: {
           _id: productId,
           archivedAt: null,
           sizes: {
-            $elemMatch: { size: sizeKey, stock: { $gte: quantity } },
+            $elemMatch: { ...row, stock: { $gte: quantity } },
           },
         },
         update: { $inc: { "sizes.$.stock": -quantity } },

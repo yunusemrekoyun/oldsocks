@@ -31,11 +31,15 @@ test("form açıkken stoğu değişen satır yazılmaz, çakışma olarak döner
   assert.deepEqual(conflicts, [{ _id: "a", size: "M", current: 2, entered: 8 }]);
 });
 
-test("aynı form yeniden gönderilirse stok ikinci kez değişmez", () => {
+test("aynı form yeniden gönderilirse stok ikinci kez değişmez; tesadüfen eşit değer de çakışmadır", () => {
   const after = [{ _id: "a", size: "M", stock: 8 }];
-  const { sizes, conflicts } = planStockEdits([{ size: "M", stock: 8 }], [{ _id: "a", loadedStock: 5 }], after);
-  assert.deepEqual(conflicts, []);
-  assert.deepEqual(sizes, [{ _id: "a", size: "M", stock: 8 }]);
+  assert.deepEqual(planStockEdits([{ size: "M", stock: 8 }], [{ _id: "a", loadedStock: 5 }], after).conflicts, [
+    { _id: "a", size: "M", current: 8, entered: 8 },
+  ]);
+  // Form 5 ile açıldı, bir ayrım 4'e indirdi, yönetici de 4 yazdı: sessizce kabul edilmez.
+  assert.deepEqual(planStockEdits([{ size: "M", stock: 4 }], [{ _id: "a", loadedStock: 5 }], [{ _id: "a", size: "M", stock: 4 }]).conflicts, [
+    { _id: "a", size: "M", current: 4, entered: 4 },
+  ]);
 });
 
 test("beden adı değişen satır kendi stoğunu korur; etiket takası geri alınmaz", () => {

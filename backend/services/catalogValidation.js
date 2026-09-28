@@ -62,9 +62,10 @@ function parseProductPricing(input = {}) {
 // Form her beden satırı için kaydın kimliğini (_id) ve açıldığı andaki stoğu (loadedStock)
 // gönderir. Satır kimlikle eşleşir; beden adı değiştirilen satır kendi stoğunu korur.
 // - Yönetici stoğa dokunmadıysa güncel stok korunur.
-// - Stok zaten girilen değerdeyse (aynı form yeniden gönderildi) değişiklik yoktur.
 // - Stok açılıştan beri değişmediyse girilen değer yazılır.
-// - Arada değiştiyse yazılmaz: yönetici güncel değeri görüp karar verir (conflicts).
+// - Arada değiştiyse yazılmaz, güncel değer girilen değere eşit olsa bile (satış ya da
+//   ayrım tesadüfen aynı sayıya getirmiş olabilir): yönetici güncel değeri görüp karar
+//   verir (conflicts). Aynı form yeniden gönderilirse de böyle olur; stok iki kez değişmez.
 // Kimliği olmayan ya da eşleşmeyen satır (yeni beden, eski istemci) girilen değerle yazılır.
 function planStockEdits(parsedSizes, rawSizes, currentSizes) {
   let rows = rawSizes;
@@ -90,7 +91,7 @@ function planStockEdits(parsedSizes, rawSizes, currentSizes) {
     const loaded = Number(rows[index]?.loadedStock);
     let stock = item.stock;
     if (Number.isSafeInteger(loaded) && loaded >= 0) {
-      if (item.stock === loaded || item.stock === now) stock = now;
+      if (item.stock === loaded) stock = now;
       else if (now !== loaded) {
         conflicts.push({ _id: id, size: item.size, current: now, entered: item.stock });
       }

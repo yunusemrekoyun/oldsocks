@@ -324,3 +324,17 @@ test("ayrım açıkken bedenin adı değişse de ayrım bitince adet aynı beden
   const product = await Products.findOne({ _id: productId });
   assert.deepEqual(product.sizes.map((s) => [s.size, s.stock]), [["Medium", 5]]);
 });
+
+test("ayrım sırasında adı değişen bedene geç gelen ödeme stoğu aynı bedenden yeniden düşer", async () => {
+  const productId = await seedProduct(1);
+  const res = await start(productId, uniq("adi-degisen-gec"));
+  assert.equal(res.status, 200);
+  await Products.updateOne({ _id: productId }, { $set: { "sizes.0.size": "Medium" } });
+  await Orders.updateOne({ conversationId: res.data.conversationId }, { $set: { stockReservedUntil: new Date(Date.now() - 1000) } });
+  assert.ok(await waitFor(async () => (await Orders.findOne({ conversationId: res.data.conversationId })).status === "cancelled"));
+  assert.equal(await stockOf(productId), 1);
+  const order = await Orders.findOne({ conversationId: res.data.conversationId });
+  await paytrCallback(server.base, { merchantOid: res.data.conversationId, totalAmount: Math.round(order.totalPrice * 100) });
+  assert.equal((await Orders.findOne({ _id: order._id })).status, "paid");
+  assert.equal(await stockOf(productId), 0);
+});
