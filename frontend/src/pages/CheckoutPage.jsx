@@ -111,7 +111,7 @@ export default function CheckoutPage() {
           selectedCampaignId: selectedCampaignId || null,
           couponCode: selectedCouponCode || null,
           heldBy: previousCheckout(),
-        }, { signal: controller.signal });
+        }, { signal: controller.signal, guestOnRefreshFail: true });
         if (!alive) return;
         setPricingSummary(data?.summary || null);
         setAppliedCampaign(data?.appliedCampaign || null);

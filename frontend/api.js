@@ -19,7 +19,7 @@ function clearExpiredSession() {
 
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem("accessToken");
-  if (token) {
+  if (token && !config.asGuest) {
     config.headers["Authorization"] = `Bearer ${token}`;
   }
   return config;
@@ -83,11 +83,24 @@ api.interceptors.response.use(
           });
       }
 
-      return refreshPromise.then((token) => {
-        config.headers = config.headers || {};
-        config.headers["Authorization"] = `Bearer ${token}`;
-        return api(config);
-      });
+      return refreshPromise.then(
+        (token) => {
+          config.headers = config.headers || {};
+          config.headers["Authorization"] = `Bearer ${token}`;
+          return api(config);
+        },
+        (err) => {
+          // Herkese açık uçlar (sepet stok kontrolü, fiyat önizlemesi): oturum yenilenemezse
+          // istek misafir olarak tekrarlanır.
+          const refreshStatus = err?.response?.status;
+          if (config.guestOnRefreshFail && (refreshStatus === 401 || refreshStatus === 403)) {
+            config.asGuest = true;
+            if (config.headers) delete config.headers["Authorization"];
+            return api(config);
+          }
+          throw err;
+        }
+      );
     }
 
     return Promise.reject(error);

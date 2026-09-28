@@ -168,7 +168,7 @@ export default function GuestCheckoutPage() {
           couponCode: selectedCouponCode || null,
           heldBy: previousCheckout(),
           customerEmail: email,
-        }, { signal: controller.signal });
+        }, { signal: controller.signal, guestOnRefreshFail: true });
         if (!alive) return;
         setPricingSummary(data?.summary || null);
         setAppliedCampaign(data?.appliedCampaign || null);

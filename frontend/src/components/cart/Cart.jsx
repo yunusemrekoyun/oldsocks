@@ -55,7 +55,7 @@ export default function Cart() {
       .post("/cart-campaigns/check", {
         cartItems: lines.map(({ id, size, qty }) => ({ id, size, qty })),
         heldBy: previousCheckout(),
-      })
+      }, { guestOnRefreshFail: true })
       .then(({ data }) => (Array.isArray(data?.items) ? data.items : []));
   };
 
@@ -151,7 +151,7 @@ export default function Cart() {
           selectedCampaignId: selectedCampaignId || null,
           couponCode: selectedCouponCode || null,
           heldBy: previousCheckout(),
-        });
+        }, { guestOnRefreshFail: true });
         if (!alive) return;
         const eligible = Array.isArray(data?.eligibleCampaigns)
           ? data.eligibleCampaigns
