@@ -1,10 +1,9 @@
-import publicApi from "../../publicApi";
-
 // Ödeme ekranına geçişte stok bu tarayıcının siparişine ayrılır. Müşteri sepete veya
-// ödeme adımına dönerse kendi ayrımı bırakılır; yoksa kendi ayırdığı son adet sepette
-// "tükendi" görünür. Oturum kimliği yalnız bu tarayıcıda tutulur.
+// ödeme adımına dönerse ayrım sürer (başka sekmede ödeme formu açık olabilir); sunucu bu
+// oturumun ayırdığı adetleri sepette ona mevcut sayar (heldBy) ve yeniden ödeme
+// başlatılınca eski oturumu kapatır (previousConversationId). Kimlik yalnız bu
+// tarayıcıda tutulur.
 const KEY = "oldsocks.checkoutSession";
-let pending = null;
 
 export function rememberCheckout(conversationId) {
   try {
@@ -22,29 +21,11 @@ export function previousCheckout() {
   }
 }
 
-export function forgetCheckout() {
+// Yalnız belirtilen oturum hâlâ kayıtlıysa siler; arada başlatılan yeni oturum korunur.
+export function forgetCheckout(conversationId) {
   try {
-    localStorage.removeItem(KEY);
+    if (localStorage.getItem(KEY) === conversationId) localStorage.removeItem(KEY);
   } catch {
     // yok say
   }
-}
-
-// Birden çok bileşen aynı anda çağırabilir; tek istek gider.
-export function releaseOwnCheckout() {
-  const conversationId = previousCheckout();
-  if (!conversationId) return Promise.resolve(false);
-  if (!pending) {
-    pending = publicApi
-      .post("/payment/release", { conversationId })
-      .then(({ data }) => {
-        forgetCheckout();
-        return Boolean(data?.released);
-      })
-      .catch(() => false)
-      .finally(() => {
-        pending = null;
-      });
-  }
-  return pending;
 }

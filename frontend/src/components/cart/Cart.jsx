@@ -12,7 +12,7 @@ import { formatTry } from "../../utils/currency";
 import ConfirmDialog from "../ui/ConfirmDialog";
 import CartRecommendations from "./CartRecommendations";
 import { cartKey, reconcileCart } from "../../utils/cartReconcile";
-import { releaseOwnCheckout } from "../../utils/checkoutSession";
+import { previousCheckout } from "../../utils/checkoutSession";
 
 export default function Cart() {
   const {
@@ -48,12 +48,12 @@ export default function Cart() {
   useEffect(() => {
     if (!items.length) return undefined;
     let alive = true;
-    releaseOwnCheckout()
-      .then(() =>
-        publicApi.post("/cart-campaigns/check", {
-          cartItems: items.map(({ id, size, qty }) => ({ id, size, qty })),
-        })
-      )
+    publicApi
+      .post("/cart-campaigns/check", {
+        cartItems: items.map(({ id, size, qty }) => ({ id, size, qty })),
+        // Ödeme ekranından dönüldüyse kendi ayırdığı adetler tükendi görünmesin.
+        heldBy: previousCheckout(),
+      })
       .then(({ data }) => {
         if (!alive) return;
         const results = Array.isArray(data?.items) ? data.items : [];
@@ -122,12 +122,11 @@ export default function Cart() {
     (async () => {
       try {
         setPricingLoading(true);
-        // Ödeme ekranından dönüldüyse kendi stok ayrımı önce bırakılır.
-        await releaseOwnCheckout();
         const { data } = await api.post("/cart-campaigns/preview", {
           cartItems: items,
           selectedCampaignId: selectedCampaignId || null,
           couponCode: selectedCouponCode || null,
+          heldBy: previousCheckout(),
         });
         if (!alive) return;
         const eligible = Array.isArray(data?.eligibleCampaigns)

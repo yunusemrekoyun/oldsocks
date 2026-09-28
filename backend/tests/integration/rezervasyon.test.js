@@ -179,23 +179,53 @@ test("başarısız ödeme bildirimi aynı anda iki kez gelse de stok bir kez ger
   assert.equal(await stockOf(productId), 1);
 });
 
-test("müşteri sepete dönünce kendi ayrımı bırakılır; sonuç sayfası geç ödeme ihtimalinde beklemeye devam eder", async () => {
+test("müşteri sepete dönünce ayrım sürer; kendi ayırdığı adet ona mevcut görünür, yeniden ödemede eski oturum kapanır", async () => {
   const productId = await seedProduct(1);
-  const res = await start(productId, uniq("don"));
+  const code = `DON${crypto.randomBytes(3).toString("hex").toUpperCase()}`;
+  await mongoose.connection.collection("coupons").insertOne({
+    code, isEnabled: true, discountType: "percent", discountValue: 10, minimumSubtotal: 0,
+    expiresAt: null, maxUses: 1, productIds: [productId], createdAt: new Date(), updatedAt: new Date(),
+  });
+  const email = uniq("don");
+  const res = await start(productId, email, 1, { couponCode: code });
+  assert.equal(res.status, 200, JSON.stringify(res.data));
+  const heldBy = res.data.conversationId;
   assert.equal(await stockOf(productId), 0);
-  const release = await postJson(server.base, "/api/v1/payment/release", { conversationId: res.data.conversationId });
-  assert.equal(release.status, 200);
-  assert.equal(release.data.released, true);
-  const order = await Orders.findOne({ conversationId: res.data.conversationId });
-  assert.equal(order.cancelReason, "customer_left");
-  assert.equal(await stockOf(productId), 1);
 
-  const confirm = await postJson(server.base, "/api/v1/orders/confirm", { conversationId: res.data.conversationId });
+  // Başka sekmede ödeme formu açık olabilir: sepeti görüntülemek ayrımı bırakmaz.
+  const cartItems = [{ id: String(productId), size: "M", qty: 1 }];
+  const others = await postJson(server.base, "/api/v1/cart-campaigns/check", { cartItems });
+  assert.equal(others.data.items[0].status, "insufficient");
+  const mine = await postJson(server.base, "/api/v1/cart-campaigns/check", { cartItems, heldBy });
+  assert.equal(mine.data.items[0].status, "ok");
+  assert.equal(mine.data.items[0].available, 1);
+  const preview = await postJson(server.base, "/api/v1/cart-campaigns/preview", {
+    cartItems, couponCode: code, customerEmail: email, heldBy,
+  });
+  assert.equal(preview.status, 200, JSON.stringify(preview.data));
+  const otherDevice = await postJson(server.base, "/api/v1/cart-campaigns/preview", {
+    cartItems: [{ id: String(await seedProduct(5)), size: "M", qty: 1 }], couponCode: code, customerEmail: email,
+  });
+  assert.equal(otherDevice.status, 409);
+  assert.equal((await Orders.findOne({ conversationId: heldBy })).status, "pending");
+  assert.equal((await postJson(server.base, "/api/v1/payment/release", { conversationId: heldBy })).status, 404);
+
+  const stranger = await start(productId, uniq("baska"));
+  assert.equal(stranger.status, 409);
+  assert.match(stranger.data.message, /stok/i);
+
+  // Aynı tarayıcıdan yeniden ödeme (e-posta değişse de): eski oturum kapanır, adet yenisine geçer.
+  const again = await start(productId, uniq("don2"), 1, { couponCode: code, previousConversationId: heldBy });
+  assert.equal(again.status, 200, JSON.stringify(again.data));
+  const old = await Orders.findOne({ conversationId: heldBy });
+  assert.equal(old.status, "cancelled");
+  assert.equal(old.cancelReason, "session_replaced");
+  assert.equal(await stockOf(productId), 0);
+
+  // Eski oturuma geç ödeme ihtimali: sonuç sayfası beklemeye devam eder.
+  const confirm = await postJson(server.base, "/api/v1/orders/confirm", { conversationId: heldBy });
   assert.equal(confirm.status, 409);
   assert.equal(confirm.data.state, "pending");
-
-  const again = await postJson(server.base, "/api/v1/payment/release", { conversationId: res.data.conversationId });
-  assert.equal(again.data.released, false);
 });
 
 test("süresi dolan kuponlu oturuma geç ödeme gelirse kupon kuralları yeniden denetlenir", async () => {

@@ -18,7 +18,6 @@ const {
   HoldLimitError,
   holdKeyFor,
   releaseCustomerPendingOrders,
-  releaseOwnCheckout,
   releaseReservation,
 } = require("../services/stockReservation");
 const { recordCouponUsageForOrder } = require("../utils/couponUsageService");
@@ -349,10 +348,7 @@ exports.startGuestPaymentSession = async (req, res) => {
     }
 
     // Aynı tarayıcının önceki ödeme oturumu kapatılır; ayırdığı stok yeni denemeye engel olmasın.
-    await releaseCustomerPendingOrders({
-      email: normalizedGuest.email,
-      previousConversationId: req.body?.previousConversationId,
-    });
+    await releaseCustomerPendingOrders({ previousConversationId: req.body?.previousConversationId });
 
     let pricing;
     try {
@@ -844,19 +840,6 @@ exports.inlineCheckoutHtml = async (req, res) => {
 };
 
 /** MOCK tamamla (sadece geliştirme) */
-// POST /payment/release — müşteri ödeme ekranından ayrıldı (sepete / ödeme adımına döndü).
-// Yalnız oturumu başlatan tarayıcının bildiği conversationId ile çalışır.
-exports.releaseCheckout = async (req, res) => {
-  try {
-    const conversationId = typeof req.body?.conversationId === "string" ? req.body.conversationId.trim() : "";
-    const released = await releaseOwnCheckout(conversationId);
-    return res.json({ released });
-  } catch (e) {
-    console.error("[PAYMENT][release] Hata:", e);
-    return res.status(500).json({ message: "Ödeme oturumu kapatılamadı." });
-  }
-};
-
 exports.mockComplete = async (req, res) => {
   try {
     const isMockProvider =

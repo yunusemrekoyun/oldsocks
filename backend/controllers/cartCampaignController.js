@@ -2,6 +2,7 @@ const mongoose = require("mongoose");
 const CartCampaign = require("../models/CartCampaign");
 const Product = require("../models/Product");
 const { timedCache } = require("../services/timedCache");
+const { heldQuantities } = require("../services/stockReservation");
 const {
   calculateCartPricing,
   checkCartItems,
@@ -267,7 +268,9 @@ exports.listHeaderCampaigns = async (_req, res) => {
 
 exports.checkCartItems = async (req, res) => {
   try {
-    const items = await checkCartItems(req.body?.cartItems);
+    const items = await checkCartItems(req.body?.cartItems, {
+      held: await heldQuantities(req.body?.heldBy),
+    });
     res.set("Cache-Control", "no-store");
     return res.json({ items });
   } catch (err) {
@@ -279,14 +282,18 @@ exports.checkCartItems = async (req, res) => {
 
 exports.previewCartPricing = async (req, res) => {
   try {
-    const { cartItems, selectedCampaignId, couponCode, customerEmail } =
+    const { cartItems, selectedCampaignId, couponCode, customerEmail, heldBy } =
       req.body || {};
+    // Müşteri ödeme ekranından döndüyse kendi ayırdığı adetler ve kupon oturumu ona
+    // engel sayılmaz; ödeme başlatılırken o oturum kapatılır.
     const pricing = await calculateCartPricing(cartItems, {
       selectedCampaignId,
       couponCode,
       customerEmail,
       customerUserId: req.user?.userId || null,
       includeEligibleCampaigns: true,
+      held: await heldQuantities(heldBy),
+      heldConversationId: typeof heldBy === "string" ? heldBy.slice(0, 64) : null,
     });
     return res.json({
       summary: pricing.summary,

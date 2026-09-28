@@ -83,7 +83,6 @@ const RELEASED_REASONS = Object.freeze([
   "reservation_expired",
   "session_replaced",
   "coupon_session_replaced",
-  "customer_left",
 ]);
 
 /**

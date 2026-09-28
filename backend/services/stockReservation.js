@@ -103,18 +103,14 @@ async function releaseReservation(orderId, reason) {
 
 // Müşterinin önceki bekleyen ödeme oturumunu kapatır; yeniden denediğinde kendi ayırdığı
 // son adet ona engel olmasın. Üyelerde hesaba bağlı tüm oturumlar; misafirde yalnız aynı
-// tarayıcının bildirdiği oturum (conversationId + aynı e-posta). E-posta tek başına yetmez:
-// başkasının e-postasını yazan biri onun oturumunu kapatamasın.
-async function releaseCustomerPendingOrders({ userId, email, previousConversationId, olderThan } = {}) {
+// tarayıcının bildirdiği oturum (conversationId yalnız o tarayıcıda tutulur). E-posta tek
+// başına yetmez: başkasının e-postasını yazan biri onun oturumunu kapatamasın.
+async function releaseCustomerPendingOrders({ userId, previousConversationId, olderThan } = {}) {
   let filter;
   if (userId) {
     filter = { status: "pending", user: userId };
-  } else if (typeof previousConversationId === "string" && previousConversationId && email) {
-    filter = {
-      status: "pending",
-      conversationId: previousConversationId.slice(0, 64),
-      "guest.email": String(email).trim().toLowerCase(),
-    };
+  } else if (typeof previousConversationId === "string" && previousConversationId) {
+    filter = { status: "pending", conversationId: previousConversationId.slice(0, 64) };
   } else {
     return 0;
   }
@@ -126,13 +122,26 @@ async function releaseCustomerPendingOrders({ userId, email, previousConversatio
   return pending.length;
 }
 
-// Müşteri ödeme ekranından sepete / ödeme adımına döndü: o oturumun ayırdığı stok bırakılır.
-async function releaseOwnCheckout(conversationId) {
-  if (typeof conversationId !== "string" || !conversationId || conversationId.length > 64) return false;
-  const order = await Order.findOne({ conversationId, status: "pending" }).select("_id").lean();
-  if (!order) return false;
-  await releaseReservation(order._id, "customer_left");
-  return true;
+// Bu tarayıcının açık ödeme oturumunun ayırdığı adetler ("ürün|beden" → adet). Müşteri
+// ödeme ekranından sepete dönerse ayrım sürer (başka sekmede ödeme formu açık olabilir);
+// sepet ve ödeme adımı bu adetleri müşteriye mevcut sayar. Yeni ödeme başlatılınca bu
+// oturum kapanır.
+async function heldQuantities(conversationId) {
+  const held = new Map();
+  if (typeof conversationId !== "string" || !conversationId || conversationId.length > 64) return held;
+  const order = await Order.findOne({
+    conversationId,
+    status: "pending",
+    stockUpdated: true,
+    stockReservedUntil: { $gt: new Date() },
+  })
+    .select("items.productId items.size items.qty")
+    .lean();
+  for (const item of order?.items || []) {
+    const key = `${item.productId}|${item.size || ""}`;
+    held.set(key, (held.get(key) || 0) + (Number(item.qty) || 0));
+  }
+  return held;
 }
 
 async function releaseExpiredReservations(limit = 50) {
@@ -154,7 +163,7 @@ module.exports = {
   HOLDS_PER_IP,
   HoldLimitError,
   holdKeyFor,
-  releaseOwnCheckout,
+  heldQuantities,
   PAYTR_TIMEOUT_MINUTES,
   createOrderWithReservation,
   releaseReservation,

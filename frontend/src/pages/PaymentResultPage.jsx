@@ -91,8 +91,8 @@ export default function PaymentResultPage() {
       if (!active) return;
       if (result.orderNumber) setOrderNumber(result.orderNumber);
       if (result.state === "paid" || result.state === "review") clearCartOnce();
-      // Başarısızsa oturum hatırlanır: müşteri sepete dönünce ayrım (varsa) bırakılır.
-      if (["paid", "review", "invalid"].includes(result.state)) forgetCheckout();
+      // Başarısızsa oturum hatırlanır: yeniden ödemede eski oturum kapatılır.
+      if (["paid", "review", "invalid"].includes(result.state)) forgetCheckout(conversationId);
       if (result.state === "review" && result.message) setReviewMessage(result.message);
       setPhase(result.state);
     };
@@ -103,7 +103,11 @@ export default function PaymentResultPage() {
       if (result.state !== "pending") return finish(result);
       // PayTR "başarısız" dönüşünde beklemeye gerek yok.
       if (urlStatus === "failure") return finish({ state: "failed" });
-      if (Date.now() - startedAt >= POLL_LIMIT_MS) return setPhase("slow");
+      if (Date.now() - startedAt >= POLL_LIMIT_MS) {
+        // Ödeme sayfası başarılı döndü, onay gecikiyor: yeni ödeme bu oturumu kapatmasın.
+        if (urlStatus === "success") forgetCheckout(conversationId);
+        return setPhase("slow");
+      }
       timer = setTimeout(poll, POLL_INTERVAL_MS);
     };
 

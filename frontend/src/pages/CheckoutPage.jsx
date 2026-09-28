@@ -12,7 +12,7 @@ import PageLoading from "../components/common/PageLoading";
 import OrderConsent from "../components/legal/OrderConsent";
 import { LEGAL_VERSION } from "../legal/store";
 import usePageMeta from "../hooks/usePageMeta";
-import { previousCheckout, rememberCheckout, releaseOwnCheckout } from "../utils/checkoutSession";
+import { previousCheckout, rememberCheckout } from "../utils/checkoutSession";
 
 function getPhoneDigits(value) {
   return String(value || "")
@@ -106,12 +106,11 @@ export default function CheckoutPage() {
     setPricingLoading(true);
     const timer = setTimeout(async () => {
       try {
-        // Ödeme ekranından dönüldüyse kendi stok ayrımı önce bırakılır.
-        await releaseOwnCheckout();
         const { data } = await api.post("/cart-campaigns/preview", {
           cartItems: items,
           selectedCampaignId: selectedCampaignId || null,
           couponCode: selectedCouponCode || null,
+          heldBy: previousCheckout(),
         }, { signal: controller.signal });
         if (!alive) return;
         setPricingSummary(data?.summary || null);

@@ -336,6 +336,7 @@ async function resolveCouponForLines(selectedCouponCode, lines, context = {}) {
       status: "pending",
       createdAt: { $gte: new Date(Date.now() - PENDING_HOLD_MS) },
       ...(identity.orderConditions.length ? { $nor: identity.orderConditions } : {}),
+      ...(context.heldConversationId ? { conversationId: { $ne: context.heldConversationId } } : {}),
     };
     const used = await Order.countDocuments({ $or: [usedFilter, othersPending] });
     if (used >= coupon.maxUses) {
@@ -389,9 +390,15 @@ function selectCampaign(eligibleCampaigns, selectedCampaignId) {
   return found;
 }
 
+// held: bu tarayıcının açık ödeme oturumunun ayırdığı adetler ("ürün|beden" → adet);
+// müşteriye mevcut sayılır (services/stockReservation: heldQuantities).
+function heldFor(held, productId, sizeRecord) {
+  return held instanceof Map ? held.get(`${productId}|${sizeRecord?.size || ""}`) || 0 : 0;
+}
+
 // Sepet eşitleme: her satırın güncel fiyatını ve stoğunu döner, hata fırlatmaz.
 // status: ok | missing (ürün yok/arşivde) | size_missing | insufficient (stok az)
-async function checkCartItems(rawItems) {
+async function checkCartItems(rawItems, { held } = {}) {
   if (!Array.isArray(rawItems) || rawItems.length > 100) {
     throw new HttpError(400, "Sepet boş veya geçersiz.");
   }
@@ -420,7 +427,7 @@ async function checkCartItems(rawItems) {
       originalPrice: Number(product.originalPrice) > 0 ? Number(product.originalPrice) : Number(product.price),
     };
     if (!sizeRecord) return { ...base, status: "size_missing", available: 0 };
-    const available = Math.max(0, Number(sizeRecord.stock || 0));
+    const available = Math.max(0, Number(sizeRecord.stock || 0)) + heldFor(held, product._id, sizeRecord);
     const qty = Number.isSafeInteger(line.qty) && line.qty > 0 ? line.qty : 1;
     return { ...base, available, status: qty > available ? "insufficient" : "ok" };
   });
@@ -471,7 +478,7 @@ async function calculateCartPricing(rawItems, options = {}) {
       throw new HttpError(409, `Seçilen beden stokta yok: ${product.name}`);
     }
 
-    const available = Number(sizeRecord.stock || 0);
+    const available = Number(sizeRecord.stock || 0) + heldFor(options?.held, product._id, sizeRecord);
     if (entry.qty > available) {
       throw new HttpError(409, `Yetersiz stok: ${product.name}`);
     }
@@ -499,6 +506,7 @@ async function calculateCartPricing(rawItems, options = {}) {
   const appliedCoupon = await resolveCouponForLines(selectedCouponCode, orderItems, {
     customerUserId: options?.customerUserId || null,
     customerEmail: options?.customerEmail || "",
+    heldConversationId: options?.heldConversationId || null,
   });
 
   const appliedCampaign =
