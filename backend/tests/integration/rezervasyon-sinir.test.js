@@ -178,7 +178,15 @@ test("bağlantı başına ayrım sayımı kendi indeksini kullanır", async () =
       stockReservedUntil: { $gt: new Date() },
     })
     .explain("queryPlanner");
-  assert.match(JSON.stringify(plan.queryPlanner.winningPlan), new RegExp(indexName));
+  // Kısmi indeks yalnız $type ile yazılmış sorguda aday olur; seçilip seçilmemesi veri
+  // miktarına bağlı olduğundan aday planlar arasında olması yeterli.
+  const candidates = [plan.queryPlanner.winningPlan, ...(plan.queryPlanner.rejectedPlans || [])];
+  assert.match(JSON.stringify(candidates), new RegExp(indexName));
+  const plain = await orders
+    .find({ stockHoldKey: "10.20.0.1", status: "pending", stockUpdated: true, stockReservedUntil: { $gt: new Date() } })
+    .explain("queryPlanner");
+  const plainCandidates = [plain.queryPlanner.winningPlan, ...(plain.queryPlanner.rejectedPlans || [])];
+  assert.doesNotMatch(JSON.stringify(plainCandidates), new RegExp(indexName));
 });
 
 test("aynı tarayıcıda başka hesaba geçen üyenin önizlemesi önceki hesabın ayrımını saymaz", async () => {
