@@ -20,19 +20,6 @@ function couponIdentity({ customerUserId, customerEmail } = {}) {
   ];
 }
 
-// Aynı müşterinin aynı kuponla açtığı eski ödeme oturumlarını kapatır. Kapatılan
-// siparişe sonradan ödeme gelirse PayTR bildirimi onu incelemeye alır.
-async function supersedePendingCouponOrders(order) {
-  const couponId = order?.coupon?.couponId;
-  const identity = couponIdentity({ customerUserId: order?.user, customerEmail: order?.guest?.email });
-  if (!couponId || !identity.length) return 0;
-  const result = await Order.updateMany(
-    { _id: { $lt: order._id }, "coupon.couponId": couponId, status: "pending", $or: identity },
-    { $set: { status: "cancelled", cancelReason: "coupon_session_replaced", cancelledAt: new Date() } }
-  );
-  return result.modifiedCount;
-}
-
 class HttpError extends Error {
   constructor(status, message, extras = {}) {
     super(message);
@@ -347,8 +334,8 @@ async function resolveCouponForLines(selectedCouponCode, lines, context = {}) {
 
   // Ödenmiş siparişler ile başka müşterilerin son 24 saatte açtığı ödeme oturumları
   // kullanım sayılır. Aynı müşterinin bekleyen oturumu sayılmaz: yeni oturum açıldığında
-  // eskisi iptal edilir (supersedePendingCouponOrders), böylece kartı reddedilen müşteri
-  // tekrar deneyebilir.
+  // eskisi kapatılır (services/stockReservation: releaseCustomerPendingOrders), böylece
+  // kartı reddedilen müşteri tekrar deneyebilir.
   const identity = couponIdentity(context);
   const usedFilter = { "coupon.couponId": coupon._id, status: { $in: COUPON_USED_STATUSES } };
 
@@ -604,5 +591,4 @@ module.exports = {
   calculateCartPricing,
   checkCartItems,
   nowInRange,
-  supersedePendingCouponOrders,
 };

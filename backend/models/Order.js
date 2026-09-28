@@ -132,6 +132,8 @@ const OrderSchema = new mongoose.Schema(
       default: "pending",
     },
     stockUpdated: { type: Boolean, default: false },
+    // Ödeme adımında stok bu siparişe ayrıldıysa ayrımın bitiş anı (bekleyen siparişte).
+    stockReservedUntil: { type: Date, default: null },
     adminSeenAt: { type: Date, default: null },
 
     paytrInit: { type: Object, default: null },
@@ -150,5 +152,6 @@ OrderSchema.pre("validate", function (next) {
 
 OrderSchema.index({ status: 1, adminSeenAt: 1, createdAt: -1 });
 OrderSchema.index({ createdAt: -1 });
+OrderSchema.index({ status: 1, stockReservedUntil: 1 });
 OrderSchema.index({ user: 1, createdAt: -1 });
 module.exports = mongoose.model("Order", OrderSchema);

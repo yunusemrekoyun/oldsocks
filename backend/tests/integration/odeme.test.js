@@ -114,10 +114,10 @@ test("imzası geçersiz bildirim reddedilir, sipariş beklemede kalır", async (
   assert.equal(res.status, 400);
   const after = await Order.findOne({ conversationId });
   assert.equal(after.status, "pending");
-  assert.equal(await stockOf(productId), 2);
+  assert.equal(await stockOf(productId), 1); // ödeme ekranında ayrılan adet ayrılmış kalır
 });
 
-test("eksik tutarlı bildirim siparişi incelemeye alır, stok düşmez", async () => {
+test("eksik tutarlı bildirim siparişi incelemeye alır, ayrılan stok incelemede tutulur", async () => {
   const productId = await seedProduct({ stock: 2 });
   const { conversationId, order } = await startGuestOrder(productId);
   const res = await paytrCallback(server.base, {
@@ -127,12 +127,13 @@ test("eksik tutarlı bildirim siparişi incelemeye alır, stok düşmez", async 
   assert.equal(res.text, "OK");
   const after = await Order.findOne({ conversationId });
   assert.equal(after.status, "payment_review");
-  assert.equal(await stockOf(productId), 2);
+  assert.equal(await stockOf(productId), 1);
 });
 
-test("başarısız ödeme bildirimi bekleyen siparişi iptal eder", async () => {
+test("başarısız ödeme bildirimi bekleyen siparişi iptal eder ve ayrılan stoğu geri ekler", async () => {
   const productId = await seedProduct({ stock: 1 });
   const { conversationId, order } = await startGuestOrder(productId);
+  assert.equal(await stockOf(productId), 0);
   const res = await paytrCallback(server.base, {
     merchantOid: conversationId,
     status: "failed",
@@ -144,20 +145,20 @@ test("başarısız ödeme bildirimi bekleyen siparişi iptal eder", async () => 
   assert.equal(await stockOf(productId), 1);
 });
 
-test("son adet için iki ödeme: ilki ödenir, ikincisi incelemeye düşer (stok eksiye inmez)", async () => {
+test("son adet ödeme ekranında ayrılır: ikinci müşteri ödeme başlatamaz, ilki öder", async () => {
   const productId = await seedProduct({ stock: 1 });
-  const a = await startGuestOrder(productId);
-  const b = await startGuestOrder(productId);
-  const amountA = Math.round(a.order.totalPrice * 100);
-  const amountB = Math.round(b.order.totalPrice * 100);
-  await Promise.all([
-    paytrCallback(server.base, { merchantOid: a.conversationId, totalAmount: amountA }),
-    paytrCallback(server.base, { merchantOid: b.conversationId, totalAmount: amountB }),
-  ]);
-  const statuses = (await Order.find({ conversationId: { $in: [a.conversationId, b.conversationId] } }).toArray())
-    .map((o) => o.status)
-    .sort();
-  assert.deepEqual(statuses, ["paid", "payment_review"]);
+  const a = await startGuestOrder(productId, 1, { email: `ilk-${crypto.randomBytes(3).toString("hex")}@test.local` });
+  assert.equal(await stockOf(productId), 0);
+  const b = await postJson(server.base, "/api/v1/payment/start-guest", {
+    cartItems: [{ id: String(productId), size: "M", qty: 1 }],
+    address,
+    guest: { ...guest, email: `ikinci-${crypto.randomBytes(3).toString("hex")}@test.local` },
+    consent: CONSENT,
+  });
+  assert.equal(b.status, 409);
+  assert.ok(["STOCK_TAKEN", undefined].includes(b.data.code)); // fiyatlama da "yetersiz stok" diyebilir
+  await paytrCallback(server.base, { merchantOid: a.conversationId, totalAmount: Math.round(a.order.totalPrice * 100) });
+  assert.equal((await Order.findOne({ conversationId: a.conversationId })).status, "paid");
   assert.equal(await stockOf(productId), 0);
 });
 

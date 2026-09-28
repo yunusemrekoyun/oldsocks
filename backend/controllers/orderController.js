@@ -10,6 +10,7 @@ const {
 } = require("../utils/updateStock");
 const CouponUsage = require("../models/CouponUsage");
 const { invalidateCatalog } = require("../services/catalogCache");
+const { releaseReservation } = require("../services/stockReservation");
 const { queueOrderMails, queueStatusMail } = require("../services/orderMailQueue");
 const { recordCouponUsageForOrder } = require("../utils/couponUsageService");
 const { normalizeEmailAddress } = require("../utils/email");
@@ -176,6 +177,12 @@ exports.updateOrderStatus = async (req, res) => {
       });
     }
 
+    // Ödemesi alınmamış (bekleyen) sipariş iptal edilirse ödeme adımında ayrılan stok geri eklenir.
+    if (order.status === "pending" && status === "cancelled") {
+      await releaseReservation(order._id, "admin_cancelled_unpaid");
+      return res.json({ message: "Sipariş durumu güncellendi.", order: await Order.findById(order._id) });
+    }
+
     if (
       order.stockUpdated &&
       ["pending", "cancelled"].includes(status)
@@ -185,9 +192,10 @@ exports.updateOrderStatus = async (req, res) => {
           "Stoğu düşülmüş bir sipariş doğrudan bekleyen veya iptal durumuna alınamaz.",
       });
     }
+    // Bekleyen siparişte stok yalnız ayrılmıştır; ödemesi alınmadan gönderilemez.
     if (
       ["shipped", "completed"].includes(status) &&
-      !order.stockUpdated
+      (!order.stockUpdated || !["paid", "shipped", "completed"].includes(order.status))
     ) {
       return res.status(409).json({
         message: "Ödemesi ve stok işlemi tamamlanmamış sipariş gönderilemez.",

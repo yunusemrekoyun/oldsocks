@@ -6,6 +6,7 @@
 const Order = require("../models/Order");
 const { dispatchOrderPlacedMail } = require("../utils/orderMailDispatch");
 const { sendAdminAlertMail, sendOrderStatusMail } = require("../utils/mailer");
+const { releaseExpiredReservations, releaseReservation } = require("./stockReservation");
 
 const PAID_STATUSES = ["paid", "shipped", "completed"];
 const CLAIM_TTL_MS = 5 * 60 * 1000;
@@ -151,14 +152,22 @@ function queueStatusMail(orderId, kind) {
 // ödeme gelirse PayTR bildirimi siparişi incelemeye alır, yönetici uyarılır.
 const ABANDON_AFTER_MS = 24 * 60 * 60 * 1000;
 async function closeAbandonedOrders() {
+  const cutoff = new Date(Date.now() - ABANDON_AFTER_MS);
+  // Stok ayrılmış olanlar stok geri eklenerek kapatılır (normalde süre dolunca zaten kapanır).
+  const reserved = await Order.find({ status: "pending", stockUpdated: true, createdAt: { $lt: cutoff } })
+    .select("_id")
+    .limit(50)
+    .lean();
+  for (const { _id } of reserved) await releaseReservation(_id, "payment_abandoned");
   const result = await Order.updateMany(
-    { status: "pending", createdAt: { $lt: new Date(Date.now() - ABANDON_AFTER_MS) } },
+    { status: "pending", stockUpdated: { $ne: true }, createdAt: { $lt: cutoff } },
     { $set: { status: "cancelled", cancelReason: "payment_abandoned", cancelledAt: new Date() } }
   );
   if (result.modifiedCount) console.log(`[orders] ${result.modifiedCount} terk edilmiş sipariş kapatıldı.`);
 }
 
 async function sweep() {
+  await releaseExpiredReservations();
   await closeAbandonedOrders();
   const cutoff = new Date(Date.now() - SWEEP_GRACE_MS);
   const pending = await Order.find({

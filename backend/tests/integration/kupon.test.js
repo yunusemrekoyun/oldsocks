@@ -170,7 +170,7 @@ test("kartı reddedilen müşteri aynı kuponla tekrar deneyebilir; eski oturum 
 
   const old = await Orders.findOne({ conversationId: first.data.conversationId });
   assert.equal(old.status, "cancelled");
-  assert.equal(old.cancelReason, "coupon_session_replaced");
+  assert.equal(old.cancelReason, "session_replaced");
   const current = await Orders.findOne({ conversationId: second.data.conversationId });
   assert.equal(current.status, "pending");
 });

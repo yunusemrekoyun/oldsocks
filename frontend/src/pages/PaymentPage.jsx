@@ -27,6 +27,8 @@ export default function PaymentPage() {
 
   const isGuest = location.state?.guest === true;
   const conversationId = location.state?.conversationId;
+  // Ödeme ekranına geçerken ürünler bu siparişe ayrıldı; bitiş saati gösterilir.
+  const reservedUntil = location.state?.reservedUntil ? new Date(location.state.reservedUntil) : null;
   const selectedAddressIdFromState = location.state?.selectedAddress || null;
 
   const [addresses, setAddresses] = useState([]);
@@ -156,6 +158,13 @@ export default function PaymentPage() {
               <p className="text-sm text-gray-500 mt-1">
                 Kart bilgilerinizi güvenle PayTR formu üzerinden girin.
               </p>
+              {reservedUntil && !Number.isNaN(reservedUntil.getTime()) && (
+                <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900">
+                  Sepetinizdeki ürünler{" "}
+                  <b>{reservedUntil.toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" })}</b>{" "}
+                  saatine kadar sizin için ayrıldı. Ödemeyi bu süre içinde tamamlayın.
+                </p>
+              )}
             </header>
             <div className="w-full">
               <div

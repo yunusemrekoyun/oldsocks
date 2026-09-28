@@ -341,6 +341,7 @@ export default function GuestCheckoutPage() {
           state: {
             conversationId: data.conversationId,
             guest: true,
+            reservedUntil: data.reservedUntil || null,
             summary,
           },
         });

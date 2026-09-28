@@ -31,6 +31,9 @@ const REASON_LABELS = {
   paid_after_cancel:
     "İptal edilmiş siparişe ödeme geldi; PayTR panelinden kontrol edip tamamlayın ya da iade edin.",
   admin_cancelled: "Yönetici iptal etti (iade kaydı girildi).",
+  admin_cancelled_unpaid: "Yönetici ödenmemiş siparişi iptal etti; ayrılan stok geri eklendi.",
+  reservation_expired: "Ödeme süresi içinde tamamlanmadı; ayrılan stok geri eklendi.",
+  session_replaced: "Müşteri yeni bir ödeme başlattığı için bu oturum kapatıldı; stok geri eklendi.",
   coupon_session_replaced:
     "Müşteri aynı kuponla yeni bir ödeme başlattığı için bu oturum kapatıldı.",
 };
@@ -242,7 +245,11 @@ export default function OrderDetailsModal({
       },
       { label: "İptal Tarihi", value: fmtDate(order.cancelledAt) },
       { label: "Admin Görme Tarihi", value: fmtDate(order.adminSeenAt) },
-      { label: "Stok Güncellendi", value: fmtBool(order.stockUpdated) },
+      {
+        label: order.status === "pending" ? "Stok Ayrıldı" : "Stok Güncellendi",
+        value: fmtBool(order.stockUpdated),
+      },
+      { label: "Stok Ayrımı Bitişi", value: order.status === "pending" ? fmtDate(order.stockReservedUntil) : "-" },
       { label: "Kargo Yöntemi", value: valueOrDash(order.shipping?.name) },
       { label: "Kargo Firması", value: valueOrDash(order.shipping?.carrier) },
       { label: "Takip Numarası", value: valueOrDash(order.shipping?.trackingNumber) },

@@ -6,14 +6,18 @@ const User = require("../models/User");
 const Order = require("../models/Order");
 const { queueOrderMails, queuePaymentReviewAlert } = require("../services/orderMailQueue");
 const {
+  RELEASED_REASONS,
   finalizeOrderPayment,
   StockUnavailableError,
   OrderPaymentStateError,
 } = require("../utils/updateStock");
+const { calculateCartPricing } = require("../services/cartPricingService");
 const {
-  calculateCartPricing,
-  supersedePendingCouponOrders,
-} = require("../services/cartPricingService");
+  PAYTR_TIMEOUT_MINUTES,
+  createOrderWithReservation,
+  releaseCustomerPendingOrders,
+  releaseReservation,
+} = require("../services/stockReservation");
 const { recordCouponUsageForOrder } = require("../utils/couponUsageService");
 const { consentVersionLabel } = require("../services/legalDocuments");
 
@@ -71,6 +75,15 @@ async function readConsent(req) {
     userAgent: String(req.get("user-agent") || "").slice(0, 300) || null,
   };
 }
+
+// Ödeme başlatılırken son adet başka bir müşteriye ayrılmışsa sipariş oluşmaz.
+const STOCK_TAKEN = {
+  code: "STOCK_TAKEN",
+  source: "stock",
+  message:
+    "Sepetinizdeki bir ürünün stoğu az önce tükendi ya da başka bir müşterinin ödemesi için ayrıldı. Sepetinizi kontrol edip tekrar deneyin.",
+};
+const stockTakenAsNull = (err) => (err instanceof StockUnavailableError ? null : Promise.reject(err));
 
 const CONSENT_REQUIRED = {
   code: "CONSENT_REQUIRED",
@@ -261,6 +274,9 @@ exports.startGuestPaymentSession = async (req, res) => {
       });
     }
 
+    // Müşterinin önceki ödeme oturumu varsa kapatılır; ayırdığı stok yeni denemeye engel olmasın.
+    await releaseCustomerPendingOrders({ email: normalizedGuest.email });
+
     let pricing;
     try {
       pricing = await calculateCartPricing(cartItems, {
@@ -286,7 +302,8 @@ exports.startGuestPaymentSession = async (req, res) => {
     const orderNumber = Math.floor(1e9 + Math.random() * 9e9).toString();
 
     // 3) Order yarat (user YOK, guest DOLU)
-    const createdOrder = await Order.create({
+    // Stok bu siparişe ayrılır (ödeme ekranı); yetmezse sipariş oluşmaz.
+    const createdOrder = await createOrderWithReservation({
       orderNumber,
       user: undefined,
       guest: {
@@ -342,16 +359,13 @@ exports.startGuestPaymentSession = async (req, res) => {
         name: pricing.summary.shippingName,
         fee: pricing.summary.shippingFee,
       },
-    });
-    if (createdOrder.coupon?.couponId) {
-      await supersedePendingCouponOrders(createdOrder).catch((err) =>
-        console.warn("[PAYMENT] eski kupon oturumu kapatılamadı:", err?.message || err)
-      );
-    }
+    }).catch(stockTakenAsNull);
+    if (!createdOrder) return res.status(409).json(STOCK_TAKEN);
 
     return res.json({
       conversationId,
       inlineUrl: `${process.env.BACKEND_PUBLIC_URL}/api/v1/payment/inline/${conversationId}`,
+      reservedUntil: createdOrder.stockReservedUntil,
       summary: pricing.summary,
       appliedCampaign: pricing.appliedCampaign,
       appliedCoupon: pricing.appliedCoupon,
@@ -414,6 +428,8 @@ exports.startPaymentSession = async (req, res) => {
       });
     }
 
+    await releaseCustomerPendingOrders({ userId, email });
+
     let pricing;
     try {
       pricing = await calculateCartPricing(cartItems, {
@@ -440,7 +456,8 @@ exports.startPaymentSession = async (req, res) => {
     const orderNumber = Math.floor(1e9 + Math.random() * 9e9).toString();
 
     // Pending Order
-    const createdOrder = await Order.create({
+    // Stok bu siparişe ayrılır (ödeme ekranı); yetmezse sipariş oluşmaz.
+    const createdOrder = await createOrderWithReservation({
       orderNumber,
       user: userId,
       items: pricing.items,
@@ -489,16 +506,13 @@ exports.startPaymentSession = async (req, res) => {
         name: pricing.summary.shippingName,
         fee: pricing.summary.shippingFee,
       },
-    });
-    if (createdOrder.coupon?.couponId) {
-      await supersedePendingCouponOrders(createdOrder).catch((err) =>
-        console.warn("[PAYMENT] eski kupon oturumu kapatılamadı:", err?.message || err)
-      );
-    }
+    }).catch(stockTakenAsNull);
+    if (!createdOrder) return res.status(409).json(STOCK_TAKEN);
 
     return res.json({
       conversationId,
       inlineUrl: `${process.env.BACKEND_PUBLIC_URL}/api/v1/payment/inline/${conversationId}`,
+      reservedUntil: createdOrder.stockReservedUntil,
       summary: pricing.summary,
       appliedCampaign: pricing.appliedCampaign,
       appliedCoupon: pricing.appliedCoupon,
@@ -693,7 +707,8 @@ exports.inlineCheckoutHtml = async (req, res) => {
       user_phone,
       merchant_ok_url: okUrl,
       merchant_fail_url: failUrl,
-      timeout_limit: "30",
+      // Ödeme sayfası stok ayrımı bitmeden kapanır (bkz. services/stockReservation).
+      timeout_limit: String(PAYTR_TIMEOUT_MINUTES),
       debug_on: process.env.NODE_ENV === "production" ? "0" : "1",
       lang: "tr",
       paytr_token,
@@ -758,7 +773,7 @@ exports.mockComplete = async (req, res) => {
 
     if (!(order.status === "paid" && order.stockUpdated)) {
       try {
-        order = await finalizeOrderPayment(order._id);
+        order = await finalizeOrderPayment(order._id, { allowReleased: true });
         order.paymentId = `mock_${conversationId}`;
         order.paymentReceivedAt ||= new Date();
       } catch (e) {
@@ -823,9 +838,13 @@ exports.paytrCallback = async (req, res) => {
       if (["payment_review", "shipped", "completed"].includes(order.status)) {
         return res.send("OK");
       }
-      // İptal edilmiş (ör. terk edildiği için kapatılmış) siparişe ödeme geldiyse
-      // sessizce yok sayma: para alındı, yönetici bilmeli.
-      if (order.status === "cancelled") {
+      // Sistemin kapattığı oturum (stok ayrımı süresi doldu, müşteri yeni ödeme başlattı)
+      // için geç gelen ödeme: stok yeniden düşülmeye çalışılır, yetmezse incelemeye düşer.
+      const releasedSession =
+        order.status === "cancelled" && RELEASED_REASONS.includes(order.cancelReason);
+      // Yöneticinin iptal ettiği siparişe ödeme geldiyse sessizce yok sayma: para alındı,
+      // yönetici bilmeli.
+      if (order.status === "cancelled" && !releasedSession) {
         order.status = "payment_review";
         order.paymentId = merchant_oid;
         order.paymentReceivedAt = new Date();
@@ -855,7 +874,7 @@ exports.paytrCallback = async (req, res) => {
       }
 
       try {
-        order = await finalizeOrderPayment(order._id);
+        order = await finalizeOrderPayment(order._id, { allowReleased: releasedSession });
         order.paymentId = merchant_oid;
         order.paymentReceivedAt ||= new Date();
       } catch (e) {
@@ -878,16 +897,11 @@ exports.paytrCallback = async (req, res) => {
       // E-posta PayTR'ye yanıt verildikten sonra arka planda gönderilir.
       queueOrderMails(order._id);
     } else {
-      await Order.updateOne(
-        { conversationId: merchant_oid, status: "pending" },
-        {
-          $set: {
-            status: "cancelled",
-            cancelReason: "payment_failed",
-            cancelledAt: new Date(),
-          },
-        }
-      );
+      // Ödeme başarısız: sipariş kapanır, ayrılan stok geri eklenir.
+      const order = await Order.findOne({ conversationId: merchant_oid, status: "pending" })
+        .select("_id")
+        .lean();
+      if (order) await releaseReservation(order._id, "payment_failed");
     }
     return res.send("OK");
   } catch (e) {

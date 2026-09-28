@@ -334,6 +334,7 @@ export default function CheckoutPage() {
           state: {
             conversationId: data.conversationId,
             selectedAddress: selectedAddress,
+            reservedUntil: data.reservedUntil || null,
             summary,
           },
         });

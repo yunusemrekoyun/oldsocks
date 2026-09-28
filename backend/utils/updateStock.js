@@ -74,12 +74,24 @@ async function restoreStock(order, options = {}) {
   return { skipped };
 }
 
+// Sistemin kısa süre içinde kapattığı (stoğu geri verilmiş) ödeme oturumları. Bunlara
+// sonradan başarılı ödeme gelirse stok yeniden düşülmeye çalışılır. 24 saat sonra
+// kapatılan (payment_abandoned) veya yöneticinin iptal ettiği siparişe gelen ödeme ise
+// yöneticinin incelemesine düşer.
+const RELEASED_REASONS = Object.freeze([
+  "reservation_expired",
+  "session_replaced",
+  "coupon_session_replaced",
+]);
+
 /**
- * Stok düşümü ile siparişin paid işaretlenmesini tek Mongo işlemi içinde yapar.
- * Aynı PayTR bildirimi eşzamanlı gelse bile transaction yeniden denendiğinde ikinci
- * işlem paid + stockUpdated durumunu görür ve stoğu tekrar düşmez.
+ * Siparişi "ödendi" yapar; stok ödeme adımında ayrıldıysa tekrar düşmez, ayrılmadıysa
+ * (eski oturum ya da süresi dolup geri verilmiş rezervasyon) aynı işlemde düşer.
+ * Aynı PayTR bildirimi eşzamanlı gelse bile ikinci işlem paid + stockUpdated durumunu
+ * görür ve stoğu tekrar düşmez.
+ * allowReleased: sistemin kapattığı oturuma geç gelen ödemeyi kabul et.
  */
-async function finalizeOrderPayment(orderId) {
+async function finalizeOrderPayment(orderId, { allowReleased = false } = {}) {
   const session = await Order.startSession();
   try {
     await session.withTransaction(async () => {
@@ -91,17 +103,21 @@ async function finalizeOrderPayment(orderId) {
       }
 
       if (order.status === "paid" && order.stockUpdated) return;
-      if (
-        !["pending", "payment_review", "paid"].includes(order.status) ||
-        order.stockUpdated
-      ) {
+      const released =
+        allowReleased && order.status === "cancelled" && RELEASED_REASONS.includes(order.cancelReason);
+      if (!["pending", "payment_review", "paid"].includes(order.status) && !released) {
         throw new OrderPaymentStateError();
       }
 
-      await applyStockChanges(order, { session });
+      if (!order.stockUpdated) await applyStockChanges(order, { session });
       order.status = "paid";
       order.stockUpdated = true;
+      order.stockReservedUntil = null;
       order.adminSeenAt = null;
+      if (released) {
+        order.cancelReason = null;
+        order.cancelledAt = null;
+      }
       await order.save({ session });
     });
     // İşlem kaydedildikten sonra: vitrin stoğu hemen güncel görünsün.
@@ -114,6 +130,7 @@ async function finalizeOrderPayment(orderId) {
 }
 
 module.exports = {
+  RELEASED_REASONS,
   applyStockChanges,
   restoreStock,
   finalizeOrderPayment,
