@@ -34,11 +34,12 @@ const CANCELLABLE = ["payment_review", "paid", "shipped", "completed"];
 const withDrafts = (o) => ({
   ...o,
   selectedStatus: o.status,
-  carrierDraft: o.shipping?.carrier || "",
+  // Firma girilmediyse Kargo ayarlarındaki yöntem adı (siparişte kayıtlı) kullanılır.
+  carrierDraft: o.shipping?.carrier || o.shipping?.name || "",
   trackingDraft: o.shipping?.trackingNumber || "",
 });
 const trackingChanged = (o) =>
-  o.carrierDraft.trim() !== (o.shipping?.carrier || "") ||
+  o.carrierDraft.trim() !== (o.shipping?.carrier || o.shipping?.name || "") ||
   o.trackingDraft.replace(/\s+/g, "") !== (o.shipping?.trackingNumber || "");
 
 const STATUS_LABELS = {
@@ -256,10 +257,6 @@ export default function OrdersPage() {
     if (!order) return;
     if (order.selectedStatus === "cancelled" && CANCELLABLE.includes(order.status)) {
       openCancel(order);
-      return;
-    }
-    if (order.selectedStatus === "shipped" && order.carrierDraft.trim().length < 2) {
-      setToast({ type: "error", msg: "Kargoya vermek için kargo firmasını girin." });
       return;
     }
     if (order.selectedStatus === "paid" && order.status !== "paid") {
@@ -778,7 +775,7 @@ export default function OrdersPage() {
                       </div>
                       {statusChanged ? (
                         <p className="text-xs text-dark2 sm:col-span-2">
-                          Kaydedince müşteriye kargo firması ve takip numarasıyla e-posta gider.
+                          Kargo firması Kargo ayarlarından gelir; takip numarası isteğe bağlıdır. Kaydedince müşteriye kargo e-postası gider.
                         </p>
                       ) : (
                         <p className="flex items-center justify-between gap-3 text-xs text-dark2 sm:col-span-2">

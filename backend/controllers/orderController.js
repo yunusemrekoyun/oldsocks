@@ -14,17 +14,22 @@ const { queueOrderMails, queueStatusMail } = require("../services/orderMailQueue
 const { recordCouponUsageForOrder } = require("../utils/couponUsageService");
 const { normalizeEmailAddress } = require("../utils/email");
 
-// Kargo firması zorunlu, takip numarası isteğe bağlı.
+// Kargo firması ve takip numarası isteğe bağlı. Firma boşsa siparişin kargo
+// yönteminin adı (Kargo ayarlarında girilen) kullanılır.
 function parseTracking(body) {
   const carrier = String(body?.carrier ?? "").trim().replace(/\s+/g, " ");
   const trackingNumber = String(body?.trackingNumber ?? "").trim().replace(/\s+/g, "");
-  if (carrier.length < 2 || carrier.length > 60) {
-    return { error: "Kargo firmasını girin." };
+  if (carrier.length > 60) {
+    return { error: "Kargo firması en fazla 60 karakter olabilir." };
   }
   if (trackingNumber.length > 60 || (trackingNumber && !/^[A-Za-z0-9-]+$/.test(trackingNumber))) {
     return { error: "Takip numarası yalnız harf, rakam ve tire içerebilir (en fazla 60 karakter)." };
   }
-  return { carrier, trackingNumber: trackingNumber || null };
+  return { carrier: carrier || null, trackingNumber: trackingNumber || null };
+}
+
+function carrierFor(order, tracking) {
+  return tracking.carrier || order.shipping?.carrier || order.shipping?.name || null;
 }
 
 async function persistCouponUsage(order) {
@@ -210,7 +215,7 @@ exports.updateOrderStatus = async (req, res) => {
     } else {
       order.status = status;
       if (status === "shipped") {
-        order.shipping.carrier = tracking.carrier;
+        order.shipping.carrier = carrierFor(order, tracking);
         order.shipping.trackingNumber = tracking.trackingNumber;
         if (!order.shippedAt) order.shippedAt = new Date();
       }
@@ -310,14 +315,13 @@ exports.updateOrderTracking = async (req, res) => {
   try {
     const tracking = parseTracking(req.body);
     if (tracking.error) return res.status(400).json({ message: tracking.error });
-    const order = await Order.findOneAndUpdate(
-      { _id: req.params.id, status: { $in: ["shipped", "completed"] } },
-      { $set: { "shipping.carrier": tracking.carrier, "shipping.trackingNumber": tracking.trackingNumber } },
-      { new: true }
-    );
+    const order = await Order.findOne({ _id: req.params.id, status: { $in: ["shipped", "completed"] } });
     if (!order) {
       return res.status(409).json({ message: "Kargo bilgisi yalnız kargoya verilmiş siparişte düzenlenebilir." });
     }
+    order.shipping.carrier = carrierFor(order, tracking);
+    order.shipping.trackingNumber = tracking.trackingNumber;
+    await order.save();
     res.json({ message: "Kargo bilgisi güncellendi.", order });
   } catch (err) {
     console.error("updateOrderTracking error:", err);

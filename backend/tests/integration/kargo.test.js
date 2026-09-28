@@ -98,12 +98,16 @@ test.after(async () => {
   await server?.stop();
 });
 
-test("kargoya verirken firma zorunlu; müşteriye takip numaralı e-posta bir kez gider", async () => {
+test("kargo firması girilmezse Kargo ayarlarındaki yöntem adı kullanılır; e-posta bir kez gider", async () => {
   const to = email("kargo");
   const { _id } = await seedOrder({ guestEmail: to });
 
-  const missing = await admin("PUT", `/orders/${_id}/status`, { status: "shipped" });
-  assert.equal(missing.status, 400);
+  // Firma yazılmadan kargoya verilir: siparişteki kargo yöntemi ("Standart") firma olur.
+  const plain = await seedOrder({ guestEmail: email("firmasiz") });
+  const noCarrier = await admin("PUT", `/orders/${plain._id}/status`, { status: "shipped" });
+  assert.equal(noCarrier.status, 200, JSON.stringify(noCarrier.data));
+  assert.equal((await Orders.findOne({ _id: plain._id })).shipping.carrier, "Standart");
+
   const badNumber = await admin("PUT", `/orders/${_id}/status`, {
     status: "shipped",
     carrier: "Yurtiçi Kargo",
