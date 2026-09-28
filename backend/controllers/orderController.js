@@ -179,7 +179,8 @@ exports.updateOrderStatus = async (req, res) => {
     }
 
     // Ödemesi alınmamış (bekleyen) sipariş iptal edilirse ödeme adımında ayrılan stok geri eklenir.
-    if (order.status === "pending" && status === "cancelled") {
+    // Ayrım sisteminden önceki, stoğu düşülmüş bekleyen sipariş eskisi gibi aşağıda reddedilir.
+    if (order.status === "pending" && status === "cancelled" && (!order.stockUpdated || order.stockReservedUntil)) {
       await releaseReservation(order._id, "admin_cancelled_unpaid");
       return res.json({ message: "Sipariş durumu güncellendi.", order: await Order.findById(order._id) });
     }

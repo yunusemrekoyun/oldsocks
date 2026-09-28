@@ -86,7 +86,10 @@ async function releaseReservation(orderId, reason) {
     const order = await Order.findById(orderId).session(session);
     if (!order || order.status !== "pending") return false;
     let didRestore = false;
-    if (order.stockUpdated) {
+    // Yalnız ödeme adımındaki ayrım (bitiş anı kayıtlı) geri verilir. Ayrım sisteminden
+    // önceki bekleyen siparişlerde stoğun neden düşülü olduğu bilinmez (ör. ödenmiş
+    // siparişin yönetici tarafından bekleyene çekilmesi): stoğa dokunulmaz.
+    if (order.stockUpdated && order.stockReservedUntil) {
       const { skipped } = await restoreStock(order, { session });
       // Ürün ya da beden silinmişse adet geri eklenemez; sessizce kaybolmasın.
       if (skipped.length) {

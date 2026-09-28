@@ -12,6 +12,10 @@ const PAID_STATUSES = ["paid", "shipped", "completed"];
 const CLAIM_TTL_MS = 5 * 60 * 1000;
 const SWEEP_MS = Number(process.env.ORDER_MAIL_SWEEP_MS || 60 * 1000);
 const SWEEP_GRACE_MS = Number(process.env.ORDER_MAIL_SWEEP_GRACE_MS || 60 * 1000);
+// Tarama yalnız son günlerde ödemesi alınmış siparişlere bakar: eski siparişlere (e-posta
+// kaydı tutulmadan önceki ya da gönderimi o zaman başarısız olmuş) haftalar sonra onay
+// e-postası ya da yöneticiye inceleme uyarısı gitmesin.
+const ORDER_MAIL_MAX_AGE_MS = 3 * 24 * 60 * 60 * 1000;
 
 async function claim(orderId) {
   const now = new Date();
@@ -155,13 +159,19 @@ const ABANDON_AFTER_MS = 24 * 60 * 60 * 1000;
 async function closeAbandonedOrders() {
   const cutoff = new Date(Date.now() - ABANDON_AFTER_MS);
   // Stok ayrılmış olanlar stok geri eklenerek kapatılır (normalde süre dolunca zaten kapanır).
-  const reserved = await Order.find({ status: "pending", stockUpdated: true, createdAt: { $lt: cutoff } })
+  const reserved = await Order.find({
+    status: "pending",
+    stockUpdated: true,
+    stockReservedUntil: { $ne: null },
+    createdAt: { $lt: cutoff },
+  })
     .select("_id")
     .limit(50)
     .lean();
   for (const { _id } of reserved) await releaseReservation(_id, "payment_abandoned");
+  // Ayrımı olmayanlar (ayrım sisteminden önceki siparişler dahil) stoğa dokunulmadan kapanır.
   const result = await Order.updateMany(
-    { status: "pending", stockUpdated: { $ne: true }, createdAt: { $lt: cutoff } },
+    { status: "pending", stockReservedUntil: null, createdAt: { $lt: cutoff } },
     { $set: { status: "cancelled", cancelReason: "payment_abandoned", cancelledAt: new Date() } }
   );
   if (result.modifiedCount) console.log(`[orders] ${result.modifiedCount} terk edilmiş sipariş kapatıldı.`);
@@ -171,10 +181,11 @@ async function sweep() {
   await releaseExpiredReservations();
   await closeAbandonedOrders();
   const cutoff = new Date(Date.now() - SWEEP_GRACE_MS);
+  const recent = new Date(Date.now() - ORDER_MAIL_MAX_AGE_MS);
   const pending = await Order.find({
     status: { $in: PAID_STATUSES },
     orderMailSentAt: null,
-    paymentReceivedAt: { $ne: null, $lt: cutoff },
+    paymentReceivedAt: { $gte: recent, $lt: cutoff },
     $or: [{ mailAttemptAt: null }, { mailAttemptAt: { $lt: new Date(Date.now() - CLAIM_TTL_MS) } }],
   })
     .select("_id")
@@ -182,7 +193,11 @@ async function sweep() {
     .lean();
   for (const { _id } of pending) await sendOrderMails(_id);
 
-  const reviews = await Order.find({ status: "payment_review", reviewAlertSentAt: null })
+  const reviews = await Order.find({
+    status: "payment_review",
+    reviewAlertSentAt: null,
+    paymentReceivedAt: { $gte: recent },
+  })
     .select("_id")
     .limit(20)
     .lean();
