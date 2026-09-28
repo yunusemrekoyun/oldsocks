@@ -213,3 +213,44 @@ test("çıkış yapıp yeniden giren üyenin kendi ayrımı sepette mevcut sayı
   assert.equal(own.data.items[0].status, "ok");
   assert.equal(own.data.items[0].available, 1);
 });
+
+test("süresi dolmuş oturum anahtarıyla sepet kontrolü 401 döner (istemci yenileyip tekrarlar); bozuk anahtar misafir sayılır", async () => {
+  const jwt = require("jsonwebtoken");
+  const product = await seedProduct();
+  const member = await memberLogin(`suresi-dolan-${crypto.randomBytes(3).toString("hex")}@sinir.test`);
+  const user = await mongoose.connection.collection("users").findOne({ "addresses._id": member.addressId });
+  const expired = jwt.sign({ userId: String(user._id), tokenVersion: 0 }, server.env.JWT_SECRET, { expiresIn: -10 });
+  const cartItems = [{ id: String(product), size: "M", qty: 1 }];
+  const res = await postJson(server.base, "/api/v1/cart-campaigns/check", { cartItems }, { Authorization: `Bearer ${expired}` });
+  assert.equal(res.status, 401);
+  const broken = await postJson(server.base, "/api/v1/cart-campaigns/check", { cartItems }, { Authorization: "Bearer bozuk" });
+  assert.equal(broken.status, 200);
+});
+
+test("önizleme, başka hesabın ödeme oturumunu kupon sayımında hariç tutmaz (üyenin kendi ayrımı olsa da)", async () => {
+  const product = await seedProduct();
+  const other = await seedProduct();
+  const code = `SNR${crypto.randomBytes(3).toString("hex").toUpperCase()}`;
+  await mongoose.connection.collection("coupons").insertOne({
+    code, isEnabled: true, discountType: "percent", discountValue: 10, minimumSubtotal: 0,
+    expiresAt: null, maxUses: 1, productIds: [product], createdAt: new Date(), updatedAt: new Date(),
+  });
+  const a = await memberLogin(`kupon-a-${crypto.randomBytes(3).toString("hex")}@sinir.test`);
+  const b = await memberLogin(`kupon-b-${crypto.randomBytes(3).toString("hex")}@sinir.test`);
+  const withCoupon = await postJson(
+    server.base,
+    "/api/v1/payment/start",
+    { cartItems: [{ id: String(product), size: "M", qty: 1 }], addressId: String(a.addressId), couponCode: code, consent: CONSENT },
+    { Authorization: `Bearer ${a.token}`, "X-Forwarded-For": "10.30.0.5" }
+  );
+  assert.equal(withCoupon.status, 200, JSON.stringify(withCoupon.data));
+  assert.equal((await startMember(b, other)).status, 200);
+  const preview = await postJson(
+    server.base,
+    "/api/v1/cart-campaigns/preview",
+    { cartItems: [{ id: String(product), size: "M", qty: 1 }], couponCode: code, heldBy: withCoupon.data.conversationId },
+    { Authorization: `Bearer ${b.token}` }
+  );
+  assert.equal(preview.status, 409);
+  assert.match(preview.data.message, /kullanım sınırına/);
+});

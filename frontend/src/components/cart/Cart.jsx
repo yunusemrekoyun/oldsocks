@@ -60,13 +60,11 @@ export default function Cart() {
   };
 
   const applyStock = (results) => {
-    const fresh = new Map(results.map((r) => [cartKey(r.id, r.size), r.available ?? 0]));
-    setStockByKey(fresh);
+    setStockByKey(new Map(results.map((r) => [cartKey(r.id, r.size), r.available ?? 0])));
     const { items: next, notices, stockNotices: current, changed } = reconcileCart(items, results);
-    setStockNotices(current);
+    setStockNotices([...new Set(current)]);
     if (notices.length) setCartNotices((prev) => [...new Set([...prev, ...notices])]);
     if (changed) replaceItems(next);
-    return fresh;
   };
 
   useEffect(() => {
@@ -241,26 +239,21 @@ export default function Cart() {
 
   // Stok kontrolü geldiyse adedi mevcut stoğu aşan satır varken ödemeye geçilmez; satır
   // sepette kalır (stok başka bir müşterinin ayrımından dönebilir).
-  const shortOf = (stock) =>
-    stock
-      ? items.filter((item) => {
-          const available = stock.get(cartKey(item.id, item.size));
-          return available !== undefined && item.qty > available;
-        })
-      : [];
-  const shortLines = shortOf(stockByKey);
+  const shortLines = stockByKey
+    ? items.filter((item) => {
+        const available = stockByKey.get(cartKey(item.id, item.size));
+        return available !== undefined && item.qty > available;
+      })
+    : [];
   const [checkoutBlocked, setCheckoutBlocked] = useState(false);
 
-  const handleCheckout = async () => {
+  const handleCheckout = () => {
     if (shortLines.length) {
-      // Engellemeden önce stok yeniden kontrol edilir; arada dönmüş olabilir.
-      const fresh = await checkStock(items)
-        .then(applyStock)
-        .catch(() => stockByKey);
-      if (shortOf(fresh).length) {
-        setCheckoutBlocked(true);
-        return;
-      }
+      // Stok arada dönmüş olabilir: yeniden kontrol edilir (sepet değişirse sonucu
+      // uygulanmaz); döndüyse uyarı kalkar ve müşteri tekrar tıklar.
+      setCheckoutBlocked(true);
+      setStockTick((n) => n + 1);
+      return;
     }
     setCheckoutBlocked(false);
     if (!isLoggedIn) {

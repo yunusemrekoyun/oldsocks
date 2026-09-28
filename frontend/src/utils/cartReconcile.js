@@ -39,7 +39,9 @@ export function reconcileCart(items, results) {
       next.push(item);
       continue;
     }
-    const label = `${item.name || result.name || "Bir ürün"}${item.size ? ` (${item.size})` : ""}`;
+    // Renk de yazılır: aynı adlı renk varyantlarının uyarıları karışmasın.
+    const detail = [item.color, item.size].filter(Boolean).join(", ");
+    const label = `${item.name || result.name || "Bir ürün"}${detail ? ` (${detail})` : ""}`;
     // Yalnız ürün ya da beden kaldırıldıysa satır çıkarılır. Stok az ya da sıfırsa satır ve
     // adet korunur: son adetler başka bir müşterinin ödeme adımında ayrılmış olabilir ve
     // ödeme olmazsa en geç 20 dakikada geri döner. Ödeme adımı stoğu yine sunucuda denetler.

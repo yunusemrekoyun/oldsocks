@@ -268,9 +268,8 @@ exports.listHeaderCampaigns = async (_req, res) => {
 
 exports.checkCartItems = async (req, res) => {
   try {
-    const items = await checkCartItems(req.body?.cartItems, {
-      held: await heldQuantities(req.body?.heldBy, { userId: req.user?.userId || null }),
-    });
+    const { quantities } = await heldQuantities(req.body?.heldBy, { userId: req.user?.userId || null });
+    const items = await checkCartItems(req.body?.cartItems, { held: quantities });
     res.set("Cache-Control", "no-store");
     return res.json({ items });
   } catch (err) {
@@ -294,8 +293,8 @@ exports.previewCartPricing = async (req, res) => {
       customerEmail,
       customerUserId: userId,
       includeEligibleCampaigns: true,
-      held,
-      heldConversationId: held.size && typeof heldBy === "string" ? heldBy.slice(0, 64) : null,
+      held: held.quantities,
+      heldConversationId: held.conversationId,
     });
     return res.json({
       summary: pricing.summary,

@@ -52,3 +52,16 @@ test("stokta kalmayan ürün sepette kalır (başka müşterinin ayrımında ola
   const removed = reconcileCart(items, [{ id: A, size: "M", status: "size_missing", available: 0 }]);
   assert.deepEqual(removed.items, []);
 });
+
+test("aynı adlı renk varyantlarının uyarıları renkle ayrılır", () => {
+  const items = [
+    { id: A, size: "M", qty: 1, price: 100, name: "Çorap", color: "Siyah" },
+    { id: B, size: "M", qty: 1, price: 100, name: "Çorap", color: "Beyaz" },
+  ];
+  const { stockNotices } = reconcileCart(items, [
+    { id: A, size: "M", status: "insufficient", available: 0, price: 100 },
+    { id: B, size: "M", status: "insufficient", available: 0, price: 100 },
+  ]);
+  assert.equal(new Set(stockNotices).size, 2);
+  assert.match(stockNotices[0], /Çorap \(Siyah, M\)/);
+});

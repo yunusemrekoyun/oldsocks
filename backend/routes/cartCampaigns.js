@@ -1,11 +1,11 @@
 const router = require("express").Router();
-const { verifyToken, attachUserIfPresent } = require("../middleware/auth");
+const { verifyToken, attachUserUnlessExpired } = require("../middleware/auth");
 const { allowRoles } = require("../middleware/roles");
 const ctrl = require("../controllers/cartCampaignController");
 
 // Public
-router.post("/preview", attachUserIfPresent, ctrl.previewCartPricing);
-router.post("/check", attachUserIfPresent, ctrl.checkCartItems);
+router.post("/preview", attachUserUnlessExpired, ctrl.previewCartPricing);
+router.post("/check", attachUserUnlessExpired, ctrl.checkCartItems);
 router.get("/header", ctrl.listHeaderCampaigns);
 
 // Admin

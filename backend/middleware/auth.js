@@ -64,3 +64,22 @@ exports.attachUserIfPresent = async (req, _res, next) => {
   }
   return next();
 };
+
+// Sonucu kimliğe göre değişen public uçlar (sepet stok kontrolü, fiyat önizlemesi): süresi
+// dolmuş token sessizce misafir sayılmaz; 401 döner, istemci oturumu yenileyip tekrarlar.
+// Diğer token hataları misafir sayılır.
+exports.attachUserUnlessExpired = async (req, res, next) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader?.startsWith("Bearer ")) {
+    return next();
+  }
+
+  try {
+    req.user = await resolveTokenUser(authHeader.split(" ")[1]);
+  } catch (err) {
+    if (err?.name === "TokenExpiredError") {
+      return res.status(401).json({ message: "Oturum süresi doldu." });
+    }
+  }
+  return next();
+};
