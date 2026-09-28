@@ -4,6 +4,9 @@ import api from "../../../api";
 import { IMaskInput } from "react-imask";
 import { getPasswordValidation } from "../../utils/passwordRules";
 import HoneypotField from "../ui/HoneypotField";
+import useBotCheck from "../../hooks/useBotCheck";
+import BotCheckField from "../../components/ui/BotCheckField";
+import { BOT_CHECK_WAIT_MESSAGE } from "../../utils/botCheck";
 
 const Register = ({ onSwitch }) => {
   const [formData, setFormData] = useState({
@@ -20,6 +23,7 @@ const Register = ({ onSwitch }) => {
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const bot = useBotCheck();
 
   const passwordValidation = useMemo(() => {
     return getPasswordValidation(formData.password || "");
@@ -53,6 +57,11 @@ const Register = ({ onSwitch }) => {
       setLoading(false);
       return;
     }
+    if (bot.waiting) {
+      setError(BOT_CHECK_WAIT_MESSAGE);
+      setLoading(false);
+      return;
+    }
 
     try {
       const res = await api.post(
@@ -64,6 +73,7 @@ const Register = ({ onSwitch }) => {
           password: formData.password,
           phone: toE164IfAny(formData.phone) || undefined, // opsiyonel
           website: formData.website,
+          turnstileToken: bot.token || undefined,
         },
         { skipAuthRefresh: true }
       );
@@ -85,6 +95,7 @@ const Register = ({ onSwitch }) => {
       );
     } finally {
       setLoading(false);
+      bot.reset();
     }
   };
 
@@ -203,6 +214,8 @@ const Register = ({ onSwitch }) => {
             className="w-full px-4 py-3 rounded-lg border border-light2 bg-light1 text-dark1 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-dark1 transition"
           />
         </div>
+
+        <BotCheckField bot={bot} />
 
         {success ? (
           <div className="w-full text-center text-sm font-semibold text-green-600 bg-green-50 border border-green-200 rounded-lg py-3 px-4">

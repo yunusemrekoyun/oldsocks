@@ -1,11 +1,15 @@
 import React, { useState } from "react";
 import api from "../../../api";
+import useBotCheck from "../../hooks/useBotCheck";
+import BotCheckField from "../../components/ui/BotCheckField";
+import { BOT_CHECK_WAIT_MESSAGE } from "../../utils/botCheck";
 
 const NewsLetter = () => {
   const [email, setEmail] = useState("");
   const [website, setWebsite] = useState("");
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState(null); // { type: "success" | "error", text: string }
+  const bot = useBotCheck();
 
   const onSubmit = async (e) => {
     e.preventDefault();
@@ -16,10 +20,14 @@ const NewsLetter = () => {
       setMsg({ type: "error", text: "Geçerli bir e-posta girin." });
       return;
     }
+    if (bot.waiting) {
+      setMsg({ type: "error", text: BOT_CHECK_WAIT_MESSAGE });
+      return;
+    }
 
     setBusy(true);
     try {
-      await api.post("/newsletter/subscribe", { email: clean, website });
+      await api.post("/newsletter/subscribe", { email: clean, website, turnstileToken: bot.token || undefined });
       setMsg({ type: "success", text: "Abonelik kaydedildi. Teşekkürler!" });
       setEmail("");
       setWebsite("");
@@ -30,6 +38,7 @@ const NewsLetter = () => {
       });
     } finally {
       setBusy(false);
+      bot.reset();
     }
   };
 
@@ -61,6 +70,7 @@ const NewsLetter = () => {
           disabled={busy}
           required
         />
+        <BotCheckField bot={bot} />
         <button
           type="submit"
           disabled={busy}

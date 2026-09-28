@@ -2,6 +2,7 @@
 const express = require("express");
 const router = express.Router();
 const { rateLimit, ipKeyGenerator } = require("express-rate-limit");
+const { requireHuman } = require("../services/turnstile");
 const {
   register,
   login,
@@ -28,7 +29,7 @@ const resetPasswordLimiter = rateLimit({
 });
 
 // POST /api/v1/auth/register
-router.post("/register", register);
+router.post("/register", requireHuman(), register);
 
 // POST /api/v1/auth/login
 router.post("/login", login);
@@ -40,7 +41,7 @@ router.post("/refresh", refresh);
 router.post("/logout", logout);
 
 // POST /api/v1/auth/forgot-password
-router.post("/forgot-password", forgotPasswordLimiter, forgotPassword);
+router.post("/forgot-password", forgotPasswordLimiter, requireHuman(), forgotPassword);
 
 // POST /api/v1/auth/reset-password
 router.post("/reset-password", resetPasswordLimiter, resetPassword);

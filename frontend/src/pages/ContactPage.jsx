@@ -8,6 +8,9 @@ import ContactInfo from "../components/contact/ContactInfo";
 import api from "../../api";
 import { useSiteContent } from "../context/siteContent";
 import usePageMeta from "../hooks/usePageMeta";
+import useBotCheck from "../hooks/useBotCheck";
+import BotCheckField from "../components/ui/BotCheckField";
+import { BOT_CHECK_WAIT_MESSAGE } from "../utils/botCheck";
 
 const ContactPage = () => {
   usePageMeta({ title: "İletişim", description: "OLDSOCKS mağaza adresi, telefon ve iletişim formu." });
@@ -21,14 +24,19 @@ const ContactPage = () => {
   });
   const [sending, setSending] = useState(false);
   const [result, setResult] = useState(null); // { type: "success"|"error", msg: string }
+  const bot = useBotCheck();
 
   const onChange = (e) =>
     setForm((f) => ({ ...f, [e.target.name]: e.target.value }));
 
   const onSubmit = async (e) => {
     e.preventDefault();
-    setSending(true);
     setResult(null);
+    if (bot.waiting) {
+      setResult({ type: "error", msg: BOT_CHECK_WAIT_MESSAGE });
+      return;
+    }
+    setSending(true);
     try {
       await api.post("/contact", {
         name: form.name,
@@ -36,6 +44,7 @@ const ContactPage = () => {
         subject: form.subject,
         message: form.message,
         website: form.website,
+        turnstileToken: bot.token || undefined,
       });
       setResult({ type: "success", msg: "Mesajınız alınmıştır, teşekkürler." });
       setForm({ name: "", email: "", subject: "", message: "", website: "" });
@@ -46,6 +55,7 @@ const ContactPage = () => {
       setResult({ type: "error", msg });
     } finally {
       setSending(false);
+      bot.reset();
     }
   };
 
@@ -134,6 +144,8 @@ const ContactPage = () => {
                 required
                 disabled={sending}
               />
+
+              <BotCheckField bot={bot} />
 
               {/* Send Button */}
               <button

@@ -22,6 +22,9 @@ router.get("/admin/traffic", verifyToken, allowRoles("admin"), (_req, res) => {
   res.json(trafficMonitor.snapshot());
 });
 
+// Formlardaki Turnstile bot doğrulamasının site anahtarı (kapalıysa null)
+router.get("/bot-check", require("../services/turnstile").sendTurnstileConfig);
+
 // auth
 router.use("/auth", require("./auth"));
 
