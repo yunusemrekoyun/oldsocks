@@ -393,9 +393,17 @@ export default function GuestCheckoutPage() {
   }
 
   return (
-    <div className="min-h-screen bg-light1 text-dark1 py-10 px-4">
-      <div className="max-w-3xl mx-auto bg-white rounded-xl shadow-md p-6">
-        <h2 className="text-2xl font-semibold mb-4">Üye Olmadan Ödeme</h2>
+    <div className="min-h-screen bg-light1 px-4 py-8 text-dark1 sm:py-10">
+      <div className="mx-auto max-w-6xl">
+        <h1 className="mb-6 text-2xl font-semibold">Üye Olmadan Ödeme</h1>
+
+        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_380px] lg:items-start">
+        {/* 1. İletişim ve teslimat */}
+        <section className="rounded-2xl bg-white p-5 shadow-sm sm:p-6 lg:col-start-1 lg:row-start-1">
+        <h2 className="mb-4 flex items-center gap-2 text-base font-semibold">
+          <span className="flex h-6 w-6 items-center justify-center rounded-full bg-dark1 text-xs text-white">1</span>
+          İletişim ve Teslimat
+        </h2>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
           <div>
@@ -602,31 +610,30 @@ export default function GuestCheckoutPage() {
           </div>
         </div>
 
-        <ul className="space-y-3 mb-6">
+        </section>
+
+        {/* Sipariş özeti: masaüstünde sağda sabit */}
+        <aside className="rounded-2xl bg-white p-5 shadow-sm sm:p-6 lg:sticky lg:top-24 lg:col-start-2 lg:row-span-2 lg:row-start-1">
+        <h2 className="mb-4 text-base font-semibold">Sipariş Özeti</h2>
+        <ul className="mb-4 max-h-80 space-y-3 overflow-y-auto pr-1">
           {items.map((it, i) => (
-            <li
-              key={i}
-              className="flex justify-between items-center bg-light2 p-3 rounded"
-            >
-              <div>
-                <p className="font-medium">{it.name}</p>
-                {it.size && (
-                  <p className="text-sm text-gray-600">Beden: {it.size}</p>
-                )}
-                <p className="text-sm text-gray-600">
-                  Adet: {it.qty} × {formatTry(it.price)}
-                </p>
+            <li key={i} className="flex items-center gap-3">
+              <div className="relative h-16 w-14 shrink-0 overflow-hidden rounded-lg bg-light1">
+                {it.image && <img src={it.image} alt="" loading="lazy" className="h-full w-full object-cover" />}
+                <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-dark1 px-1 text-[10px] font-bold text-white">{it.qty}</span>
               </div>
-              <div className="font-semibold">
-                {formatTry(it.price * it.qty)}
+              <div className="min-w-0 flex-1 text-sm">
+                <p className="truncate font-medium">{it.name}</p>
+                <p className="text-dark2">{[it.size && `Beden: ${it.size}`, it.color].filter(Boolean).join(" · ")}</p>
               </div>
+              <div className="text-sm font-semibold">{formatTry(it.price * it.qty)}</div>
             </li>
           ))}
         </ul>
 
-        <div className="space-y-2 border-t pt-4 text-lg font-semibold">
+        <div className="space-y-2 border-t border-light2 pt-4 text-sm">
           <div className="flex justify-between">
-            <span>Ara Toplam:</span>
+            <span>Ara Toplam</span>
             <span>{formatTry(displaySubTotal)}</span>
           </div>
 
@@ -649,7 +656,7 @@ export default function GuestCheckoutPage() {
 
           {(displayCampaignDiscount > 0 || displayCouponDiscount > 0) && (
             <div className="flex justify-between text-base">
-              <span>İndirimli Ara Toplam:</span>
+              <span>İndirimli Ara Toplam</span>
               <span>{formatTry(displayDiscountedSubTotal)}</span>
             </div>
           )}
@@ -683,9 +690,9 @@ export default function GuestCheckoutPage() {
             </p>
           )}
 
-          <div className="flex justify-between text-xl">
-            <span>Genel Toplam:</span>
-            <span className="text-primary">{formatTry(displayGrandTotal)}</span>
+          <div className="flex justify-between border-t border-light2 pt-3 text-lg font-semibold">
+            <span>Genel Toplam</span>
+            <span>{formatTry(displayGrandTotal)}</span>
           </div>
         </div>
 
@@ -705,6 +712,27 @@ export default function GuestCheckoutPage() {
           </div>
         )}
 
+        <div className="mt-5 hidden lg:block">
+          <button
+            type="button"
+            onClick={startGuestPayment}
+            disabled={loading || !consentOk}
+            className={`h-12 w-full rounded-lg text-sm font-semibold uppercase tracking-wider text-white transition ${
+              loading || !consentOk ? "cursor-not-allowed bg-gray-400" : "bg-dark1 hover:bg-black"
+            }`}
+          >
+            {loading ? "Yönlendiriliyor…" : "Ödemeye Geç"}
+          </button>
+          {!consentOk && <p className="mt-2 text-center text-xs text-dark2">Ödemeye geçmek için soldaki iki onay kutusunu işaretleyin.</p>}
+        </div>
+        </aside>
+
+        {/* 2. Onay */}
+        <section className="rounded-2xl bg-white p-5 shadow-sm sm:p-6 lg:col-start-1 lg:row-start-2">
+        <h2 className="mb-2 flex items-center gap-2 text-base font-semibold">
+          <span className="flex h-6 w-6 items-center justify-center rounded-full bg-dark1 text-xs text-white">2</span>
+          Ön Bilgilendirme ve Sözleşme
+        </h2>
         <OrderConsent
           items={items}
           totals={{
@@ -723,24 +751,28 @@ export default function GuestCheckoutPage() {
           onChange={setConsent}
         />
 
-        <div className="mt-6 flex gap-3">
+        <div className="mt-6 flex gap-3 lg:hidden">
           <button
+            type="button"
             onClick={() => navigate(-1)}
-            className="w-1/3 py-3 rounded bg-light2 hover:bg-light1 text-dark2 transition"
+            className="h-12 w-1/3 rounded-lg bg-light2 text-sm font-medium text-dark2 transition hover:bg-light1"
           >
             Geri
           </button>
+          <div className="w-2/3">
           <button
+            type="button"
             onClick={startGuestPayment}
             disabled={loading || !consentOk}
-            className={`w-2/3 py-3 rounded text-white transition ${
-              loading || !consentOk
-                ? "bg-gray-400 cursor-not-allowed"
-                : "bg-dark1 hover:bg-dark2"
+            className={`h-12 w-full rounded-lg text-sm font-semibold uppercase tracking-wider text-white transition ${
+              loading || !consentOk ? "cursor-not-allowed bg-gray-400" : "bg-dark1 hover:bg-black"
             }`}
           >
-            {loading ? "Yönlendiriliyor…" : "Ödemeye Geç (Üye olmadan)"}
+            {loading ? "Yönlendiriliyor…" : "Ödemeye Geç"}
           </button>
+          </div>
+        </div>
+        </section>
         </div>
 
         {toast && (

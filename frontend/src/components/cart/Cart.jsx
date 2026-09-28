@@ -39,6 +39,17 @@ export default function Cart() {
   const [couponInput, setCouponInput] = useState(selectedCouponCode || "");
   const [couponError, setCouponError] = useState(null);
 
+  // Öneriler masaüstünde sol sütunda, mobilde sayfanın altında (tek kopya).
+  const [isDesktop, setIsDesktop] = useState(() =>
+    typeof window !== "undefined" && window.matchMedia("(min-width: 1024px)").matches
+  );
+  useEffect(() => {
+    const query = window.matchMedia("(min-width: 1024px)");
+    const onChange = () => setIsDesktop(query.matches);
+    query.addEventListener("change", onChange);
+    return () => query.removeEventListener("change", onChange);
+  }, []);
+
   // Sunucuyla eşitleme: güncel fiyat, stok ve satıştan kalkan ürünler
   const [stockByKey, setStockByKey] = useState(null); // Map<cartKey, available> | null
   const [cartNotices, setCartNotices] = useState([]); // olaylar: çıkarılan ürün, değişen fiyat
@@ -342,6 +353,8 @@ export default function Cart() {
               />
             ))}
           </div>
+          {/* Masaüstünde öneriler satırların altındaki boşlukta */}
+          {isDesktop && <CartRecommendations inline />}
         </section>
 
         {/* Özet kartı */}
@@ -592,7 +605,7 @@ export default function Cart() {
         </aside>
       </div>
 
-      <CartRecommendations />
+      {!isDesktop && <CartRecommendations />}
 
       {showLoginModal && (
         <AuthRequiredModal

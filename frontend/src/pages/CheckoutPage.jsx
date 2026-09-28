@@ -369,136 +369,51 @@ export default function CheckoutPage() {
   };
 
   return (
-    <div className="min-h-screen bg-light1 text-dark1 py-10 px-4">
-      <div className="max-w-3xl mx-auto bg-white rounded-xl shadow-md p-6">
-        <h2 className="text-2xl font-semibold mb-4">Ödeme Özeti</h2>
+    <div className="min-h-screen bg-light1 px-4 py-8 text-dark1 sm:py-10">
+      <div className="mx-auto max-w-6xl">
+        <h1 className="mb-6 text-2xl font-semibold">Siparişi Tamamla</h1>
 
-        <div className="mb-6">
-          <h3 className="font-medium mb-2">Gönderim Adresi</h3>
-          <fieldset className="space-y-2">
-            {addresses.map((addr) => (
-              <label key={addr._id} className="flex items-center space-x-2">
-                <input
-                  type="radio"
-                  name="addr"
-                  value={addr._id}
-                  checked={selectedAddress === addr._id}
-                  onChange={() => setSelectedAddress(addr._id)}
-                  className="form-radio"
-                />
-                <span>
-                  {addr.title} — {addr.mainaddress}, {addr.city}
-                </span>
-              </label>
-            ))}
-          </fieldset>
-        </div>
-
-        <ul className="space-y-3 mb-6">
-          {items.map((it, i) => (
-            <li
-              key={i}
-              className="flex justify-between items-center bg-light2 p-3 rounded"
-            >
-              <div>
-                <p className="font-medium">{it.name}</p>
-                {it.size && (
-                  <p className="text-sm text-gray-600">Beden: {it.size}</p>
-                )}
-                <p className="text-sm text-gray-600">
-                  Adet: {it.qty} × {formatTry(it.price)}
-                </p>
-              </div>
-              <div className="font-semibold">
-                {formatTry(it.price * it.qty)}
-              </div>
-            </li>
-          ))}
-        </ul>
-
-        <div className="space-y-2 border-t pt-4 text-lg font-semibold">
-          <div className="flex justify-between">
-            <span>Ara Toplam:</span>
-            <span>{formatTry(displaySubTotal)}</span>
-          </div>
-
-          {displayCampaignDiscount > 0 && (
-            <div className="flex justify-between text-emerald-700 text-base">
-              <span>Kampanya İndirimi</span>
-              <span>-{formatTry(displayCampaignDiscount)}</span>
-            </div>
-          )}
-
-          {displayCouponDiscount > 0 && (
-            <div className="flex justify-between text-blue-700 text-base">
-              <span>
-                Kupon İndirimi
-                {appliedCoupon?.code ? ` (${appliedCoupon.code})` : ""}
-              </span>
-              <span>-{formatTry(displayCouponDiscount)}</span>
-            </div>
-          )}
-
-          {(displayCampaignDiscount > 0 || displayCouponDiscount > 0) && (
-            <div className="flex justify-between text-base">
-              <span>İndirimli Ara Toplam:</span>
-              <span>{formatTry(displayDiscountedSubTotal)}</span>
-            </div>
-          )}
-
-          <div className="flex justify-between items-center">
-            <span>
-              Kargo{displayShippingName ? ` (${displayShippingName})` : ""}
-            </span>
-            {shipLoading || pricingLoading ? (
-              <span className="text-gray-500">Kargo yükleniyor…</span>
-            ) : shipping || pricingSummary ? (
-              displayIsFree ? (
-                <span className="flex items-center gap-2">
-                  <span className="line-through text-gray-500">
-                    {formatTry(shipping?.fee ?? displayShippingFee)}
+        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_380px] lg:items-start">
+          {/* 1. Teslimat adresi */}
+          <section className="rounded-2xl bg-white p-5 shadow-sm sm:p-6 lg:col-start-1 lg:row-start-1">
+            <h2 className="mb-4 flex items-center gap-2 text-base font-semibold">
+              <span className="flex h-6 w-6 items-center justify-center rounded-full bg-dark1 text-xs text-white">1</span>
+              Teslimat Adresi
+            </h2>
+            <fieldset className="grid gap-3 sm:grid-cols-2">
+              <legend className="sr-only">Teslimat adresi seçin</legend>
+              {addresses.map((addr) => (
+                <label
+                  key={addr._id}
+                  className={`flex cursor-pointer gap-3 rounded-xl border p-4 text-sm transition ${
+                    selectedAddress === addr._id ? "border-dark1 ring-1 ring-dark1" : "border-light2 hover:border-dark2"
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="addr"
+                    value={addr._id}
+                    checked={selectedAddress === addr._id}
+                    onChange={() => setSelectedAddress(addr._id)}
+                    className="mt-0.5 accent-black"
+                  />
+                  <span className="min-w-0">
+                    <span className="block font-semibold">{addr.title}</span>
+                    <span className="block text-dark2">{addr.mainaddress}</span>
+                    <span className="block text-dark2">{[addr.district, addr.city].filter(Boolean).join(", ")}</span>
                   </span>
-                  <span className="text-emerald-600 font-bold">Ücretsiz</span>
-                </span>
-              ) : (
-                <span>{formatTry(displayShippingFee)}</span>
-              )
-            ) : (
-              <span className="text-gray-500">Tanımlı kargo yok</span>
-            )}
-          </div>
-
-          {displayFreeShippingThreshold != null && !displayIsFree && (
-            <p className="text-sm text-gray-500">
-              {formatTry(displayFreeShippingThreshold, { fractionDigits: 0 })} ve üzeri
-              alışverişlerde kargo ücretsiz.
-            </p>
-          )}
-
-          <div className="flex justify-between text-xl">
-            <span>Genel Toplam:</span>
-            <span className="text-primary">{formatTry(displayGrandTotal)}</span>
-          </div>
-        </div>
-
-        {(appliedCampaign?.name || appliedCoupon?.code || pricingError) && (
-          <div className="mt-4 space-y-1 text-sm">
-            {appliedCampaign?.name && (
-              <p className="text-emerald-700">
-                Uygulanan kampanya: <b>{appliedCampaign.name}</b>
-              </p>
-            )}
-            {appliedCoupon?.code && (
-              <p className="text-blue-700">
-                Uygulanan kupon: <b>{appliedCoupon.code}</b>
-              </p>
-            )}
-            {pricingError && <p className="text-red-600">{pricingError}</p>}
-          </div>
-        )}
-
-        {profilePhone === "" && (
-          <div className="mt-6">
+                </label>
+              ))}
+            </fieldset>
+            <button
+              type="button"
+              onClick={() => navigate("/profile", { state: { tab: "addresses" } })}
+              className="mt-3 text-sm font-medium text-dark2 underline underline-offset-2 hover:text-dark1"
+            >
+              Adresleri yönet
+            </button>
+            {profilePhone === "" && (
+          <div className="mt-5">
             <label htmlFor="checkout-phone" className="block text-sm mb-1">
               Telefon
             </label>
@@ -535,6 +450,128 @@ export default function CheckoutPage() {
           </div>
         )}
 
+          </section>
+
+          {/* Sipariş özeti: masaüstünde sağda sabit */}
+          <aside className="rounded-2xl bg-white p-5 shadow-sm sm:p-6 lg:sticky lg:top-24 lg:col-start-2 lg:row-span-2 lg:row-start-1">
+            <h2 className="mb-4 text-base font-semibold">Sipariş Özeti</h2>
+            <ul className="mb-4 max-h-80 space-y-3 overflow-y-auto pr-1">
+              {items.map((it, i) => (
+                <li key={i} className="flex items-center gap-3">
+                  <div className="relative h-16 w-14 shrink-0 overflow-hidden rounded-lg bg-light1">
+                    {it.image && <img src={it.image} alt="" loading="lazy" className="h-full w-full object-cover" />}
+                    <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-dark1 px-1 text-[10px] font-bold text-white">{it.qty}</span>
+                  </div>
+                  <div className="min-w-0 flex-1 text-sm">
+                    <p className="truncate font-medium">{it.name}</p>
+                    <p className="text-dark2">{[it.size && `Beden: ${it.size}`, it.color].filter(Boolean).join(" · ")}</p>
+                  </div>
+                  <div className="text-sm font-semibold">{formatTry(it.price * it.qty)}</div>
+                </li>
+              ))}
+            </ul>
+        <div className="space-y-2 border-t border-light2 pt-4 text-sm">
+          <div className="flex justify-between">
+            <span>Ara Toplam</span>
+            <span>{formatTry(displaySubTotal)}</span>
+          </div>
+
+          {displayCampaignDiscount > 0 && (
+            <div className="flex justify-between text-emerald-700 text-base">
+              <span>Kampanya İndirimi</span>
+              <span>-{formatTry(displayCampaignDiscount)}</span>
+            </div>
+          )}
+
+          {displayCouponDiscount > 0 && (
+            <div className="flex justify-between text-blue-700 text-base">
+              <span>
+                Kupon İndirimi
+                {appliedCoupon?.code ? ` (${appliedCoupon.code})` : ""}
+              </span>
+              <span>-{formatTry(displayCouponDiscount)}</span>
+            </div>
+          )}
+
+          {(displayCampaignDiscount > 0 || displayCouponDiscount > 0) && (
+            <div className="flex justify-between text-base">
+              <span>İndirimli Ara Toplam</span>
+              <span>{formatTry(displayDiscountedSubTotal)}</span>
+            </div>
+          )}
+
+          <div className="flex justify-between items-center">
+            <span>
+              Kargo{displayShippingName ? ` (${displayShippingName})` : ""}
+            </span>
+            {shipLoading || pricingLoading ? (
+              <span className="text-gray-500">Kargo yükleniyor…</span>
+            ) : shipping || pricingSummary ? (
+              displayIsFree ? (
+                <span className="flex items-center gap-2">
+                  <span className="line-through text-gray-500">
+                    {formatTry(shipping?.fee ?? displayShippingFee)}
+                  </span>
+                  <span className="text-emerald-600 font-bold">Ücretsiz</span>
+                </span>
+              ) : (
+                <span>{formatTry(displayShippingFee)}</span>
+              )
+            ) : (
+              <span className="text-gray-500">Tanımlı kargo yok</span>
+            )}
+          </div>
+
+          {displayFreeShippingThreshold != null && !displayIsFree && (
+            <p className="text-sm text-gray-500">
+              {formatTry(displayFreeShippingThreshold, { fractionDigits: 0 })} ve üzeri
+              alışverişlerde kargo ücretsiz.
+            </p>
+          )}
+
+          <div className="flex justify-between border-t border-light2 pt-3 text-lg font-semibold">
+            <span>Genel Toplam</span>
+            <span>{formatTry(displayGrandTotal)}</span>
+          </div>
+        </div>
+
+        {(appliedCampaign?.name || appliedCoupon?.code || pricingError) && (
+          <div className="mt-4 space-y-1 text-sm">
+            {appliedCampaign?.name && (
+              <p className="text-emerald-700">
+                Uygulanan kampanya: <b>{appliedCampaign.name}</b>
+              </p>
+            )}
+            {appliedCoupon?.code && (
+              <p className="text-blue-700">
+                Uygulanan kupon: <b>{appliedCoupon.code}</b>
+              </p>
+            )}
+            {pricingError && <p className="text-red-600">{pricingError}</p>}
+          </div>
+        )}
+
+            <div className="mt-5 hidden lg:block">
+              <button
+            type="button"
+            onClick={() => attemptPayment(false)}
+            disabled={loading || !consentOk}
+            className={` h-12 w-full rounded-lg text-sm font-semibold uppercase tracking-wider text-white transition ${
+              loading || !consentOk ? "cursor-not-allowed bg-gray-400" : "bg-dark1 hover:bg-black"
+            }`}
+          >
+            {loading ? "Yönlendiriliyor…" : "Ödemeye Geç"}
+          </button>
+              {!consentOk && <p className="mt-2 text-center text-xs text-dark2">Ödemeye geçmek için soldaki iki onay kutusunu işaretleyin.</p>}
+            </div>
+          </aside>
+
+          {/* 2. Onay */}
+          <section className="rounded-2xl bg-white p-5 shadow-sm sm:p-6 lg:col-start-1 lg:row-start-2">
+            <h2 className="mb-2 flex items-center gap-2 text-base font-semibold">
+              <span className="flex h-6 w-6 items-center justify-center rounded-full bg-dark1 text-xs text-white">2</span>
+              Ön Bilgilendirme ve Sözleşme
+            </h2>
         <OrderConsent
           items={items}
           totals={{
@@ -553,15 +590,20 @@ export default function CheckoutPage() {
           onChange={setConsent}
         />
 
-        <button
-          onClick={() => attemptPayment(false)}
-          disabled={loading || !consentOk}
-          className={`mt-6 w-full py-3 rounded text-white transition ${
-            loading || !consentOk ? "bg-gray-400 cursor-not-allowed" : "bg-dark1 hover:bg-dark2"
-          }`}
-        >
-          {loading ? "Yönlendiriliyor…" : "Ödemeye Geç"}
-        </button>
+            <div className="mt-6 lg:hidden">
+              <button
+            type="button"
+            onClick={() => attemptPayment(false)}
+            disabled={loading || !consentOk}
+            className={` h-12 w-full rounded-lg text-sm font-semibold uppercase tracking-wider text-white transition ${
+              loading || !consentOk ? "cursor-not-allowed bg-gray-400" : "bg-dark1 hover:bg-black"
+            }`}
+          >
+            {loading ? "Yönlendiriliyor…" : "Ödemeye Geç"}
+          </button>
+            </div>
+          </section>
+        </div>
       </div>
 
       {showLoginModal && (

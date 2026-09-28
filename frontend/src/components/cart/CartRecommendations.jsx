@@ -76,7 +76,8 @@ function RecommendationCard({ product, onAdded }) {
   </article>;
 }
 
-export default function CartRecommendations() {
+// inline: masaüstünde sepet satırlarının altındaki boşlukta, dar sütuna göre dizilir.
+export default function CartRecommendations({ inline = false }) {
   const { items } = useCart();
   const settings = useStorefrontSettings().cartRecommendations;
   const { data: products } = useProductsCache();
@@ -88,7 +89,7 @@ export default function CartRecommendations() {
 
   if (settings?.visible === false || !items.length || !recommendations.length) return null;
 
-  return <section className="mt-12 border-t border-light2 pt-8" aria-label={settings?.heading || "Sepet önerileri"}>
+  return <section className={inline ? "mt-8" : "mt-12 border-t border-light2 pt-8"} aria-label={settings?.heading || "Sepet önerileri"}>
     <div className="mb-5 flex flex-wrap items-end justify-between gap-2">
       <div>
         <h2 className="text-xl font-semibold text-dark1 sm:text-2xl">{settings?.heading || "Sepetinize yakışabilecek ürünler"}</h2>
@@ -97,7 +98,7 @@ export default function CartRecommendations() {
       <Link to="/shop" className="text-sm font-medium text-dark1 underline underline-offset-4">Tüm ürünler</Link>
     </div>
     {notice && <p role="status" className="mb-4 rounded-lg bg-emerald-50 px-4 py-3 text-sm text-emerald-800">{notice} sepete eklendi.</p>}
-    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 lg:gap-4">
+    <div className={inline ? "grid gap-4 sm:grid-cols-2 xl:grid-cols-3" : "grid gap-3 sm:grid-cols-2 lg:grid-cols-4 lg:gap-4"}>
       {recommendations.map((product) => <RecommendationCard key={product._id} product={product} onAdded={setNotice} />)}
     </div>
   </section>;
