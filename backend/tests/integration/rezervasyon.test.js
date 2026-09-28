@@ -310,6 +310,7 @@ test("üye aynı anda iki ödeme başlatırsa yalnız en yeni oturum stok tutar"
   const user = await mongoose.connection.collection("users").findOne({ email });
   const pending = await Orders.find({ user: user._id, status: "pending" }).toArray();
   assert.equal(pending.length, 1);
+  assert.equal(pending[0].identityFallbackUsed, true);
   assert.equal(await stockOf(productId), 2);
 });
 
@@ -383,4 +384,33 @@ test("ayrım sırasında beden satırı silinip aynı adla yeniden eklenirse ge�
   const approved = await admin("PUT", `/orders/${orderB._id}/status`, { status: "paid" });
   assert.equal(approved.status, 200, JSON.stringify(approved.data));
   assert.equal(await stockOf(review), 2);
+});
+
+test("misafirde T.C. kimlik no isteğe bağlı: boşsa 11111111111 atanır, girilirse 11 hane olmalı", async () => {
+  const productId = await seedProduct(5);
+  const withGuest = (email, identityNumber) =>
+    postJson(server.base, "/api/v1/payment/start-guest", {
+      cartItems: [{ id: String(productId), size: "M", qty: 1 }],
+      address,
+      guest: { ...guest(email), identityNumber },
+      consent: CONSENT,
+    });
+
+  const empty = await withGuest(uniq("tc-bos"), "");
+  assert.equal(empty.status, 200, JSON.stringify(empty.data));
+  const a = await Orders.findOne({ conversationId: empty.data.conversationId });
+  assert.equal(a.guest.identityNumber, "11111111111");
+  assert.equal(a.guest.identityFallbackUsed, true);
+  assert.equal(a.identityFallbackUsed, true);
+
+  const given = await withGuest(uniq("tc-dolu"), "123 456 789 01");
+  assert.equal(given.status, 200, JSON.stringify(given.data));
+  const b = await Orders.findOne({ conversationId: given.data.conversationId });
+  assert.equal(b.guest.identityNumber, "12345678901");
+  assert.equal(b.guest.identityFallbackUsed, false);
+  assert.equal(b.identityFallbackUsed, false);
+
+  const short = await withGuest(uniq("tc-kisa"), "1234567890");
+  assert.equal(short.status, 422);
+  assert.ok(short.data.invalid.includes("guest.identityNumber"));
 });

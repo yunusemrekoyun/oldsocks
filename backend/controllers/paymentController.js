@@ -124,6 +124,13 @@ const CONSENT_REQUIRED = {
     "Devam etmek için ön bilgilendirme formunu ve mesafeli satış sözleşmesini onaylayın. Sayfa açık kaldıysa yenileyip tekrar deneyin.",
 };
 
+// T.C. kimlik no misafir ödemesinde isteğe bağlıdır (müşterinin talebi). Girilmezse aynı
+// uzunlukta 11111111111 atanır ve siparişte "otomatik atandı" olarak işaretlenir.
+const IDENTITY_FALLBACK = "11111111111";
+function normalizeIdentityNumber(value) {
+  return String(value || "").replace(/\D/g, "");
+}
+
 function normalizeTrPhone(value) {
   const digits = String(value || "").replace(/\D/g, "");
 
@@ -289,6 +296,7 @@ exports.startGuestPaymentSession = async (req, res) => {
       lastName: String(guest?.lastName || "").trim(),
       email: normalizeEmail(guest?.email),
       phone: normalizeTrPhone(guest?.phone),
+      identityNumber: normalizeIdentityNumber(guest?.identityNumber),
       registrationAddress: String(guest?.registrationAddress || "").trim(),
     };
     const normalizedAddress = {
@@ -327,6 +335,9 @@ exports.startGuestPaymentSession = async (req, res) => {
     const invalid = [];
     if (!EMAIL_REGEX.test(normalizedGuest.email)) invalid.push("guest.email");
     if (!normalizedGuest.phone) invalid.push("guest.phone");
+    if (normalizedGuest.identityNumber && normalizedGuest.identityNumber.length !== 11) {
+      invalid.push("guest.identityNumber");
+    }
     const lengthLimits = {
       "guest.firstName": [normalizedGuest.firstName, 80],
       "guest.lastName": [normalizedGuest.lastName, 80],
@@ -387,8 +398,11 @@ exports.startGuestPaymentSession = async (req, res) => {
         lastName: normalizedGuest.lastName,
         email: normalizedGuest.email,
         phone: normalizedGuest.phone,
+        identityNumber: normalizedGuest.identityNumber || IDENTITY_FALLBACK,
         registrationAddress: normalizedGuest.registrationAddress,
+        identityFallbackUsed: !normalizedGuest.identityNumber,
       },
+      identityFallbackUsed: !normalizedGuest.identityNumber,
       items: pricing.items,
       totalPrice: pricing.summary.grandTotal,
       campaign: pricing.appliedCampaign
@@ -537,6 +551,8 @@ exports.startPaymentSession = async (req, res) => {
     const createdOrder = await createOrderWithReservation({
       orderNumber,
       user: userId,
+      // Üyeden kimlik no istenmez; eskiden olduğu gibi otomatik atandı sayılır.
+      identityFallbackUsed: true,
       items: pricing.items,
       totalPrice: pricing.summary.grandTotal,
       campaign: pricing.appliedCampaign

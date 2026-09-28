@@ -16,6 +16,7 @@ const GUEST_FIELD_KEYS = [
   "lastName",
   "email",
   "phone",
+  "identityNumber",
   "mainaddress",
   "street",
   "city",
@@ -30,6 +31,13 @@ function getPhoneDigits(value) {
 function toE164TrPhone(value) {
   const digits = getPhoneDigits(value);
   return digits.length === 10 ? `+90${digits}` : "";
+}
+
+// T.C. kimlik no isteğe bağlı; boş bırakılırsa sunucu 11111111111 atar.
+function normalizeIdentityNumber(value) {
+  return String(value || "")
+    .replace(/\D/g, "")
+    .slice(0, 11);
 }
 
 function validateGuestCheckout(buyer, address) {
@@ -48,6 +56,11 @@ function validateGuestCheckout(buyer, address) {
   const phoneDigits = getPhoneDigits(buyer.phone);
   if (phoneDigits.length !== 10) {
     errors.phone = "Telefon numarasını 10 haneli girin.";
+  }
+
+  const identityNumber = normalizeIdentityNumber(buyer.identityNumber);
+  if (identityNumber && identityNumber.length !== 11) {
+    errors.identityNumber = "T.C. Kimlik No 11 haneli olmalı.";
   }
 
   if (!address.mainaddress.trim()) {
@@ -91,6 +104,7 @@ export default function GuestCheckoutPage() {
     lastName: "",
     email: "",
     phone: "",
+    identityNumber: "",
   });
   const [address, setAddress] = useState({
     title: "Teslimat Adresi",
@@ -288,6 +302,7 @@ export default function GuestCheckoutPage() {
           lastName: buyer.lastName.trim(),
           email: buyer.email.trim().toLowerCase(),
           phone: toE164TrPhone(buyer.phone),
+          identityNumber: normalizeIdentityNumber(buyer.identityNumber),
           registrationAddress: address.mainaddress.trim(),
         },
         address: {
@@ -475,6 +490,26 @@ export default function GuestCheckoutPage() {
             <p className="mt-1 text-xs text-dark2">Başına +90 otomatik eklenir.</p>
             {touched.phone && validationErrors.phone && (
               <p className="mt-1 text-xs text-red-600">{validationErrors.phone}</p>
+            )}
+          </div>
+
+          <div className="sm:col-span-2">
+            <label htmlFor="identityNumber" className="block text-sm mb-1">
+              T.C. Kimlik No (Opsiyonel)
+            </label>
+            <input
+              id="identityNumber"
+              className={getFieldClassName("identityNumber")}
+              value={buyer.identityNumber}
+              onChange={(e) => setBuyerField("identityNumber", normalizeIdentityNumber(e.target.value))}
+              onBlur={() => touchField("identityNumber")}
+              inputMode="numeric"
+              maxLength={11}
+              placeholder="11 haneli T.C. Kimlik No"
+            />
+            <p className="mt-1 text-xs text-dark2">Girilecekse sadece rakam ve 11 hane olmalı.</p>
+            {touched.identityNumber && validationErrors.identityNumber && (
+              <p className="mt-1 text-xs text-red-600">{validationErrors.identityNumber}</p>
             )}
           </div>
 
