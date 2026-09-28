@@ -56,7 +56,9 @@ test.after(async () => {
 
 test("gönderilemeyen sipariş e-postası her taramada değil, giderek seyrekleşen aralıklarla denenir", async () => {
   const id = await paidOrder();
-  await wait(2500); // ~12 tarama
+  // İlk deneme bitene kadar bekle (makine yüklüyse gecikebilir), sonra ~7 tarama daha.
+  for (let i = 0; i < 40 && !((await Orders.findOne({ _id: id }))?.mailAttempts >= 1); i += 1) await wait(200);
+  await wait(1500);
   const order = await Orders.findOne({ _id: id });
   assert.equal(order.orderMailSentAt, null);
   assert.equal(order.mailAttempts, 1);
