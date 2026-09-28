@@ -58,7 +58,7 @@ export default function SimilarProducts({ categoryId, currentProductId }) {
       [result[i], result[j]] = [result[j], result[i]];
     }
 
-    setItems(result.slice(0, 5));
+    setItems(result.slice(0, 10));
     setError("");
   }, [allProducts, categoryId, currentProductId]);
 
@@ -85,17 +85,19 @@ export default function SimilarProducts({ categoryId, currentProductId }) {
   };
 
   return (
-    <div className="space-y-4">
-      <h3 className="text-xl font-semibold">Benzer Ürünler</h3>
+    <div className="space-y-5">
+      <h2 className="text-lg font-semibold uppercase tracking-wide text-dark1">Benzer Ürünler</h2>
+      {/* Sonsuz döngü: son üründen sonra başa kesintisiz döner. */}
       <Swiper
         modules={[Autoplay, FreeMode]}
         spaceBetween={16}
         slidesPerView={2}
-        autoplay={{ delay: 3000 }}
-        rewind
+        breakpoints={{ 768: { slidesPerView: 3 }, 1024: { slidesPerView: 4 } }}
+        autoplay={{ delay: 3500, disableOnInteraction: false, pauseOnMouseEnter: true }}
+        loop={items.length > 4}
+        rewind={items.length <= 4}
         grabCursor
         freeMode
-        className="!px-2"
       >
         {items.map((p) => {
           const poster =

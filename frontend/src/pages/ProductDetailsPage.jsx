@@ -7,7 +7,7 @@ import BreadCrumb from "../components/breadCrumb/BreadCrumb";
 import ProductDetails from "../components/products/product-details/ProductDetails";
 import SimilarProducts from "../components/products/product-details/SimilarProducts";
 import AddToCart from "../components/products/product-details/AddToCart";
-import ShippingReturnInfo from "../components/products/product-details/ShippingReturnInfo";
+import ProductInfoSections from "../components/products/product-details/ProductInfoSections";
 import Campaigns from "../components/campaigns/Campaigns";
 import Services from "../components/services/Services";
 import { useStorefrontSettings } from "../context/storefrontSettings";
@@ -109,30 +109,36 @@ export default function ProductDetailsPage() {
     <>
       <BreadCrumb category={product.category} name={product.name} />
 
-      <main className="container mx-auto px-4 py-12 grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* Detaylar */}
-        <section className="lg:col-span-2">
-          <ProductDetails product={product} />
-        </section>
+      <div className="mx-auto max-w-7xl px-4 pb-12 pt-2 sm:px-6 lg:px-8 lg:pt-6">
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-12 lg:gap-12">
+          {/* Görseller */}
+          <section className="lg:col-span-7" aria-label="Ürün görselleri">
+            <ProductDetails product={product} />
+          </section>
 
-        {/* Sağ sidebar */}
-        <aside className="lg:col-span-1 space-y-6">
-          <AddToCart
-            price={product.price}
-            sizes={product.sizes}
-            color={product.color}
-            parentProductId={product.parentProductId}
-            productId={product._id}
-            productName={product.name}
-            image={product.images?.[0]}
-          />
-          <ShippingReturnInfo />
-          {similarProductsVisible !== false && <SimilarProducts
-            categoryId={rootCategoryId}
-            currentProductId={product._id}
-          />}
-        </aside>
-      </main>
+          {/* Satın alma: kaydırırken masaüstünde sabit kalır */}
+          <aside className="lg:col-span-5">
+            <div className="space-y-6 lg:sticky lg:top-24">
+              <AddToCart
+                price={product.price}
+                sizes={product.sizes}
+                color={product.color}
+                parentProductId={product.parentProductId}
+                productId={product._id}
+                productName={product.name}
+                image={product.images?.[0]}
+              />
+              <ProductInfoSections description={product.description} />
+            </div>
+          </aside>
+        </div>
+
+        {similarProductsVisible !== false && (
+          <section className="mt-14 lg:mt-20">
+            <SimilarProducts categoryId={rootCategoryId} currentProductId={product._id} />
+          </section>
+        )}
+      </div>
 
       <Campaigns />
       <Services />

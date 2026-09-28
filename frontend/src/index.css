@@ -243,3 +243,8 @@
   letter-spacing: 0.02em;
   padding-bottom: 0.06em;
 }
+
+/* Açılır başlıklarda tarayıcının üçgen işaretini gizle (Safari dahil). */
+.details-summary::-webkit-details-marker {
+  display: none;
+}

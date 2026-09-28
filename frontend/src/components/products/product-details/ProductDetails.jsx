@@ -1,115 +1,216 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
+import { FaChevronLeft, FaChevronRight, FaTimes } from "react-icons/fa";
 import { getResponsiveImageProps } from "../../../utils/media";
 
-// Büyük görsel en fazla 32rem (512px) genişlikte; küçükler 3-4 sütun.
-const MAIN_IMAGE = { widths: [320, 640, 960, 1200], defaultWidth: 960, sizes: "(min-width: 640px) 512px, 100vw" };
-const THUMB_IMAGE = { widths: [320, 640], defaultWidth: 320, sizes: "(min-width: 640px) 120px, 30vw" };
+// Ürün galerisi. Mobilde parmakla kaydırılan tam genişlik görseller; masaüstünde tek görsel
+// ekran yüksekliğinde bütünüyle, birden çok görsel iki sütunlu ızgarada. Görsele
+// tıklayınca tam ekran görüntüleyici açılır.
+const SLIDE_IMAGE = { widths: [480, 640, 960, 1200], defaultWidth: 960, sizes: "100vw" };
+const GRID_IMAGE = { widths: [480, 640, 960], defaultWidth: 640, sizes: "(min-width: 1280px) 330px, 28vw" };
+const SINGLE_IMAGE = { widths: [640, 960, 1200], defaultWidth: 960, sizes: "(min-width: 1024px) 50vw, 100vw" };
+const FULL_IMAGE = { widths: [960, 1200], defaultWidth: 1200, sizes: "100vw" };
 
-export default function ProductDetails({ product }) {
-  const [activeIndex, setActiveIndex] = useState(0);
-  const [showZoom, setShowZoom] = useState(false);
-  const [zoomPosition, setZoomPosition] = useState({ x: 50, y: 50 });
-  const zoomAreaRef = useRef(null);
+function Img({ image, preset, className, eager, alt }) {
+  const props = getResponsiveImageProps(image, preset);
+  return (
+    <img
+      src={props.src}
+      srcSet={props.srcSet}
+      sizes={props.sizes}
+      alt={alt}
+      loading={eager ? "eager" : "lazy"}
+      fetchPriority={eager ? "high" : undefined}
+      decoding="async"
+      className={className}
+    />
+  );
+}
+
+function Viewer({ gallery, start, name, onClose }) {
+  const trackRef = useRef(null);
+  const [index, setIndex] = useState(start);
+
+  const go = useCallback((next) => {
+    const el = trackRef.current;
+    if (!el) return;
+    const target = Math.max(0, Math.min(gallery.length - 1, next));
+    el.scrollTo({ left: target * el.clientWidth, behavior: "smooth" });
+  }, [gallery.length]);
 
   useEffect(() => {
-    setActiveIndex(0);
+    const el = trackRef.current;
+    if (el) el.scrollLeft = start * el.clientWidth;
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previous;
+    };
+  }, [start]);
+
+  useEffect(() => {
+    const onKey = (event) => {
+      if (event.key === "Escape") onClose();
+      if (event.key === "ArrowRight") go(index + 1);
+      if (event.key === "ArrowLeft") go(index - 1);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [go, index, onClose]);
+
+  return (
+    <div className="fixed inset-0 z-[80] bg-black/95" role="dialog" aria-modal="true" aria-label={`${name} görselleri`}>
+      <div
+        ref={trackRef}
+        onScroll={(event) => setIndex(Math.round(event.currentTarget.scrollLeft / event.currentTarget.clientWidth))}
+        className="no-scrollbar flex h-full w-full snap-x snap-mandatory overflow-x-auto"
+      >
+        {gallery.map((image, i) => (
+          <div key={i} className="flex h-full w-full shrink-0 snap-center items-center justify-center p-2 sm:p-8">
+            <Img image={image} preset={FULL_IMAGE} alt={`${name} görsel ${i + 1}`} className="max-h-full max-w-full object-contain" />
+          </div>
+        ))}
+      </div>
+      <button
+        type="button"
+        onClick={onClose}
+        aria-label="Kapat"
+        className="absolute right-3 top-3 flex h-11 w-11 items-center justify-center rounded-full bg-white/10 text-white backdrop-blur transition hover:bg-white/20"
+      >
+        <FaTimes />
+      </button>
+      {gallery.length > 1 && (
+        <>
+          <button
+            type="button"
+            onClick={() => go(index - 1)}
+            disabled={index === 0}
+            aria-label="Önceki görsel"
+            className="absolute left-3 top-1/2 hidden h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-white/10 text-white backdrop-blur transition hover:bg-white/20 disabled:opacity-30 sm:flex"
+          >
+            <FaChevronLeft />
+          </button>
+          <button
+            type="button"
+            onClick={() => go(index + 1)}
+            disabled={index === gallery.length - 1}
+            aria-label="Sonraki görsel"
+            className="absolute right-3 top-1/2 hidden h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-white/10 text-white backdrop-blur transition hover:bg-white/20 disabled:opacity-30 sm:flex"
+          >
+            <FaChevronRight />
+          </button>
+          <p className="absolute bottom-4 left-1/2 -translate-x-1/2 rounded-full bg-white/10 px-3 py-1 text-xs text-white">
+            {index + 1} / {gallery.length}
+          </p>
+        </>
+      )}
+    </div>
+  );
+}
+
+export default function ProductDetails({ product }) {
+  const [active, setActive] = useState(0);
+  const [viewer, setViewer] = useState(null);
+  const trackRef = useRef(null);
+
+  useEffect(() => {
+    setActive(0);
+    setViewer(null);
+    if (trackRef.current) trackRef.current.scrollLeft = 0;
   }, [product?._id]);
-
-  const handleMouseMove = (e) => {
-    if (!zoomAreaRef.current) return;
-    const rect = zoomAreaRef.current.getBoundingClientRect();
-    const x = ((e.clientX - rect.left) / rect.width) * 100;
-    const y = ((e.clientY - rect.top) / rect.height) * 100;
-    setZoomPosition({ x, y });
-  };
-
-  const handleImageClick = () => {
-    setShowZoom((prev) => !prev);
-  };
 
   if (!product) return null;
 
   // Medya kayıtları varsa farklı boyutlar (srcset) kullanılır; yoksa eski tek adres.
   const gallery = product.media?.images?.length ? product.media.images : product.images || [];
-  const active = gallery[activeIndex] || gallery[0];
-  const mainImage = getResponsiveImageProps(active, MAIN_IMAGE);
+  if (!gallery.length) {
+    return <div className="flex aspect-[3/4] items-center justify-center rounded-2xl bg-light1 text-sm text-dark2">Görsel yok</div>;
+  }
+
+  const goTo = (i) => {
+    const el = trackRef.current;
+    if (el) el.scrollTo({ left: i * el.clientWidth, behavior: "smooth" });
+  };
 
   return (
-    <section className="max-w-5xl mx-auto px-4 md:px-6 py-10 space-y-10">
-      {/* Galeri */}
-      <div className="flex flex-col gap-5 items-center">
-        {/* Büyük Görsel */}
-        <div className="w-full max-w-lg aspect-[3/4] overflow-hidden rounded-xl border border-light2 shadow-sm">
-          <div
-            ref={zoomAreaRef}
-            className="relative w-full h-full"
-            onClick={handleImageClick}
-            onMouseMove={handleMouseMove}
-          >
-            <img
-              src={mainImage.src}
-              srcSet={mainImage.srcSet}
-              sizes={mainImage.sizes}
-              alt={product.name}
-              fetchPriority="high"
-              className={`w-full h-full object-cover transition-transform duration-300 ${
-                showZoom ? "scale-150" : "scale-100"
-              }`}
-              style={
-                showZoom
-                  ? {
-                      transformOrigin: `${zoomPosition.x}% ${zoomPosition.y}%`,
-                    }
-                  : {}
-              }
-            />
-          </div>
+    <div>
+      {/* Mobil ve tablet: kaydırmalı galeri */}
+      <div className="relative -mx-4 sm:mx-0 lg:hidden">
+        <div
+          ref={trackRef}
+          onScroll={(event) => setActive(Math.round(event.currentTarget.scrollLeft / event.currentTarget.clientWidth))}
+          className="no-scrollbar flex snap-x snap-mandatory overflow-x-auto sm:rounded-2xl"
+        >
+          {gallery.map((image, i) => (
+            <button
+              key={i}
+              type="button"
+              onClick={() => setViewer(i)}
+              aria-label={`${product.name} görsel ${i + 1}, büyüt`}
+              className="aspect-[3/4] w-full shrink-0 snap-center bg-light1"
+            >
+              <Img image={image} preset={SLIDE_IMAGE} eager={i === 0} alt={`${product.name} görsel ${i + 1}`} className="h-full w-full object-cover" />
+            </button>
+          ))}
         </div>
-
-        {/* Küçük Görseller */}
-        <div className="grid grid-cols-3 sm:grid-cols-4 gap-3 max-w-lg w-full">
-          {gallery.map((img, i) => {
-            const thumb = getResponsiveImageProps(img, THUMB_IMAGE);
-            return (
+        {gallery.length > 1 && (
+          <div className="absolute bottom-3 left-1/2 flex -translate-x-1/2 gap-1.5 rounded-full bg-black/25 px-2.5 py-1.5 backdrop-blur">
+            {gallery.map((_, i) => (
               <button
                 key={i}
                 type="button"
-                aria-label={`${product.name} görsel ${i + 1}`}
-                aria-pressed={activeIndex === i}
-                onClick={() => {
-                  setActiveIndex(i);
-                  setShowZoom(false);
-                }}
-                className={`aspect-square overflow-hidden rounded border transition ${
-                  activeIndex === i
-                    ? "border-dark1"
-                    : "border-light2 hover:border-dark2"
-                }`}
-              >
-                <img
-                  src={thumb.src}
-                  srcSet={thumb.srcSet}
-                  sizes={thumb.sizes}
-                  alt=""
-                  loading="lazy"
-                  decoding="async"
-                  className="w-full h-full object-cover"
-                />
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Açıklama */}
-      <div className="bg-light1 border border-light2 rounded-xl p-6 shadow text-dark2 leading-relaxed text-sm">
-        <h2 className="text-lg text-dark1 font-bold mb-3">Açıklama</h2>
-        {product.description ? (
-          <p>{product.description}</p>
-        ) : (
-          <p className="italic text-gray-500">Açıklama bulunamadı.</p>
+                onClick={() => goTo(i)}
+                aria-label={`Görsel ${i + 1}`}
+                aria-current={active === i}
+                className={`h-1.5 rounded-full transition-all ${active === i ? "w-5 bg-white" : "w-1.5 bg-white/60"}`}
+              />
+            ))}
+          </div>
         )}
       </div>
-    </section>
+
+      {/* Masaüstü */}
+      <div className="hidden lg:block">
+        {gallery.length === 1 ? (
+          <button
+            type="button"
+            onClick={() => setViewer(0)}
+            aria-label={`${product.name} görselini büyüt`}
+            className="flex w-full cursor-zoom-in justify-center overflow-hidden rounded-2xl bg-light1"
+          >
+            <Img
+              image={gallery[0]}
+              preset={SINGLE_IMAGE}
+              eager
+              alt={product.name}
+              className="h-[min(calc(100vh-8rem),58rem)] w-auto max-w-full object-contain"
+            />
+          </button>
+        ) : (
+          <div className="grid grid-cols-2 gap-3">
+            {gallery.map((image, i) => (
+              <button
+                key={i}
+                type="button"
+                onClick={() => setViewer(i)}
+                aria-label={`${product.name} görsel ${i + 1}, büyüt`}
+                className="group aspect-[3/4] cursor-zoom-in overflow-hidden rounded-xl bg-light1"
+              >
+                <Img
+                  image={image}
+                  preset={GRID_IMAGE}
+                  eager={i < 2}
+                  alt={`${product.name} görsel ${i + 1}`}
+                  className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.03]"
+                />
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {viewer !== null && (
+        <Viewer gallery={gallery} start={viewer} name={product.name} onClose={() => setViewer(null)} />
+      )}
+    </div>
   );
 }

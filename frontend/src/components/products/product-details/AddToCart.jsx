@@ -1,6 +1,6 @@
 // src/components/products/product-details/AddToCart.jsx
 import React, { useState, useEffect, useRef } from "react";
-import { FaPlus, FaMinus, FaChevronDown } from "react-icons/fa";
+import { FaPlus, FaMinus } from "react-icons/fa";
 import { useCart } from "../../../context/useCart";
 import { useNavigate } from "react-router-dom";
 import api from "../../../../api";
@@ -122,70 +122,6 @@ export default function AddToCart({
     }
   };
 
-  /* dropdown component */
-  const CustomDropdown = ({
-    label,
-    options,
-    selected,
-    onChange,
-    getLabel,
-    isDisabled,
-  }) => {
-    const [open, setOpen] = useState(false);
-    return (
-      <div className="relative">
-        <label className="block text-sm font-medium text-dark2 mb-2">
-          {label}
-        </label>
-        <button
-          type="button"
-          onClick={() => setOpen(!open)}
-          aria-expanded={open}
-          aria-haspopup="listbox"
-          className="w-full flex items-center justify-between px-4 py-2 border border-light2 rounded-lg bg-white text-dark1 focus:outline-none"
-        >
-          <span>{selected || "Seçiniz"}</span>
-          <FaChevronDown className="w-4 h-4 text-dark2" />
-        </button>
-        {open && (
-          <ul
-            role="listbox"
-            className="absolute z-20 mt-1 w-full bg-white border border-light2 rounded-lg shadow-md max-h-60 overflow-auto"
-          >
-            {options.map((opt) => {
-              const disabled = isDisabled?.(opt);
-              const optionLabel = getLabel(opt);
-              return (
-                <li key={optionLabel} role="none">
-                  <button
-                    type="button"
-                    role="option"
-                    aria-selected={selected === optionLabel}
-                    disabled={disabled}
-                    onClick={() => {
-                      onChange(optionLabel);
-                      setOpen(false);
-                    }}
-                    className={`w-full px-4 py-2 text-left ${
-                      disabled
-                        ? "cursor-not-allowed text-gray-400"
-                        : "hover:bg-light1"
-                    } ${
-                      selected === optionLabel ? "bg-light2 font-medium" : ""
-                    }`}
-                  >
-                    {optionLabel}
-                    {disabled && " (Tükendi)"}
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
-        )}
-      </div>
-    );
-  };
-
   /* renk değiştir */
   const handleColorChange = (newColor) => {
     const found = colorOptions.find((opt) => opt.color === newColor);
@@ -197,101 +133,135 @@ export default function AddToCart({
     }
   };
 
+  const addLabel = showAdded
+    ? "Sepete eklendi ✓"
+    : available <= 0 && (withoutSize || selectedSize !== null)
+      ? "Tükendi"
+      : !withoutSize && selectedSize === null
+        ? "Beden seçin"
+        : "Sepete Ekle";
+  const allSoldOut = sizeRows.length > 0 && sizeRows.every((row) => Number(row.stock) <= 0);
+
   return (
-    <div className="bg-white p-6 rounded-lg shadow-md space-y-6">
+    <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold leading-tight text-dark1">
+        <h1 className="text-xl font-semibold leading-snug text-dark1 sm:text-2xl">
           {productName}
         </h1>
-        {color && <p className="mt-1 text-sm text-dark2">Renk: {color}</p>}
-        <div className="mt-3 text-3xl font-bold text-dark1">
-          {formatTry(price)}
-        </div>
+        <div className="mt-2 text-2xl font-semibold text-dark1">{formatTry(price)}</div>
       </div>
+
+      {/* renk */}
+      {(color || colorOptions.length > 1) && (
+        <div>
+          <p className="mb-2 text-sm text-dark2">
+            Renk: <span className="font-medium text-dark1">{selectedColor || color}</span>
+          </p>
+          {colorOptions.some((opt) => opt._id !== productId) && (
+            <div className="flex flex-wrap gap-2">
+              {colorOptions.map((opt) => {
+                const current = opt._id === productId;
+                return (
+                  <button
+                    key={opt._id}
+                    type="button"
+                    onClick={() => handleColorChange(opt.color)}
+                    aria-pressed={current}
+                    className={`rounded-full border px-4 py-1.5 text-sm transition ${
+                      current ? "border-dark1 bg-dark1 text-white" : "border-light2 text-dark1 hover:border-dark1"
+                    }`}
+                  >
+                    {opt.color}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* beden */}
       {sizeRows.length > 0 && !withoutSize && (
-        <CustomDropdown
-          label="Beden"
-          options={sizeRows}
-          selected={selectedSize}
-          onChange={setSelectedSize}
-          getLabel={(opt) => opt.size}
-          isDisabled={(opt) => opt.stock <= 0}
-        />
+        <div>
+          <p className="mb-2 text-sm text-dark2">
+            Beden{selectedSize ? <>: <span className="font-medium text-dark1">{selectedSize}</span></> : ""}
+          </p>
+          <div className="flex flex-wrap gap-2" role="group" aria-label="Beden seçin">
+            {sizeRows.map((row) => {
+              const soldOut = Number(row.stock) <= 0;
+              const selected = selectedSize === row.size;
+              return (
+                <button
+                  key={row.size}
+                  type="button"
+                  disabled={soldOut}
+                  aria-pressed={selected}
+                  onClick={() => setSelectedSize(row.size)}
+                  title={soldOut ? `${row.size} tükendi` : undefined}
+                  className={`h-11 min-w-[3rem] rounded-lg border px-3 text-sm font-medium transition ${
+                    soldOut
+                      ? "cursor-not-allowed border-light2 text-gray-400 line-through"
+                      : selected
+                        ? "border-dark1 bg-dark1 text-white"
+                        : "border-light2 bg-white text-dark1 hover:border-dark1"
+                  }`}
+                >
+                  {row.size}
+                </button>
+              );
+            })}
+          </div>
+        </div>
       )}
 
-      {/* renk */}
-      {colorOptions.some((opt) => opt._id !== productId) && (
-        <CustomDropdown
-          label="Renk"
-          options={colorOptions}
-          selected={selectedColor}
-          onChange={handleColorChange}
-          getLabel={(opt) => opt.color}
-        />
-      )}
-
-      {/* adet */}
-      <div>
-        <label className="block text-sm font-medium text-dark2 mb-2">
-          Adet
-        </label>
-        <div className="flex items-center">
+      {/* adet ve sepete ekle */}
+      <div className="flex items-stretch gap-3">
+        <div className="flex items-center rounded-lg border border-light2">
           <button
             type="button"
             onClick={decrement}
             aria-label="Adeti azalt"
-            className="p-2 border border-light2 rounded-l-lg hover:bg-light1 transition"
+            className="flex h-12 w-10 items-center justify-center text-dark2 transition hover:text-dark1"
           >
-            <FaMinus className="text-dark2" />
+            <FaMinus className="text-xs" />
           </button>
           <input
             type="text"
             readOnly
             value={qty}
             aria-label="Adet"
-            className="w-16 text-center border-t border-b border-light2 text-dark1 px-2 bg-white"
+            className="w-8 bg-transparent text-center text-dark1 outline-none"
           />
           <button
             type="button"
             onClick={increment}
             aria-label="Adeti artır"
-            className="p-2 border border-light2 rounded-r-lg hover:bg-light1 transition"
+            className="flex h-12 w-10 items-center justify-center text-dark2 transition hover:text-dark1"
           >
-            <FaPlus className="text-dark2" />
+            <FaPlus className="text-xs" />
           </button>
         </div>
-        {warn && (
-          <p className="text-xs text-red-600 mt-2 text-center">{warn}</p>
-        )}
+        <button
+          type="button"
+          onClick={handleAddToCart}
+          disabled={!canAdd}
+          className={`h-12 flex-1 rounded-lg text-sm font-semibold uppercase tracking-wider transition ${
+            canAdd ? "bg-dark1 text-white hover:bg-black" : "cursor-not-allowed bg-light2 text-dark2"
+          }`}
+        >
+          {allSoldOut ? "Tükendi" : addLabel}
+        </button>
       </div>
-
-      {/* sepete ekle */}
-      <button
-        onClick={handleAddToCart}
-        disabled={!canAdd}
-        className={`relative w-full py-3 font-medium rounded-lg transition flex items-center justify-center ${
-          canAdd
-            ? "bg-dark1 hover:bg-dark2 text-white"
-            : "bg-light2 text-dark2 cursor-not-allowed"
-        }`}
-      >
-        {showAdded ? (
-          <span className="animate-pulse">Sepete eklendi</span>
-        ) : (
-          "Sepete Ekle"
-        )}
-      </button>
+      {warn && <p className="text-center text-xs text-red-600">{warn}</p>}
 
       {/* alışverişi tamamla — sayfadan çıkana kadar görünür */}
       {hasAddedToCart && (
         <button
           type="button"
           onClick={() => navigate("/cart")}
-          className="w-full py-3 rounded-lg border border-dark1 text-dark1 font-semibold hover:bg-dark1 hover:text-white transition"
+          className="h-12 w-full rounded-lg border border-dark1 text-sm font-semibold uppercase tracking-wider text-dark1 transition hover:bg-dark1 hover:text-white"
         >
-          Alışverişi Tamamla
+          Sepete Git
         </button>
       )}
     </div>

@@ -5,7 +5,8 @@ import { formatTry } from "../../../utils/currency";
 
 // Ürün sayfasında kargo ücreti ve iade hakkı özeti. Kargo bilgisi yönetim
 // panelindeki kargo ayarından gelir; iade süresi yasal cayma hakkıdır.
-export default function ShippingReturnInfo() {
+// bare: ürün sayfasındaki açılır başlığın içinde, çerçevesiz ve başlıksız.
+export default function ShippingReturnInfo({ bare = false }) {
   const [shipping, setShipping] = useState(null);
 
   useEffect(() => {
@@ -23,8 +24,8 @@ export default function ShippingReturnInfo() {
   const threshold = shipping?.freeShippingThreshold;
 
   return (
-    <section className="rounded-xl border border-light2 bg-white p-4 text-sm text-dark2 space-y-2">
-      <h2 className="text-base font-semibold text-dark1">Kargo ve iade</h2>
+    <section className={bare ? "space-y-2 text-sm text-dark2" : "rounded-xl border border-light2 bg-white p-4 text-sm text-dark2 space-y-2"}>
+      {!bare && <h2 className="text-base font-semibold text-dark1">Kargo ve iade</h2>}
       {shipping && (
         <p>
           Kargo: {fee > 0 ? formatTry(fee) : "ücretsiz"}
