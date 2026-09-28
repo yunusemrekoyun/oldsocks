@@ -21,7 +21,7 @@ function Img({ image, preset, className, eager, alt }) {
       sizes={props.sizes}
       alt={alt}
       loading={eager ? "eager" : "lazy"}
-      fetchPriority={eager ? "high" : undefined}
+      fetchpriority={eager ? "high" : undefined}
       decoding="async"
       className={className}
     />

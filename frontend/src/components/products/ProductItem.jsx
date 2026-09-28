@@ -296,7 +296,7 @@ const ProductItem = ({
 ProductItem.propTypes = {
   id: PropTypes.oneOfType([PropTypes.string, PropTypes.number]).isRequired,
   video: PropTypes.string,
-  poster: PropTypes.string,
+  poster: PropTypes.oneOfType([PropTypes.string, PropTypes.object]),
   name: PropTypes.string.isRequired,
   price: PropTypes.number.isRequired,
   discountedPrice: PropTypes.number,

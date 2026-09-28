@@ -111,7 +111,7 @@ export default function Hero() {
           sizes={imageProps.sizes}
           alt="OLDSOCKS"
           loading={first ? "eager" : "lazy"}
-          fetchPriority={first ? "high" : "low"}
+          fetchpriority={first ? "high" : "low"}
           decoding={first ? "sync" : "async"}
           className="w-full h-full object-cover object-center block"
         />

@@ -286,7 +286,7 @@ export default function SimilarProductItem({
 SimilarProductItem.propTypes = {
   id: PropTypes.string.isRequired,
   video: PropTypes.string,
-  poster: PropTypes.string, // opsiyonel
+  poster: PropTypes.oneOfType([PropTypes.string, PropTypes.object]), // opsiyonel
   name: PropTypes.string.isRequired,
   price: PropTypes.number.isRequired,
   discountedPrice: PropTypes.number,

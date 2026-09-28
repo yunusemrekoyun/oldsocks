@@ -283,7 +283,7 @@ const ProductGridItem = ({
 ProductGridItem.propTypes = {
   id: PropTypes.oneOfType([PropTypes.string, PropTypes.number]).isRequired,
   video: PropTypes.string,
-  poster: PropTypes.string,
+  poster: PropTypes.oneOfType([PropTypes.string, PropTypes.object]),
   name: PropTypes.string.isRequired,
   // normalize edilmiş pricing props
   price: PropTypes.number.isRequired,
