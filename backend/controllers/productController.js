@@ -206,12 +206,13 @@ async function saveProductSizes(productId, parsedSizes, rawSizes) {
       }));
     }
     const result = await Product.updateOne(unchanged, { $set: { sizes: plan.sizes } });
-    if (result.matchedCount) return { ok: true };
+    if (result.matchedCount) return { ok: true, wrote: true };
   }
   return { busy: true };
 }
 
 exports.updateProduct = async (req, res) => {
+  let sizesWritten = false;
   try {
     const existing = await Product.findById(req.params.id);
     if (!existing) return res.status(404).json({ message: "Ürün bulunamadı." });
@@ -261,10 +262,29 @@ exports.updateProduct = async (req, res) => {
       videoAsset = videos[0] || null;
     }
 
+    existing.name = name;
+    existing.price = pricing.price;
+    existing.originalPrice = pricing.originalPrice;
+    existing.discount = pricing.discount;
+    existing.category = req.body.category || existing.category;
+    existing.description =
+      req.body.description !== undefined ? req.body.description : existing.description;
+    existing.color = req.body.color !== undefined ? req.body.color : existing.color;
+    existing.imageAssets = imageAssets.map((asset) => asset._id);
+    existing.videoAsset = videoAsset?._id || null;
+    existing.images = imageAssets.map((asset) => legacyAssetUrl(asset, "detail"));
+    existing.video = videoAsset ? legacyAssetUrl(videoAsset, "detail") : "";
+    // Diğer alanlar stoktan önce doğrulanır: kayıt yarıda kalıp yalnız stok yazılmasın.
+    if (String(existing.color || "").trim().length > 80) {
+      throw new CatalogValidationError("Renk en fazla 80 karakter olabilir.");
+    }
+    await existing.validate();
+
     // Bedenler ve stok diğer alanlardan önce, ayrı yazılır: stok arada değiştiyse
     // yönetici güncel değeri görür, hiçbir alan kaydedilmez.
     if (sizes) {
       const saved = await saveProductSizes(existing._id, sizes, req.body.sizes);
+      sizesWritten = Boolean(saved.wrote);
       if (saved.conflicts) {
         return res.status(409).json({
           code: "STOCK_CHANGED",
@@ -283,27 +303,20 @@ exports.updateProduct = async (req, res) => {
       }
     }
 
-    existing.name = name;
-    existing.price = pricing.price;
-    existing.originalPrice = pricing.originalPrice;
-    existing.discount = pricing.discount;
-    existing.category = req.body.category || existing.category;
-    existing.description =
-      req.body.description !== undefined ? req.body.description : existing.description;
-    existing.color = req.body.color !== undefined ? req.body.color : existing.color;
-    existing.imageAssets = imageAssets.map((asset) => asset._id);
-    existing.videoAsset = videoAsset?._id || null;
-    existing.images = imageAssets.map((asset) => legacyAssetUrl(asset, "detail"));
-    existing.video = videoAsset ? legacyAssetUrl(videoAsset, "detail") : "";
     await existing.save();
     await syncProductReferences(existing);
     invalidateProductsCache();
     const populated = await populateProductMedia(Product.findById(existing._id));
     res.json(applyProductMedia(populated));
   } catch (error) {
+    // Stok yazıldıysa sonraki adım başarısız olsa da vitrin güncel stoğu göstersin.
+    if (sizesWritten) invalidateProductsCache();
     if (error instanceof MediaError) throw error;
     if (error instanceof CatalogValidationError) {
       return res.status(400).json({ message: error.message, details: error.details });
+    }
+    if (error?.name === "ValidationError") {
+      return res.status(400).json({ message: "Ürün bilgileri geçersiz. Alanları kontrol edin." });
     }
     console.error(error);
     res.status(500).json({ message: "Ürün güncellenirken hata oluştu." });

@@ -12,6 +12,7 @@ import {
   validateMediaFile,
 } from "../../services/mediaUpload";
 import { normalizePricing, resolvePricingForSubmit } from "../../utils/pricing";
+import { applyStockConflict } from "../../utils/stockConflict";
 
 const Badge = ({ children }) => (
   <span className="inline-flex items-center px-2 py-0.5 rounded text-xs bg-gray-100 text-gray-700">
@@ -439,14 +440,7 @@ export default function EditProductForm({ product, onClose, onSaved }) {
       console.error("Ürün güncelleme hatası:", err);
       const data = err?.response?.data;
       if (data?.code === "STOCK_CHANGED" && Array.isArray(data.sizes)) {
-        // Girilen değerler kalır; bir sonraki kayıt güncel stoğa göre yapılır.
-        const fresh = new Map(data.sizes.map((row) => [String(row._id), Number(row.stock)]));
-        setFormData((current) => ({
-          ...current,
-          sizes: current.sizes.map((row) =>
-            row._id && fresh.has(String(row._id)) ? { ...row, loadedStock: fresh.get(String(row._id)) } : row
-          ),
-        }));
+        setFormData((current) => ({ ...current, sizes: applyStockConflict(current.sizes, data.sizes) }));
         setStockNotice(data.message);
       }
       const message = mediaErrorMessage(
@@ -500,6 +494,7 @@ export default function EditProductForm({ product, onClose, onSaved }) {
                 name="color"
                 value={formData.color}
                 onChange={handleInput}
+                maxLength={80}
                 className="w-full px-4 py-2 border rounded-lg"
                 placeholder="Örn. Siyah"
               />

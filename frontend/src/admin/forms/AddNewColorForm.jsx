@@ -377,6 +377,7 @@ export default function AddNewColorForm({ product, onClose, onSaved }) {
               name="color"
               value={formData.color}
               onChange={handleInput}
+              maxLength={80}
               placeholder="Örn. Kırmızı"
               className="w-full px-4 py-2 border rounded-lg focus:ring-blue-500"
             />

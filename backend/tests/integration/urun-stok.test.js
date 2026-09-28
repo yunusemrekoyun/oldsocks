@@ -139,3 +139,33 @@ test("kayıt ile eşzamanlı ayrımlar kaybolmaz", async () => {
     assert.deepEqual(await stocks(productId), { M: 15, L: 9 });
   }
 });
+
+test("çakışmadan sonra yalnız değiştirilen beden yazılır; dokunulmamış bedende ayrım korunur", async () => {
+  const productId = await seedProduct([["M", 5], ["L", 5]]);
+  const form = await openForm(productId);
+  assert.equal((await hold(productId, "M")).status, 200);
+  assert.equal((await hold(productId, "L")).status, 200);
+  form[1].stock = 8;
+  const conflict = await save(productId, form);
+  assert.equal(conflict.status, 409);
+  assert.deepEqual(conflict.data.conflicts.map((c) => c.size), ["L"]);
+  // Formun yaptığı gibi (frontend/src/utils/stockConflict): dokunulmamış satır güncel stoğu alır.
+  const fresh = new Map(conflict.data.sizes.map((s) => [String(s._id), s.stock]));
+  const next = form.map((row) =>
+    row.stock === row.loadedStock
+      ? { ...row, stock: fresh.get(row._id), loadedStock: fresh.get(row._id) }
+      : { ...row, loadedStock: fresh.get(row._id) }
+  );
+  assert.equal((await save(productId, next)).status, 200);
+  assert.deepEqual(await stocks(productId), { M: 4, L: 8 });
+});
+
+test("diğer alanlardan biri geçersizse stok da yazılmaz", async () => {
+  const productId = await seedProduct([["M", 5]]);
+  const form = await openForm(productId);
+  form[0].stock = 9;
+  const res = await save(productId, form, { color: "x".repeat(81) });
+  assert.equal(res.status, 400);
+  assert.match(res.data.message, /Renk/);
+  assert.deepEqual(await stocks(productId), { M: 5 });
+});
