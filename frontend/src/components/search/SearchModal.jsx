@@ -123,7 +123,7 @@ export default function SearchModal({ open, onClose }) {
             type="text"
             enterKeyHint="search"
             aria-label="Ürün ara"
-            placeholder="Ürün, renk veya kategori ara..."
+            placeholder="Ne arıyorsunuz?"
             className="w-full outline-none text-lg"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
@@ -173,7 +173,7 @@ export default function SearchModal({ open, onClose }) {
             )
           ) : (
             <div className="text-gray-500 text-center py-4">
-              Herhangi bir ürün adı yazın.
+              Aradığınız ürünü, rengi ya da kategoriyi yazın.
             </div>
           )}
         </div>

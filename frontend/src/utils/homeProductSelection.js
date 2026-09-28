@@ -8,10 +8,11 @@ function shuffle(items, random) {
 }
 
 // Sunucu her bölüm için aday havuzunu hazırlar (GET /storefront/home-products); burada
-// yalnız karıştırılır ve 4 ürün seçilir.
+// yalnız karıştırılır. Bölüm yana kaydırılan şerit olduğu için havuzun tamamı (en çok 12) gösterilir.
+export const HOME_SECTION_MAX = 12;
 export function pickHomeProducts(pool, section, random = Math.random) {
   const items = Array.isArray(pool) ? pool : [];
   const config = section || {};
   const shouldShuffle = config.shuffle || config.source === "random";
-  return (shouldShuffle ? shuffle(items, random) : items).slice(0, 4);
+  return (shouldShuffle ? shuffle(items, random) : items).slice(0, HOME_SECTION_MAX);
 }

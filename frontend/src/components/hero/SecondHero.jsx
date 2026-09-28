@@ -26,6 +26,11 @@ export default function SecondHero() {
     sizes: "100vw",
   });
 
+  // Telefonda görsel kırpılmasın: kutu görselin kendi oranında (yoksa 16:9). Tablet ve
+  // masaüstünde yükseklik ekrana göre, eskisi gibi.
+  const media = campaign.media || {};
+  const ratio = Number(media.width) > 0 && Number(media.height) > 0 ? `${media.width} / ${media.height}` : "16 / 9";
+
   const handleClick = () => {
     // 2) /shop sayfasına yönlendir, state ile aktar
     navigate("/shop", {
@@ -39,7 +44,7 @@ export default function SecondHero() {
   return (
     <section className="relative w-full">
       {/* Arka plan */}
-      <div className="w-full h-[60vh] md:h-[70vh] lg:h-[80vh] overflow-hidden">
+      <div className="w-full overflow-hidden md:h-[70vh] lg:h-[80vh]" style={{ aspectRatio: ratio }}>
         <img
           src={imageProps.src}
           srcSet={imageProps.srcSet}
@@ -54,16 +59,16 @@ export default function SecondHero() {
       {overlayOpacity > 0 && <div className="pointer-events-none absolute inset-0 bg-black" style={{ opacity: overlayOpacity / 100 }} />}
 
       {/* İçerik */}
-      <div className="absolute inset-0 flex flex-col items-center justify-end text-center px-6 pb-8 md:pb-12">
+      <div className="absolute inset-0 flex flex-col items-center justify-end px-6 pb-3 text-center sm:pb-6 md:pb-12">
         {(title || subtitle) && (
           <div className="max-w-4xl bg-dark1/85 px-5 py-3 text-white">
-            {title && <h2 className="font-playfair text-2xl font-bold uppercase leading-tight md:text-4xl">{title}</h2>}
-            {subtitle && <p className="mt-1 text-sm md:text-lg">{subtitle}</p>}
+            {title && <h2 className="font-playfair text-base font-bold uppercase leading-tight sm:text-2xl md:text-4xl">{title}</h2>}
+            {subtitle && <p className="mt-1 text-xs sm:text-sm md:text-lg">{subtitle}</p>}
           </div>
         )}
         <button
           onClick={handleClick}
-          className="campaign-cta mt-3 rounded-full border border-white px-8 py-3 font-medium text-white backdrop-blur-sm transition-colors duration-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+          className="campaign-cta mt-2 rounded-full border border-white px-4 py-1 text-xs font-medium text-white sm:mt-3 sm:px-6 sm:py-2 sm:text-sm md:px-8 md:py-3 md:text-base backdrop-blur-sm transition-colors duration-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
           style={{ "--button-opacity": buttonOpacity / 100 }}
         >
           {buttonText}

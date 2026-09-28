@@ -44,18 +44,12 @@ html {
   color: #000;
 }
 
-.home-product-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 1.5rem;
+/* Ana sayfa ürün şeridi: kartlar eşit boyda */
+.home-rail .swiper-slide {
+  height: auto;
 }
-
-@media (min-width: 640px) {
-  .home-product-grid {
-    width: var(--home-desktop-width);
-    grid-template-columns: repeat(var(--home-count), minmax(0, 1fr));
-    margin-inline: auto;
-  }
+.home-rail .swiper-slide > * {
+  height: 100%;
 }
 
 .no-scrollbar::-webkit-scrollbar {
