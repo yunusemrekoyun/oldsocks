@@ -148,6 +148,48 @@ async function persistCouponUsage(order, tag) {
   }
 }
 
+// Ödeme alındı: sipariş tamamlanır. Kupon kuralı aşıldıysa ya da stok kalmadıysa
+// sipariş incelemeye düşer; bu arada iptal edildiyse de para alınmış sipariş kaybolmaz.
+// PayTR bildirimi ve mock ödeme aynı yolu kullanır. Dönüş: "paid" | "review"
+async function completePaidOrder(order, paymentId, tag) {
+  let finalized;
+  try {
+    // Serbest bırakılmış oturum kararı işlemin içinde, güncel kayda göre verilir:
+    // bildirim okunduktan sonra sipariş kapatılmış olabilir.
+    finalized = await finalizeOrderPayment(order._id, { allowReleased: true, enforceCoupon: true });
+  } catch (e) {
+    if (e instanceof OrderPaymentStateError) {
+      const current = await Order.findById(order._id).select("status").lean();
+      if (current?.status === "cancelled") await markPaidAfterCancel(order._id, paymentId);
+      return "review";
+    }
+    if (!(e instanceof StockUnavailableError)) throw e;
+    console.error(`[PAYMENT][${tag}] stock error:`, e.message);
+    order.status = "payment_review";
+    order.paymentId = paymentId;
+    order.paymentReceivedAt = new Date();
+    order.cancelReason = "stock_unavailable_after_payment";
+    order.cancelledAt = null;
+    order.stockUpdated = false;
+    await order.save();
+    queuePaymentReviewAlert(order._id);
+    return "review";
+  }
+
+  finalized.paymentId = paymentId;
+  finalized.paymentReceivedAt ||= new Date();
+  if (finalized.status === "payment_review") {
+    await finalized.save();
+    queuePaymentReviewAlert(finalized._id);
+    return "review";
+  }
+  await persistCouponUsage(finalized, tag);
+  await finalized.save();
+  // E-posta yanıt verildikten sonra arka planda gönderilir.
+  queueOrderMails(finalized._id);
+  return "paid";
+}
+
 function buildPaytrBasket(order) {
   const rawItems = Array.isArray(order?.items) ? order.items : [];
   const lines = rawItems
@@ -825,34 +867,20 @@ exports.mockComplete = async (req, res) => {
       return res.status(400).json({ message: "Eksik parametre." });
     }
 
-    let order = await Order.findOne({ conversationId });
+    const order = await Order.findOne({ conversationId });
 
     if (!order) {
       return res.status(404).json({ message: "Sipariş bulunamadı." });
     }
 
-    if (!(order.status === "paid" && order.stockUpdated)) {
-      try {
-        order = await finalizeOrderPayment(order._id, { allowReleased: true });
-        order.paymentId = `mock_${conversationId}`;
-        order.paymentReceivedAt ||= new Date();
-      } catch (e) {
-        if (!(e instanceof StockUnavailableError)) throw e;
-        console.error("[PAYMENT][mock-complete] stock error:", e.message);
-        order.status = "cancelled";
-        order.cancelReason = "stock_unavailable";
-        order.cancelledAt = new Date();
-        order.stockUpdated = false;
-        await order.save();
-        return res
-          .status(409)
-          .json({ message: "Stok yetersizliği nedeniyle sipariş iptal edildi." });
-      }
+    // PayTR bildirimiyle aynı: incelemedeki veya gönderilmiş sipariş yeniden işlenmez.
+    if (["payment_review", "shipped", "completed"].includes(order.status)) {
+      return res.json({ ok: true });
     }
-
-    await persistCouponUsage(order, "mock-complete");
-    await order.save();
-    queueOrderMails(order._id);
+    if (!(order.status === "paid" && order.stockUpdated)) {
+      const outcome = await completePaidOrder(order, `mock_${conversationId}`, "mock-complete");
+      return res.json({ ok: true, state: outcome });
+    }
     return res.json({ ok: true });
   } catch (e) {
     console.error("[PAYMENT][mock-complete] Hata:", e);
@@ -893,20 +921,16 @@ exports.paytrCallback = async (req, res) => {
     }
 
     if (status === "success") {
-      let order = await Order.findOne({ conversationId: merchant_oid });
+      const order = await Order.findOne({ conversationId: merchant_oid });
       if (!order) return res.send("OK");
       if (["payment_review", "shipped", "completed"].includes(order.status)) {
         return res.send("OK");
       }
       // Sistemin kapattığı oturum (stok ayrımı süresi doldu, müşteri yeni ödeme başlattı)
       // için geç gelen ödeme: stok yeniden düşülmeye çalışılır, yetmezse incelemeye düşer.
-      const releasedSession =
-        order.status === "cancelled" &&
-        RELEASED_REASONS.includes(order.cancelReason) &&
-        !order.coupon?.couponId;
       // Yöneticinin iptal ettiği siparişe ödeme geldiyse sessizce yok sayma: para alındı,
       // yönetici bilmeli.
-      if (order.status === "cancelled" && !releasedSession) {
+      if (order.status === "cancelled" && !RELEASED_REASONS.includes(order.cancelReason)) {
         await markPaidAfterCancel(order._id, merchant_oid);
         return res.send("OK");
       }
@@ -930,36 +954,7 @@ exports.paytrCallback = async (req, res) => {
         return res.send("OK");
       }
 
-      try {
-        // Serbest bırakılmış oturum kararı işlemin içinde, güncel kayda göre verilir:
-        // bildirim okunduktan sonra sipariş kapatılmış olabilir.
-        order = await finalizeOrderPayment(order._id, { allowReleased: true });
-        order.paymentId = merchant_oid;
-        order.paymentReceivedAt ||= new Date();
-      } catch (e) {
-        if (e instanceof OrderPaymentStateError) {
-          // Bu arada iptal edildiyse para alınmış bir sipariş sessizce kaybolmasın.
-          const current = await Order.findById(order._id).select("status").lean();
-          if (current?.status === "cancelled") await markPaidAfterCancel(order._id, merchant_oid);
-          return res.send("OK");
-        }
-        if (!(e instanceof StockUnavailableError)) throw e;
-        console.error("[PAYTR][callback] stock error:", e.message);
-        order.status = "payment_review";
-        order.paymentId = merchant_oid;
-        order.paymentReceivedAt = new Date();
-        order.cancelReason = "stock_unavailable_after_payment";
-        order.cancelledAt = null;
-        order.stockUpdated = false;
-        await order.save();
-        queuePaymentReviewAlert(order._id);
-        return res.send("OK");
-      }
-
-      await persistCouponUsage(order, "callback");
-      await order.save();
-      // E-posta PayTR'ye yanıt verildikten sonra arka planda gönderilir.
-      queueOrderMails(order._id);
+      await completePaidOrder(order, merchant_oid, "callback");
     } else {
       // Ödeme başarısız: sipariş kapanır, ayrılan stok geri eklenir.
       const order = await Order.findOne({ conversationId: merchant_oid, status: "pending" })

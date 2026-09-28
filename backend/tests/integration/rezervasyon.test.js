@@ -198,21 +198,41 @@ test("müşteri sepete dönünce kendi ayrımı bırakılır; sonuç sayfası ge
   assert.equal(again.data.released, false);
 });
 
-test("kuponlu serbest bırakılmış oturuma geç ödeme gelirse otomatik tamamlanmaz, incelemeye düşer", async () => {
-  const productId = await seedProduct(2);
+test("süresi dolan kuponlu oturuma geç ödeme gelirse kupon kuralları yeniden denetlenir", async () => {
+  const productId = await seedProduct(3);
   const code = `REZ${crypto.randomBytes(3).toString("hex").toUpperCase()}`;
   await mongoose.connection.collection("coupons").insertOne({
     code, isEnabled: true, discountType: "percent", discountValue: 10, minimumSubtotal: 0,
     expiresAt: null, maxUses: 1, productIds: [productId], createdAt: new Date(), updatedAt: new Date(),
   });
-  const res = await start(productId, uniq("kupon"), 1, { couponCode: code });
-  assert.equal(res.status, 200, JSON.stringify(res.data));
-  await postJson(server.base, "/api/v1/payment/release", { conversationId: res.data.conversationId });
-  const order = await Orders.findOne({ conversationId: res.data.conversationId });
-  await paytrCallback(server.base, { merchantOid: res.data.conversationId, totalAmount: Math.round(order.totalPrice * 100) });
-  const after = await Orders.findOne({ _id: order._id });
-  assert.equal(after.status, "payment_review");
-  assert.equal(after.cancelReason, "paid_after_cancel");
+  const expire = async (conversationId) => {
+    await Orders.updateOne({ conversationId }, { $set: { stockReservedUntil: new Date(Date.now() - 1000) } });
+    return waitFor(async () => (await Orders.findOne({ conversationId })).status === "cancelled");
+  };
+  const payFor = async (conversationId) => {
+    const order = await Orders.findOne({ conversationId });
+    await paytrCallback(server.base, { merchantOid: conversationId, totalAmount: Math.round(order.totalPrice * 100) });
+    return Orders.findOne({ _id: order._id });
+  };
+
+  // Kupon hâlâ kullanılabilir: sipariş tamamlanır, stok yeniden düşülür.
+  const first = await start(productId, uniq("kupon1"), 1, { couponCode: code });
+  assert.equal(first.status, 200, JSON.stringify(first.data));
+  assert.ok(await expire(first.data.conversationId));
+  assert.equal(await stockOf(productId), 3);
+  const paid = await payFor(first.data.conversationId);
+  assert.equal(paid.status, "paid");
+  assert.equal(await stockOf(productId), 2);
+
+  // Sınır bu arada doldu: para alındı, sipariş incelemeye düşer.
+  await mongoose.connection.collection("coupons").updateOne({ code }, { $set: { maxUses: 2 } });
+  const second = await start(productId, uniq("kupon2"), 1, { couponCode: code });
+  assert.equal(second.status, 200, JSON.stringify(second.data));
+  assert.ok(await expire(second.data.conversationId));
+  await mongoose.connection.collection("coupons").updateOne({ code }, { $set: { maxUses: 1 } });
+  const review = await payFor(second.data.conversationId);
+  assert.equal(review.status, "payment_review");
+  assert.equal(review.cancelReason, "coupon_limit_after_payment");
   assert.equal(await stockOf(productId), 2);
 });
 

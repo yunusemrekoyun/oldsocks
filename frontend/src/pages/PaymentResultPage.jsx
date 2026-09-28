@@ -19,7 +19,7 @@ const POLL_INTERVAL_MS = 2000;
 const POLL_LIMIT_MS = 30000;
 
 const REVIEW_MESSAGE =
-  "Ödemeniz alındı; siparişiniz stok veya tutar kontrolü için incelemeye alındı. Ekibimiz sizinle iletişime geçecek.";
+  "Ödemeniz alındı; siparişiniz kontrol için incelemeye alındı. Ekibimiz sizinle iletişime geçecek.";
 
 // Sunucu yanıtını tek bir duruma çevirir: paid | review | failed | invalid | pending
 async function fetchPaymentState(conversationId) {

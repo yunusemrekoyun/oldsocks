@@ -1,4 +1,5 @@
 const CouponUsage = require("../models/CouponUsage");
+const { memberEmail } = require("../services/couponRules");
 
 function normalizeCouponCode(value) {
   return String(value || "").trim().toUpperCase();
@@ -6,32 +7,6 @@ function normalizeCouponCode(value) {
 
 function normalizeEmailKey(value) {
   return String(value || "").trim().toLowerCase();
-}
-
-async function hasCouponUsage({ couponId, userId, email }) {
-  const conditions = [];
-
-  if (userId) {
-    conditions.push({ user: userId });
-  }
-
-  const emailKey = normalizeEmailKey(email);
-  if (emailKey) {
-    conditions.push({ emailKey });
-  }
-
-  if (!couponId || conditions.length === 0) {
-    return false;
-  }
-
-  const existing = await CouponUsage.findOne({
-    couponId,
-    $or: conditions,
-  })
-    .select("_id")
-    .lean();
-
-  return Boolean(existing);
 }
 
 async function recordCouponUsageForOrder(order) {
@@ -46,7 +21,8 @@ async function recordCouponUsageForOrder(order) {
   const payload = {
     couponId,
     user: order?.user || null,
-    emailKey: normalizeEmailKey(order?.guest?.email || ""),
+    // Üyede de e-posta yazılır: aynı e-postayla misafir olarak tekrar kullanılamasın.
+    emailKey: normalizeEmailKey(order?.guest?.email || (await memberEmail(order?.user))),
     orderId: order?._id || null,
     orderConversationId: order?.conversationId || null,
     usedAt: new Date(),
@@ -58,6 +34,5 @@ async function recordCouponUsageForOrder(order) {
 module.exports = {
   normalizeCouponCode,
   normalizeEmailKey,
-  hasCouponUsage,
   recordCouponUsageForOrder,
 };

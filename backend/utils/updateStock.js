@@ -1,6 +1,7 @@
 const { invalidateCatalog } = require("../services/catalogCache");
 const Product = require("../models/Product");
 const Order = require("../models/Order");
+const { couponLimitBreached } = require("../services/couponRules");
 
 class StockUnavailableError extends Error {
   constructor(message = "Stock update failed for one or more items.") {
@@ -91,8 +92,10 @@ const RELEASED_REASONS = Object.freeze([
  * Aynı PayTR bildirimi eşzamanlı gelse bile ikinci işlem paid + stockUpdated durumunu
  * görür ve stoğu tekrar düşmez.
  * allowReleased: sistemin kapattığı oturuma geç gelen ödemeyi kabul et.
+ * enforceCoupon: kupon kurallarını ödeme anında yeniden denetle (PayTR bildirimi);
+ *   aşılıyorsa sipariş "paid" yerine incelemeye (payment_review) alınır.
  */
-async function finalizeOrderPayment(orderId, { allowReleased = false } = {}) {
+async function finalizeOrderPayment(orderId, { allowReleased = false, enforceCoupon = false } = {}) {
   const session = await Order.startSession();
   try {
     await session.withTransaction(async () => {
@@ -104,15 +107,27 @@ async function finalizeOrderPayment(orderId, { allowReleased = false } = {}) {
       }
 
       if (order.status === "paid" && order.stockUpdated) return;
-      // Kuponlu sipariş otomatik tamamlanmaz: kupon hakkı arada başka siparişte
-      // kullanılmış olabilir; yönetici inceler.
       const released =
         allowReleased &&
         order.status === "cancelled" &&
-        RELEASED_REASONS.includes(order.cancelReason) &&
-        !order.coupon?.couponId;
+        RELEASED_REASONS.includes(order.cancelReason);
       if (!["pending", "payment_review", "paid"].includes(order.status) && !released) {
         throw new OrderPaymentStateError();
+      }
+      // Aynı müşterinin başka oturumu ödendiyse ya da kullanım sınırı dolduysa kupon
+      // ikinci kez işlemez: para alındı, yönetici inceler.
+      if (
+        enforceCoupon &&
+        (order.status === "pending" || released) &&
+        (await couponLimitBreached(order, { session }))
+      ) {
+        order.status = "payment_review";
+        order.cancelReason = "coupon_limit_after_payment";
+        order.cancelledAt = null;
+        order.stockReservedUntil = null;
+        order.adminSeenAt = null;
+        await order.save({ session });
+        return;
       }
 
       if (!order.stockUpdated) await applyStockChanges(order, { session });

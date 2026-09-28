@@ -70,6 +70,7 @@ async function alertPaymentReview(orderId) {
     amount_mismatch_after_payment: "PayTR'den gelen tutar sipariş tutarından düşük.",
     stock_unavailable_after_payment: "Ödeme alındı ama ürün stokta kalmadı.",
     paid_after_cancel: "İptal edilmiş bir siparişe ödeme geldi.",
+    coupon_limit_after_payment: "Ödeme alındı ama kupon bu müşteri tarafından daha önce kullanılmış ya da kullanım sınırı dolmuş.",
   };
   try {
     await sendAdminAlertMail({

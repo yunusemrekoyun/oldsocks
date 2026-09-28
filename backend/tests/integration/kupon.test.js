@@ -214,6 +214,92 @@ test("kuponu ödeyerek kullanan müşteri aynı kuponu ikinci kez kullanamaz", a
   assert.match(second.data.message, /daha önce kullandınız/);
 });
 
+async function pay(conversationId) {
+  const order = await Orders.findOne({ conversationId });
+  return paytrCallback(server.base, { merchantOid: conversationId, totalAmount: Math.round(order.totalPrice * 100) });
+}
+
+async function statusesOf(...conversationIds) {
+  const orders = await Orders.find({ conversationId: { $in: conversationIds } }).toArray();
+  return orders.map((o) => [o.status, o.cancelReason || null]).sort();
+}
+
+test("aynı müşteri kuponu başka cihazda ikinci bir oturumla kullanamaz", async () => {
+  const productId = await seedProduct();
+  const code = await seedCoupon(productId);
+  const first = await startGuest(productId, "iki-cihaz@test.local", code);
+  assert.equal(first.status, 200, JSON.stringify(first.data));
+  const second = await startGuest(productId, "Iki-Cihaz@test.local", code);
+  assert.equal(second.status, 409);
+  assert.match(second.data.message, /açık bir ödeme oturumunuzda/);
+});
+
+test("aynı müşterinin iki oturumu da ödenirse kupon ikinci siparişte işlemez, sipariş incelemeye düşer", async () => {
+  const productId = await seedProduct();
+  const code = await seedCoupon(productId);
+  const a = await startGuest(productId, "yaris-a@test.local", code);
+  const b = await startGuest(productId, "yaris-b@test.local", code);
+  assert.equal(a.status, 200);
+  assert.equal(b.status, 200);
+  // Başlatma denetimini aynı anda geçmiş iki oturum: ikisi de aynı müşterinin.
+  await Orders.updateOne({ conversationId: b.data.conversationId }, { $set: { "guest.email": "yaris-a@test.local" } });
+  const results = await Promise.all([pay(a.data.conversationId), pay(b.data.conversationId)]);
+  assert.deepEqual(results.map((r) => r.text), ["OK", "OK"]);
+  assert.deepEqual(await statusesOf(a.data.conversationId, b.data.conversationId), [
+    ["paid", null],
+    ["payment_review", "coupon_limit_after_payment"],
+  ]);
+});
+
+test("kullanım sınırı ödeme anında da denetlenir", async () => {
+  const productId = await seedProduct();
+  const code = await seedCoupon(productId);
+  const a = await startGuest(productId, "sinir-a@test.local", code);
+  const b = await startGuest(productId, "sinir-b@test.local", code);
+  assert.equal(a.status, 200);
+  assert.equal(b.status, 200);
+  await mongoose.connection.collection("coupons").updateOne({ code }, { $set: { maxUses: 1 } });
+  await pay(a.data.conversationId);
+  await pay(b.data.conversationId);
+  assert.deepEqual(await statusesOf(a.data.conversationId, b.data.conversationId), [
+    ["paid", null],
+    ["payment_review", "coupon_limit_after_payment"],
+  ]);
+});
+
+test("üyenin kullandığı kupon aynı e-postayla misafir olarak tekrar kullanılamaz", async () => {
+  const productId = await seedProduct();
+  const code = await seedCoupon(productId);
+  const email = "kupon-uye@test.local";
+  const password = `Test-${crypto.randomBytes(6).toString("hex")}!aA1`;
+  const addressId = new mongoose.Types.ObjectId();
+  await mongoose.connection.collection("users").insertOne({
+    firstName: "Kupon", lastName: "Üye", email, phone: "+905551234567", password: await bcrypt.hash(password, 4),
+    role: "user", tokenVersion: 0, refreshTokens: [], createdAt: new Date(), updatedAt: new Date(),
+    addresses: [{ _id: addressId, ...address }],
+  });
+  const login = await postJson(server.base, "/api/v1/auth/login", { email, password });
+  const member = await postJson(
+    server.base,
+    "/api/v1/payment/start",
+    {
+      cartItems: [{ id: String(productId), size: "M", qty: 1 }],
+      addressId: String(addressId),
+      couponCode: code,
+      consent: CONSENT,
+    },
+    { Authorization: `Bearer ${login.data.accessToken}` }
+  );
+  assert.equal(member.status, 200, JSON.stringify(member.data));
+  assert.equal((await pay(member.data.conversationId)).text, "OK");
+  const usage = await mongoose.connection.collection("couponusages").findOne({ orderConversationId: member.data.conversationId });
+  assert.equal(usage.emailKey, email);
+
+  const asGuest = await startGuest(productId, "KUPON-UYE@test.local", code);
+  assert.equal(asGuest.status, 409);
+  assert.match(asGuest.data.message, /daha önce kullandınız/);
+});
+
 test("kargo ücreti negatif olamaz", async () => {
   const create = await adminRequest("POST", "/shipping", { name: "Hatalı", fee: -10 });
   assert.equal(create.status, 400);

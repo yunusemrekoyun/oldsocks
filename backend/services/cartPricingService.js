@@ -4,21 +4,11 @@ const ShippingMethod = require("../models/ShippingMethod");
 const CartCampaign = require("../models/CartCampaign");
 const Coupon = require("../models/Coupon");
 const Order = require("../models/Order");
-const {
-  hasCouponUsage,
-  normalizeCouponCode,
-} = require("../utils/couponUsageService");
+const CouponUsage = require("../models/CouponUsage");
+const { normalizeCouponCode } = require("../utils/couponUsageService");
+const { COUPON_USED_STATUSES, customerIdentity } = require("./couponRules");
 
-const COUPON_USED_STATUSES = ["payment_review", "paid", "shipped", "completed"];
 const PENDING_HOLD_MS = 24 * 60 * 60 * 1000;
-
-function couponIdentity({ customerUserId, customerEmail } = {}) {
-  const email = String(customerEmail || "").trim().toLowerCase();
-  return [
-    ...(customerUserId ? [{ user: customerUserId }] : []),
-    ...(email ? [{ "guest.email": email }] : []),
-  ];
-}
 
 class HttpError extends Error {
   constructor(status, message, extras = {}) {
@@ -333,10 +323,11 @@ async function resolveCouponForLines(selectedCouponCode, lines, context = {}) {
   }
 
   // Ödenmiş siparişler ile başka müşterilerin son 24 saatte açtığı ödeme oturumları
-  // kullanım sayılır. Aynı müşterinin bekleyen oturumu sayılmaz: yeni oturum açıldığında
-  // eskisi kapatılır (services/stockReservation: releaseCustomerPendingOrders), böylece
-  // kartı reddedilen müşteri tekrar deneyebilir.
-  const identity = couponIdentity(context);
+  // kullanım sayılır. Aynı müşterinin aynı tarayıcıdaki önceki oturumu ödeme başlatılırken
+  // önce kapatılır (services/stockReservation: releaseCustomerPendingOrders), böylece kartı
+  // reddedilen müşteri tekrar deneyebilir. Başka cihazda açık kalan oturumu varsa ikinci
+  // oturum açılmaz; ödeme anında da ayrıca denetlenir (services/couponRules).
+  const identity = await customerIdentity(context);
   const usedFilter = { "coupon.couponId": coupon._id, status: { $in: COUPON_USED_STATUSES } };
 
   if (coupon.maxUses) {
@@ -344,7 +335,7 @@ async function resolveCouponForLines(selectedCouponCode, lines, context = {}) {
       "coupon.couponId": coupon._id,
       status: "pending",
       createdAt: { $gte: new Date(Date.now() - PENDING_HOLD_MS) },
-      ...(identity.length ? { $nor: identity } : {}),
+      ...(identity.orderConditions.length ? { $nor: identity.orderConditions } : {}),
     };
     const used = await Order.countDocuments({ $or: [usedFilter, othersPending] });
     if (used >= coupon.maxUses) {
@@ -352,17 +343,28 @@ async function resolveCouponForLines(selectedCouponCode, lines, context = {}) {
     }
   }
 
-  if (identity.length) {
+  if (identity.orderConditions.length) {
     const alreadyUsed =
-      (await hasCouponUsage({
-        couponId: coupon._id,
-        userId: context.customerUserId || null,
-        email: context.customerEmail || "",
-      })) || (await Order.exists({ ...usedFilter, $or: identity }));
+      (await CouponUsage.exists({ couponId: coupon._id, $or: identity.usageConditions })) ||
+      (await Order.exists({ ...usedFilter, $or: identity.orderConditions }));
     if (alreadyUsed) {
       throw new HttpError(409, "Bu kuponu daha önce kullandınız.", {
         source: "coupon",
       });
+    }
+    const openSession = await Order.exists({
+      "coupon.couponId": coupon._id,
+      status: "pending",
+      stockReservedUntil: { $gt: new Date() },
+      $or: identity.orderConditions,
+      ...(context.heldConversationId ? { conversationId: { $ne: context.heldConversationId } } : {}),
+    });
+    if (openSession) {
+      throw new HttpError(
+        409,
+        "Bu kupon açık bir ödeme oturumunuzda kullanılıyor. O ödemeyi tamamlayın ya da birkaç dakika sonra tekrar deneyin.",
+        { source: "coupon" }
+      );
     }
   }
 

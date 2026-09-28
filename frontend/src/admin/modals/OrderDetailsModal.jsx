@@ -27,6 +27,8 @@ const REASON_LABELS = {
     "Ödeme alındıktan sonra yeterli stok bulunamadı; manuel kontrol gerekiyor.",
   payment_failed: "Ödeme sağlayıcısı işlemin başarısız olduğunu bildirdi.",
   stock_unavailable: "Sipariş tamamlanırken yeterli stok bulunamadı.",
+  coupon_limit_after_payment:
+    "Ödeme alındı ama kupon bu müşteri tarafından daha önce kullanılmış ya da kullanım sınırı dolmuş; kontrol edip tamamlayın ya da farkı iade edin.",
   payment_abandoned: "Ödeme 24 saat içinde tamamlanmadığı için kapatıldı.",
   paid_after_cancel:
     "İptal edilmiş siparişe ödeme geldi; PayTR panelinden kontrol edip tamamlayın ya da iade edin.",

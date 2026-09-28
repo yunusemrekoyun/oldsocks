@@ -451,7 +451,7 @@ exports.confirmOrderPayment = async (req, res) => {
         state: "review",
         orderNumber: order.orderNumber,
         message:
-          "Ödemeniz alındı; siparişiniz stok veya tutar kontrolü için incelemeye alındı. Ekibimiz sizinle iletişime geçecek.",
+          "Ödemeniz alındı; siparişiniz kontrol için incelemeye alındı. Ekibimiz sizinle iletişime geçecek.",
       });
     }
     // Sistemin kapattığı oturuma geç gelen ödeme hâlâ tamamlanabilir: sonuç sayfası beklesin.
