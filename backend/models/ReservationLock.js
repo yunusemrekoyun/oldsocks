@@ -1,7 +1,8 @@
 const mongoose = require("mongoose");
 
-// Aynı bağlantıdan (IP) eşzamanlı ödeme başlatmalarını sıraya sokmak için kilit kaydı:
-// stok ayrımı işlemi önce bu kayda yazar, böylece açık ayrım sayısı yarışmadan sayılır.
+// Eşzamanlı işlemleri sıraya sokmak için kilit kaydı: işlem önce bu kayda yazar, böylece
+// sonraki sayım diğerinin sonucunu görür. Anahtarlar: bağlantı (IP) başına açık stok
+// ayrımı sayımı ve "coupon:<id>" ile ödeme anındaki kupon kuralı denetimi.
 const ReservationLockSchema = new mongoose.Schema(
   {
     _id: { type: String },

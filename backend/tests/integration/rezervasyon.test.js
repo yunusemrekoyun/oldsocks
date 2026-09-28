@@ -203,10 +203,6 @@ test("müşteri sepete dönünce ayrım sürer; kendi ayırdığı adet ona mevc
     cartItems, couponCode: code, customerEmail: email, heldBy,
   });
   assert.equal(preview.status, 200, JSON.stringify(preview.data));
-  const otherDevice = await postJson(server.base, "/api/v1/cart-campaigns/preview", {
-    cartItems: [{ id: String(await seedProduct(5)), size: "M", qty: 1 }], couponCode: code, customerEmail: email,
-  });
-  assert.equal(otherDevice.status, 409);
   assert.equal((await Orders.findOne({ conversationId: heldBy })).status, "pending");
   assert.equal((await postJson(server.base, "/api/v1/payment/release", { conversationId: heldBy })).status, 404);
 

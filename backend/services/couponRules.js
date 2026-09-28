@@ -3,6 +3,7 @@
 const Order = require("../models/Order");
 const Coupon = require("../models/Coupon");
 const CouponUsage = require("../models/CouponUsage");
+const ReservationLock = require("../models/ReservationLock");
 const User = require("../models/User");
 
 // Kuponu kullanmış sayılan sipariş durumları.
@@ -42,21 +43,21 @@ async function memberEmail(userId, session) {
 async function couponLimitBreached(order, { session } = {}) {
   const couponId = order?.coupon?.couponId;
   if (!couponId) return false;
-  // Kupon kaydına yazmak, aynı kuponla eşzamanlı tamamlanan ödemeleri sıraya sokar:
-  // ikincisi birincinin sonucunu görür.
-  const coupon = await Coupon.findOneAndUpdate(
-    { _id: couponId },
-    { $set: { lastUsedAt: new Date() } },
-    { new: true, session }
-  ).lean();
-  if (!coupon) return false;
+  // Kilit kaydına yazmak, aynı kuponla eşzamanlı tamamlanan ödemeleri sıraya sokar:
+  // ikincisi birincinin sonucunu görür. Kupon silinmiş olsa da kilit ve müşteri denetimi çalışır.
+  await ReservationLock.updateOne(
+    { _id: `coupon:${couponId}` },
+    { $set: { at: new Date() } },
+    { upsert: true, session }
+  );
+  const coupon = await Coupon.findById(couponId).select("maxUses").session(session || null).lean();
 
   const others = {
     "coupon.couponId": couponId,
     status: { $in: COUPON_USED_STATUSES },
     _id: { $ne: order._id },
   };
-  if (coupon.maxUses && (await Order.countDocuments(others).session(session || null)) >= coupon.maxUses) {
+  if (coupon?.maxUses && (await Order.countDocuments(others).session(session || null)) >= coupon.maxUses) {
     return true;
   }
 

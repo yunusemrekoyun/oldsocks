@@ -106,6 +106,10 @@ async function finalizeOrderPayment(orderId, { allowReleased = false, enforceCou
       }
 
       if (order.status === "paid" && order.stockUpdated) return;
+      // Ödeme bildirimi yolunda incelemeye alınmış sipariş kesinleşmiştir: aynı bildirim
+      // eşzamanlı ikinci kez gelse bile "ödendi"ye çevrilmez. İncelemedeki siparişi
+      // yalnız yönetici tamamlar (enforceCoupon olmadan).
+      if (enforceCoupon && order.status === "payment_review") return;
       const released =
         allowReleased &&
         order.status === "cancelled" &&

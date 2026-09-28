@@ -325,8 +325,9 @@ async function resolveCouponForLines(selectedCouponCode, lines, context = {}) {
   // Ödenmiş siparişler ile başka müşterilerin son 24 saatte açtığı ödeme oturumları
   // kullanım sayılır. Aynı müşterinin aynı tarayıcıdaki önceki oturumu ödeme başlatılırken
   // önce kapatılır (services/stockReservation: releaseCustomerPendingOrders), böylece kartı
-  // reddedilen müşteri tekrar deneyebilir. Başka cihazda açık kalan oturumu varsa ikinci
-  // oturum açılmaz; ödeme anında da ayrıca denetlenir (services/couponRules).
+  // reddedilen müşteri tekrar deneyebilir. Açık oturum e-postayla eşleştirilip engellenmez
+  // (e-postayı bilen biri müşteriyi kilitleyemesin); aynı müşterinin iki oturumu da
+  // ödenirse ikincisi ödeme anında incelemeye düşer (services/couponRules).
   const identity = await customerIdentity(context);
   const usedFilter = { "coupon.couponId": coupon._id, status: { $in: COUPON_USED_STATUSES } };
 
@@ -352,20 +353,6 @@ async function resolveCouponForLines(selectedCouponCode, lines, context = {}) {
       throw new HttpError(409, "Bu kuponu daha önce kullandınız.", {
         source: "coupon",
       });
-    }
-    const openSession = await Order.exists({
-      "coupon.couponId": coupon._id,
-      status: "pending",
-      stockReservedUntil: { $gt: new Date() },
-      $or: identity.orderConditions,
-      ...(context.heldConversationId ? { conversationId: { $ne: context.heldConversationId } } : {}),
-    });
-    if (openSession) {
-      throw new HttpError(
-        409,
-        "Bu kupon açık bir ödeme oturumunuzda kullanılıyor. O ödemeyi tamamlayın ya da birkaç dakika sonra tekrar deneyin.",
-        { source: "coupon" }
-      );
     }
   }
 

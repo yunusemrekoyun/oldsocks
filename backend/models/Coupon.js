@@ -23,9 +23,6 @@ const CouponSchema = new mongoose.Schema(
     expiresAt: { type: Date, default: null },
     // Boşsa sınırsız. Ödenmiş ve ödeme bekleyen siparişler sayılır.
     maxUses: { type: Number, default: null, min: 1 },
-    // Kuponlu son ödemenin tamamlandığı an; ödeme tamamlanırken kupon kuralları
-    // denetlenirken güncellenir (services/couponRules).
-    lastUsedAt: { type: Date, default: null },
     productIds: [
       { type: mongoose.Schema.Types.ObjectId, ref: "Product", required: true },
     ],
