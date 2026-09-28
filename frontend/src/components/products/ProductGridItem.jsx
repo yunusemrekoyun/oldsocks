@@ -151,7 +151,7 @@ const ProductGridItem = ({
   return (
     <Link
       to={`/product-details/${id}`}
-      className="group relative rounded-xl overflow-hidden bg-white shadow border border-light2 hover:shadow-xl transition-all duration-300"
+      className="group relative flex flex-col rounded-xl overflow-hidden bg-white shadow border border-light2 hover:shadow-xl transition-all duration-300"
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
     >
@@ -254,14 +254,14 @@ const ProductGridItem = ({
       </div>
 
       {/* İçerik */}
-      <div className="p-4 relative">
-        {/* (Rozet artık içerikte değil, medya alanında) */}
-        <h3 className="text-sm font-medium text-dark1 mb-2 text-center">
+      {/* Ad üstte, fiyat altta: aynı sıradaki kartlar eşit boyda, fiyatın altında boşluk kalmaz. */}
+      <div className="relative flex flex-1 flex-col p-3 sm:p-4">
+        <h3 className="mb-2 line-clamp-2 text-center text-sm font-medium text-dark1">
           {name}
         </h3>
 
         {hasDiscount ? (
-          <div className="flex flex-col items-center gap-0.5">
+          <div className="mt-auto flex flex-col items-center gap-0.5">
             <div className="text-sm text-dark2 line-through opacity-70">
               {formatTry(price)}
             </div>
@@ -271,7 +271,7 @@ const ProductGridItem = ({
             </div>
           </div>
         ) : (
-          <p className="text-center text-base font-semibold text-dark2">
+          <p className="mt-auto text-center text-base font-semibold text-dark2">
             {formatTry(price)}
           </p>
         )}

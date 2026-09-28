@@ -271,7 +271,7 @@ export default function ShopPage() {
     <div className="bg-white text-dark1">
       <BreadCrumb />
 
-      <main className="container mx-auto px-4 py-14 grid grid-cols-1 lg:grid-cols-4 gap-10">
+      <main className="container mx-auto px-4 py-6 sm:py-14 grid grid-cols-1 lg:grid-cols-4 gap-6 sm:gap-10">
         {/* SOL: Filtre */}
         <aside className="lg:col-span-1 bg-transparent rounded-xl p-6 shadow-sm">
           <CategoryFilter

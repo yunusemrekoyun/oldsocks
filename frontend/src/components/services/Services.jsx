@@ -64,23 +64,26 @@ const Services = () => {
   }, []);
 
   return (
-    <section className="bg-light1 py-16">
+    <section className="bg-light1 py-8 sm:py-16">
       <div className="container mx-auto px-4">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+        {/* Mobilde kompakt satırlar (simge solda), geniş ekranda kartlar. */}
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-6 lg:grid-cols-3">
           {services.map(({ id, icon, title, subtitle }) => (
             <div
               key={id}
-              className="group bg-white border border-light2 rounded-xl p-8 flex flex-col items-center text-center shadow-md hover:shadow-xl transition-all duration-300 hover:border-primary hover:bg-light1"
+              className="group flex items-center gap-4 rounded-xl border border-light2 bg-white p-4 text-left shadow-sm transition-all duration-300 hover:border-primary hover:bg-light1 hover:shadow-xl sm:flex-col sm:gap-0 sm:p-8 sm:text-center sm:shadow-md"
             >
-              <div className="mb-5 transform group-hover:scale-110 transition-transform duration-300">
+              <div className="shrink-0 transform transition-transform duration-300 group-hover:scale-110 sm:mb-5">
                 {icon}
               </div>
-              <h4 className="text-lg font-semibold text-dark1 group-hover:text-primary">
-                {title}
-              </h4>
-              <p className="text-sm text-dark2 mt-2 leading-relaxed">
-                {subtitle}
-              </p>
+              <div>
+                <h4 className="text-base font-semibold text-dark1 group-hover:text-primary sm:text-lg">
+                  {title}
+                </h4>
+                <p className="mt-1 text-sm leading-relaxed text-dark2 sm:mt-2">
+                  {subtitle}
+                </p>
+              </div>
             </div>
           ))}
         </div>

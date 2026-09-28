@@ -154,7 +154,7 @@ export default function NewProductItem({
   return (
     <Link
       to={`/product-details/${id}`}
-      className="group relative rounded-xl overflow-hidden bg-white shadow border border-light2 hover:shadow-xl transition-all duration-300"
+      className="group relative flex flex-col rounded-xl overflow-hidden bg-white shadow border border-light2 hover:shadow-xl transition-all duration-300"
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
     >
@@ -259,13 +259,13 @@ export default function NewProductItem({
       </div>
 
       {/* İçerik */}
-      <div className="p-4">
-        <h3 className="text-sm font-medium text-dark1 mb-2 text-center">
+      <div className="flex flex-1 flex-col p-3 sm:p-4">
+        <h3 className="mb-2 line-clamp-2 text-center text-sm font-medium text-dark1">
           {name}
         </h3>
 
         {hasDiscount ? (
-          <div className="text-center">
+          <div className="mt-auto text-center">
             <div className="text-xs text-gray-500 line-through">
               {formatTry(price)}
             </div>
@@ -275,7 +275,7 @@ export default function NewProductItem({
             </div>
           </div>
         ) : (
-          <p className="text-center text-base font-semibold text-dark2">
+          <p className="mt-auto text-center text-base font-semibold text-dark2">
             {formatTry(price)}
           </p>
         )}

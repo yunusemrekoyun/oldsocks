@@ -55,7 +55,7 @@ const ContactPage = () => {
     <>
       <BreadCrumb />
 
-      <main className="container mx-auto px-4 py-16 space-y-12">
+      <main className="container mx-auto px-4 py-8 sm:py-16 space-y-8 sm:space-y-12">
         {/* 1) Map */}
         <Map address={address} />
 

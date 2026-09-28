@@ -29,9 +29,9 @@ export default function HomeProductSection({ sectionKey }) {
   const widths = ["0", "calc(25% - 1.125rem)", "calc(50% - 0.75rem)", "calc(75% - 0.375rem)", "100%"];
   const count = Math.min(products.length, 4);
 
-  return <section className="bg-light1 py-12">
+  return <section className="bg-light1 py-8 sm:py-12">
     <div className="container mx-auto px-4">
-      <h2 className="mb-8 text-center text-3xl uppercase text-black md:text-4xl">{section.heading}</h2>
+      <h2 className="mb-5 text-center text-2xl uppercase text-black sm:mb-8 sm:text-3xl md:text-4xl">{section.heading}</h2>
       <div className="home-product-grid" style={{ "--home-count": count, "--home-desktop-width": widths[count] }}>
         {products.map((product) => {
           const final = Number(product.price || 0);

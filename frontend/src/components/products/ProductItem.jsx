@@ -167,7 +167,7 @@ const ProductItem = ({
   return (
     <Link
       to={`/product-details/${id}`}
-      className="group relative rounded-xl overflow-hidden bg-white shadow border border-light2 hover:shadow-xl transition-all duration-300"
+      className="group relative flex flex-col rounded-xl overflow-hidden bg-white shadow border border-light2 hover:shadow-xl transition-all duration-300"
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
     >
@@ -270,11 +270,11 @@ const ProductItem = ({
       </div>
 
       {/* METİN / FİYAT */}
-      <div className="p-4 text-center">
-        <h3 className="text-sm font-medium text-dark1 mb-2">{name}</h3>
+      <div className="flex flex-1 flex-col p-3 text-center sm:p-4">
+        <h3 className="mb-2 line-clamp-2 text-sm font-medium text-dark1">{name}</h3>
 
         {showDiscount ? (
-          <div>
+          <div className="mt-auto">
             <p className="text-sm text-gray-500 line-through">
               {formatTry(cleanPrice)}
             </p>
@@ -284,7 +284,7 @@ const ProductItem = ({
             </p>
           </div>
         ) : (
-          <p className="text-lg font-semibold text-dark2">
+          <p className="mt-auto text-lg font-semibold text-dark2">
             {formatTry(finalPrice)}
           </p>
         )}

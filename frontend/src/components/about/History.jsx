@@ -2,7 +2,7 @@
 import React from "react";
 
 const History = ({ content }) => (
-  <section className="bg-light1 py-20 px-4">
+  <section className="bg-light1 py-12 sm:py-20 px-4">
     <div className="container mx-auto text-center">
       <h2 className="text-4xl font-serif font-bold text-dark1 mb-4">
         {content?.heading || "2021 → 2025"}

@@ -6,7 +6,7 @@ import { getResponsiveImageProps } from "../../utils/media";
 const OurMission = ({ content }) => {
   const image = getResponsiveImageProps(content?.image || missionImg, { widths: [640, 960, 1440], defaultWidth: 1440, sizes: "(max-width: 768px) 100vw, 1200px" });
   return (
-  <section className="py-20 px-4">
+  <section className="py-12 sm:py-20 px-4">
     <div className="container mx-auto">
       <h2 className="text-4xl font-serif font-bold text-dark1 text-center mb-6">
         {content?.heading || "Misyonumuz"}

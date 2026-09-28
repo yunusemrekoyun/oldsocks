@@ -67,7 +67,7 @@ export default function BlogPage() {
     <>
       <BreadCrumb />
 
-      <main className="container mx-auto px-4 py-16 grid grid-cols-1 lg:grid-cols-3 gap-10">
+      <main className="container mx-auto px-4 py-8 sm:py-16 grid grid-cols-1 lg:grid-cols-3 gap-8 sm:gap-10">
         {/* Sol sütun */}
         <section className="lg:col-span-2 space-y-10">
           {headerMsg && <h2 className="text-2xl font-semibold">{headerMsg}</h2>}

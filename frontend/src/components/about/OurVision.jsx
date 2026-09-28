@@ -6,7 +6,7 @@ import { getResponsiveImageProps } from "../../utils/media";
 const OurVision = ({ content }) => {
   const image = getResponsiveImageProps(content?.image || storyImg, { widths: [640, 960, 1440], defaultWidth: 1440, sizes: "(max-width: 768px) 100vw, 1200px" });
   return (
-  <section className="bg-light1 py-20 px-4">
+  <section className="bg-light1 py-12 sm:py-20 px-4">
     <div className="container mx-auto">
       <h2 className="text-4xl font-serif font-bold text-dark1 text-center mb-6">
         {content?.heading || "Vizyonumuz"}
