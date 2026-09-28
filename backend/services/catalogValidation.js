@@ -66,7 +66,9 @@ function parseProductPricing(input = {}) {
 // - Arada değiştiyse yazılmaz, güncel değer girilen değere eşit olsa bile (satış ya da
 //   ayrım tesadüfen aynı sayıya getirmiş olabilir): yönetici güncel değeri görüp karar
 //   verir (conflicts). Aynı form yeniden gönderilirse de böyle olur; stok iki kez değişmez.
-// Kimliği olmayan ya da eşleşmeyen satır (yeni beden, eski istemci) girilen değerle yazılır.
+// Kimliği olmayan ya da eşleşmeyen satır (yeni beden) girilen değerle yazılır. Kimliği eşleşip
+// açılıştaki stoğu gelmeyen satır, güncellemeden önce açılmış eski yönetim paneli sekmesidir:
+// kayıt yapılmaz (stale), yönetici sayfayı yenilemelidir.
 function planStockEdits(parsedSizes, rawSizes, currentSizes) {
   let rows = rawSizes;
   if (typeof rows === "string") {
@@ -82,6 +84,7 @@ function planStockEdits(parsedSizes, rawSizes, currentSizes) {
   );
   const used = new Set();
   const conflicts = [];
+  let stale = false;
   const sizes = parsedSizes.map((item, index) => {
     const id = rows[index]?._id ? String(rows[index]._id) : "";
     const match = id && !used.has(id) ? current.get(id) : undefined;
@@ -90,15 +93,16 @@ function planStockEdits(parsedSizes, rawSizes, currentSizes) {
     const now = Number(match.stock) || 0;
     const loaded = Number(rows[index]?.loadedStock);
     let stock = item.stock;
-    if (Number.isSafeInteger(loaded) && loaded >= 0) {
-      if (item.stock === loaded) stock = now;
-      else if (now !== loaded) {
-        conflicts.push({ _id: id, size: item.size, current: now, entered: item.stock });
-      }
+    if (!Number.isSafeInteger(loaded) || loaded < 0 || rows[index]?.loadedStock === "" || rows[index]?.loadedStock == null) {
+      stale = true;
+    } else if (item.stock === loaded) {
+      stock = now;
+    } else if (now !== loaded) {
+      conflicts.push({ _id: id, size: item.size, current: now, entered: item.stock });
     }
     return { _id: match._id, size: item.size, stock };
   });
-  return { sizes, conflicts };
+  return { sizes, conflicts, stale };
 }
 
 function parseArray(value, label) {

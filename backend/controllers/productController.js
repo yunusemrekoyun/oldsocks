@@ -197,6 +197,7 @@ async function saveProductSizes(productId, parsedSizes, rawSizes) {
     const fresh = await Product.findById(productId).select("sizes").lean();
     const current = fresh?.sizes || [];
     const plan = planStockEdits(parsedSizes, rawSizes, current);
+    if (plan.stale) return { stale: true };
     if (plan.conflicts.length) return { conflicts: plan.conflicts, current };
     if (sameSizes(plan.sizes, current)) return { ok: true };
     const unchanged = { _id: productId, sizes: { $size: current.length } };
@@ -285,6 +286,12 @@ exports.updateProduct = async (req, res) => {
     if (sizes) {
       const saved = await saveProductSizes(existing._id, sizes, req.body.sizes);
       sizesWritten = Boolean(saved.wrote);
+      if (saved.stale) {
+        return res.status(409).json({
+          code: "STALE_FORM",
+          message: "Yönetim paneli güncellendi. Sayfayı yenileyip ürünü yeniden açın; değişiklik kaydedilmedi.",
+        });
+      }
       if (saved.conflicts) {
         return res.status(409).json({
           code: "STOCK_CHANGED",

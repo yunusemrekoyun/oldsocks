@@ -170,3 +170,15 @@ test("diğer alanlardan biri geçersizse stok da yazılmaz", async () => {
   assert.match(res.data.message, /Renk/);
   assert.deepEqual(await stocks(productId), { M: 5 });
 });
+
+test("güncellemeden önce açılmış eski yönetim paneli sekmesi stoğu ezemez, sayfayı yenilemesi istenir", async () => {
+  const productId = await seedProduct([["M", 5]]);
+  const form = (await openForm(productId)).map(({ loadedStock, ...row }) => row); // eski panel loadedStock göndermez
+  assert.equal((await hold(productId, "M")).status, 200);
+  form[0].stock = 5;
+  const res = await save(productId, form, { description: "eski sekmeden" });
+  assert.equal(res.status, 409);
+  assert.equal(res.data.code, "STALE_FORM");
+  assert.deepEqual(await stocks(productId), { M: 4 });
+  assert.notEqual((await Products.findOne({ _id: productId })).description, "eski sekmeden");
+});
