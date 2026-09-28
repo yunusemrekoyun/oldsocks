@@ -13,6 +13,8 @@ const mongoose = require("mongoose");
 const connectDB = require("./config/db");
 const apiRoutes = require("./routes");
 const requestId = require("./middleware/requestId");
+const { cloudflareClientIp, edgeCacheOnlyForSite } = require("./middleware/cloudflare");
+const { siteUrl } = require("./services/sitemap");
 const { publicAssetFilter } = require("./middleware/publicAssetFilter");
 const { trafficMonitor } = require("./services/trafficMonitor");
 const { MediaError, toMediaErrorPayload } = require("./services/media/errors");
@@ -33,6 +35,7 @@ const mediaStorageReady = initializeMediaStorage();
 
 /* 2) Güven / Proxy (Render, Railway vb. için) */
 app.set("trust proxy", 1); // gerçek istemci IP’si için
+app.use(cloudflareClientIp); // Cloudflare arkasında ziyaretçinin kendi adresi
 app.disable("x-powered-by");
 app.use(requestId);
 app.use((req, res, next) => {
@@ -60,6 +63,7 @@ const corsOptionsDelegate = (req, cb) => {
 };
 
 app.use(cors(corsOptionsDelegate));
+app.use("/api/v1", edgeCacheOnlyForSite(siteUrl()));
 
 /* 4) Güvenlik başlıkları */
 app.use(
