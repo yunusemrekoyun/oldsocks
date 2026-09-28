@@ -65,6 +65,8 @@ export default function EditProductForm({ product, onClose, onSaved }) {
   const [isSizeLess, setIsSizeLess] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [toast, setToast] = useState(null);
+  // Form açıkken stok değiştiyse sunucunun bildirdiği güncel değerler (kaydetmeden önce görülür).
+  const [stockNotice, setStockNotice] = useState(null);
 
   const { addTask, updateTask, removeTask } = useUploadQueue();
 
@@ -97,7 +99,8 @@ export default function EditProductForm({ product, onClose, onSaved }) {
         price: pricing.values.price,
         description: p.description || "",
         color: p.color || "",
-        // loadedStock: sunucu kaydederken aradaki satış/ayrımı korumak için değişikliği hesaplar.
+        // _id + loadedStock: sunucu satırı kimliğiyle eşler; stok form açıkken değiştiyse
+        // (satış, ödeme adımında ayrım) yazmaz, güncel değeri bildirir.
         sizes: (p.sizes || []).map((s) => ({ ...s, id: uuid(), loadedStock: s.stock })),
       });
       setIsSizeLess(
@@ -430,9 +433,22 @@ export default function EditProductForm({ product, onClose, onSaved }) {
       setTimeout(() => removeTask(taskId), 1800);
 
       setToast({ msg: "Ürün güncellendi", type: "success" });
+      setStockNotice(null);
       onSaved();
     } catch (err) {
       console.error("Ürün güncelleme hatası:", err);
+      const data = err?.response?.data;
+      if (data?.code === "STOCK_CHANGED" && Array.isArray(data.sizes)) {
+        // Girilen değerler kalır; bir sonraki kayıt güncel stoğa göre yapılır.
+        const fresh = new Map(data.sizes.map((row) => [String(row._id), Number(row.stock)]));
+        setFormData((current) => ({
+          ...current,
+          sizes: current.sizes.map((row) =>
+            row._id && fresh.has(String(row._id)) ? { ...row, loadedStock: fresh.get(String(row._id)) } : row
+          ),
+        }));
+        setStockNotice(data.message);
+      }
       const message = mediaErrorMessage(
         err,
         err?.response?.data?.message || "Güncelleme hatası"
@@ -624,6 +640,12 @@ export default function EditProductForm({ product, onClose, onSaved }) {
               Bedensiz ürün (tek stok)
             </label>
 
+            {stockNotice && (
+              <p role="alert" className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900">
+                {stockNotice}
+              </p>
+            )}
+
             {isSizeLess ? (
               <div>
                 <label className="block text-sm font-medium">Toplam Stok *</label>
@@ -638,6 +660,8 @@ export default function EditProductForm({ product, onClose, onSaved }) {
                       ...current,
                       sizes: [
                         {
+                          // Satırın kimliği ve açılıştaki stoğu korunur.
+                          ...current.sizes[0],
                           id: current.sizes[0]?.id || uuid(),
                           size: "",
                           stock: Number(e.target.value),

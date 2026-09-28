@@ -1,22 +1,62 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { mergeStockEdits } = require("../services/catalogValidation");
+const { planStockEdits } = require("../services/catalogValidation");
 
-test("form açıkken değişen stok korunur; yöneticinin değişikliği güncel stoğa eklenir", () => {
-  const parsed = [{ size: "M", stock: 5 }, { size: "L", stock: 2 }, { size: "XL", stock: 4 }];
-  const raw = [{ size: "M", stock: 5, loadedStock: 3 }, { size: "L", stock: 2, loadedStock: 2 }, { size: "XL", stock: 4 }];
-  const current = [{ size: "M", stock: 2 }, { size: "l", stock: 1 }];
-  assert.deepEqual(mergeStockEdits(parsed, raw, current), [
-    { size: "M", stock: 4 }, // 2 + (5 - 3)
-    { size: "L", stock: 1 }, // değişmedi: güncel değer kalır
-    { size: "XL", stock: 4 }, // yeni satır: girilen değer
+const current = [
+  { _id: "a", size: "M", stock: 2 },
+  { _id: "b", size: "L", stock: 1 },
+  { _id: "c", size: "XL", stock: 5 },
+];
+
+test("dokunulmayan satır güncel stoğu korur, değişmemiş satıra girilen değer yazılır", () => {
+  const parsed = [{ size: "M", stock: 3 }, { size: "L", stock: 4 }, { size: "XL", stock: 9 }, { size: "XXL", stock: 7 }];
+  const raw = [
+    { _id: "a", loadedStock: 3 }, // dokunulmadı; arada 1 satıldı
+    { _id: "b", loadedStock: 1 }, // stok değişmemiş: 4 yazılır
+    { _id: "c", loadedStock: 5 },
+    {}, // yeni beden
+  ];
+  const { sizes, conflicts } = planStockEdits(parsed, raw, current);
+  assert.deepEqual(conflicts, []);
+  assert.deepEqual(sizes, [
+    { _id: "a", size: "M", stock: 2 },
+    { _id: "b", size: "L", stock: 4 },
+    { _id: "c", size: "XL", stock: 9 },
+    { size: "XXL", stock: 7 },
   ]);
 });
 
-test("değişiklik stoğu eksiye düşüremez; bozuk girdi olduğu gibi döner", () => {
-  assert.deepEqual(
-    mergeStockEdits([{ size: "M", stock: 0 }], [{ size: "M", stock: 0, loadedStock: 5 }], [{ size: "M", stock: 2 }]),
-    [{ size: "M", stock: 0 }]
+test("form açıkken stoğu değişen satır yazılmaz, çakışma olarak döner", () => {
+  const { conflicts } = planStockEdits([{ size: "M", stock: 8 }], [{ _id: "a", loadedStock: 5 }], current);
+  assert.deepEqual(conflicts, [{ _id: "a", size: "M", current: 2, entered: 8 }]);
+});
+
+test("aynı form yeniden gönderilirse stok ikinci kez değişmez", () => {
+  const after = [{ _id: "a", size: "M", stock: 8 }];
+  const { sizes, conflicts } = planStockEdits([{ size: "M", stock: 8 }], [{ _id: "a", loadedStock: 5 }], after);
+  assert.deepEqual(conflicts, []);
+  assert.deepEqual(sizes, [{ _id: "a", size: "M", stock: 8 }]);
+});
+
+test("beden adı değişen satır kendi stoğunu korur; etiket takası geri alınmaz", () => {
+  const { sizes } = planStockEdits(
+    [{ size: "XL", stock: 2 }, { size: "M", stock: 1 }],
+    [{ _id: "a", loadedStock: 2 }, { _id: "b", loadedStock: 1 }],
+    current
   );
-  assert.deepEqual(mergeStockEdits([{ size: "M", stock: 3 }], "bozuk", [{ size: "M", stock: 9 }]), [{ size: "M", stock: 3 }]);
+  assert.deepEqual(sizes, [
+    { _id: "a", size: "XL", stock: 2 },
+    { _id: "b", size: "M", stock: 1 },
+  ]);
+});
+
+test("eski istemci (loadedStock yok) ve bozuk girdi girilen değeri yazar; aynı kimlik iki kez eşleşmez", () => {
+  assert.deepEqual(planStockEdits([{ size: "M", stock: 3 }], "bozuk", current).sizes, [{ size: "M", stock: 3 }]);
+  assert.deepEqual(planStockEdits([{ size: "M", stock: 3 }], [{ _id: "a" }], current).sizes, [
+    { _id: "a", size: "M", stock: 3 },
+  ]);
+  assert.deepEqual(
+    planStockEdits([{ size: "M", stock: 3 }, { size: "S", stock: 1 }], [{ _id: "a" }, { _id: "a" }], current).sizes,
+    [{ _id: "a", size: "M", stock: 3 }, { size: "S", stock: 1 }]
+  );
 });

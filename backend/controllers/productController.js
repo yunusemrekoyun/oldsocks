@@ -7,7 +7,7 @@ const {
   CatalogValidationError,
   parseProductPricing,
   parseProductSizes,
-  mergeStockEdits,
+  planStockEdits,
   requiredText,
 } = require("../services/catalogValidation");
 const {
@@ -179,6 +179,38 @@ exports.getProduct = async (req, res) => {
 
 exports.invalidateProductsCache = invalidateProductsCache;
 
+const sameSizes = (a, b) =>
+  a.length === b.length &&
+  a.every(
+    (row, i) =>
+      row._id &&
+      String(row._id) === String(b[i]?._id) &&
+      row.size === b[i]?.size &&
+      row.stock === Number(b[i]?.stock)
+  );
+
+// Beden/stok satırlarını, okunduğu andan beri stok değişmediyse yazar. Ödeme adımındaki
+// ayrım, iade veya satış stoğu $inc ile değiştirir; arada biri geldiyse güncel kayıtla
+// yeniden hesaplanır, böylece o değişiklik ezilmez.
+async function saveProductSizes(productId, parsedSizes, rawSizes) {
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    const fresh = await Product.findById(productId).select("sizes").lean();
+    const current = fresh?.sizes || [];
+    const plan = planStockEdits(parsedSizes, rawSizes, current);
+    if (plan.conflicts.length) return { conflicts: plan.conflicts, current };
+    if (sameSizes(plan.sizes, current)) return { ok: true };
+    const unchanged = { _id: productId, sizes: { $size: current.length } };
+    if (current.length) {
+      unchanged.$and = current.map((s) => ({
+        sizes: { $elemMatch: { _id: s._id, size: s.size, stock: s.stock } },
+      }));
+    }
+    const result = await Product.updateOne(unchanged, { $set: { sizes: plan.sizes } });
+    if (result.matchedCount) return { ok: true };
+  }
+  return { busy: true };
+}
+
 exports.updateProduct = async (req, res) => {
   try {
     const existing = await Product.findById(req.params.id);
@@ -188,10 +220,7 @@ exports.updateProduct = async (req, res) => {
       price: req.body.price ?? existing.price,
       originalPrice: req.body.originalPrice ?? existing.originalPrice,
     });
-    const sizes =
-      req.body.sizes !== undefined
-        ? mergeStockEdits(parseProductSizes(req.body.sizes), req.body.sizes, existing.sizes)
-        : parseProductSizes(existing.sizes);
+    const sizes = req.body.sizes !== undefined ? parseProductSizes(req.body.sizes) : null;
     if (req.body.category && !(await Category.exists({ _id: req.body.category, archivedAt: null }))) {
       return res.status(400).json({ message: "Geçersiz kategori." });
     }
@@ -232,6 +261,28 @@ exports.updateProduct = async (req, res) => {
       videoAsset = videos[0] || null;
     }
 
+    // Bedenler ve stok diğer alanlardan önce, ayrı yazılır: stok arada değiştiyse
+    // yönetici güncel değeri görür, hiçbir alan kaydedilmez.
+    if (sizes) {
+      const saved = await saveProductSizes(existing._id, sizes, req.body.sizes);
+      if (saved.conflicts) {
+        return res.status(409).json({
+          code: "STOCK_CHANGED",
+          message: `Siz düzenlerken stok değişti: ${saved.conflicts
+            .map((c) => `${c.size || "stok"} şu an ${c.current}`)
+            .join(", ")}. Değerleri kontrol edip yeniden kaydedin.`,
+          conflicts: saved.conflicts,
+          sizes: saved.current,
+        });
+      }
+      if (saved.busy) {
+        return res.status(409).json({
+          code: "STOCK_BUSY",
+          message: "Stok şu anda sık değişiyor. Birkaç saniye sonra yeniden kaydedin.",
+        });
+      }
+    }
+
     existing.name = name;
     existing.price = pricing.price;
     existing.originalPrice = pricing.originalPrice;
@@ -240,7 +291,6 @@ exports.updateProduct = async (req, res) => {
     existing.description =
       req.body.description !== undefined ? req.body.description : existing.description;
     existing.color = req.body.color !== undefined ? req.body.color : existing.color;
-    existing.sizes = sizes;
     existing.imageAssets = imageAssets.map((asset) => asset._id);
     existing.videoAsset = videoAsset?._id || null;
     existing.images = imageAssets.map((asset) => legacyAssetUrl(asset, "detail"));

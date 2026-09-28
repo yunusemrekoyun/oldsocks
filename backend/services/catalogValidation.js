@@ -59,27 +59,45 @@ function parseProductPricing(input = {}) {
 }
 
 // Ürün formu açıkken stok değişmiş olabilir (satış, ödeme adımında ayrım veya iadesi).
-// Form her satır için açıldığı andaki stoğu (loadedStock) gönderir; yöneticinin
-// girdiği değer mutlak yazılmaz, yaptığı değişiklik (yeni - açılıştaki) güncel stoğa
-// eklenir. loadedStock yoksa (yeni satır, eski istemci) girilen değer aynen yazılır.
-function mergeStockEdits(parsedSizes, rawSizes, currentSizes) {
+// Form her beden satırı için kaydın kimliğini (_id) ve açıldığı andaki stoğu (loadedStock)
+// gönderir. Satır kimlikle eşleşir; beden adı değiştirilen satır kendi stoğunu korur.
+// - Yönetici stoğa dokunmadıysa güncel stok korunur.
+// - Stok zaten girilen değerdeyse (aynı form yeniden gönderildi) değişiklik yoktur.
+// - Stok açılıştan beri değişmediyse girilen değer yazılır.
+// - Arada değiştiyse yazılmaz: yönetici güncel değeri görüp karar verir (conflicts).
+// Kimliği olmayan ya da eşleşmeyen satır (yeni beden, eski istemci) girilen değerle yazılır.
+function planStockEdits(parsedSizes, rawSizes, currentSizes) {
   let rows = rawSizes;
   if (typeof rows === "string") {
     try {
       rows = JSON.parse(rows);
     } catch {
-      return parsedSizes;
+      rows = [];
     }
   }
-  if (!Array.isArray(rows)) return parsedSizes;
-  const key = (value) => String(value || "").trim().toLocaleLowerCase("tr-TR");
-  const current = new Map((currentSizes || []).map((s) => [key(s?.size), Number(s?.stock) || 0]));
-  return parsedSizes.map((item, index) => {
+  if (!Array.isArray(rows)) rows = [];
+  const current = new Map(
+    (currentSizes || []).filter((s) => s?._id).map((s) => [String(s._id), s])
+  );
+  const used = new Set();
+  const conflicts = [];
+  const sizes = parsedSizes.map((item, index) => {
+    const id = rows[index]?._id ? String(rows[index]._id) : "";
+    const match = id && !used.has(id) ? current.get(id) : undefined;
+    if (!match) return { size: item.size, stock: item.stock };
+    used.add(id);
+    const now = Number(match.stock) || 0;
     const loaded = Number(rows[index]?.loadedStock);
-    const now = current.get(key(item.size));
-    if (!Number.isSafeInteger(loaded) || loaded < 0 || now === undefined) return item;
-    return { ...item, stock: Math.max(0, now + (item.stock - loaded)) };
+    let stock = item.stock;
+    if (Number.isSafeInteger(loaded) && loaded >= 0) {
+      if (item.stock === loaded || item.stock === now) stock = now;
+      else if (now !== loaded) {
+        conflicts.push({ _id: id, size: item.size, current: now, entered: item.stock });
+      }
+    }
+    return { _id: match._id, size: item.size, stock };
   });
+  return { sizes, conflicts };
 }
 
 function parseArray(value, label) {
@@ -143,7 +161,7 @@ function parseProductSizes(raw) {
 }
 
 module.exports = {
-  mergeStockEdits,
+  planStockEdits,
   CatalogValidationError,
   parseProductPricing,
   parseProductSizes,
