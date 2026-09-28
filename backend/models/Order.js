@@ -42,6 +42,9 @@ const OrderSchema = new mongoose.Schema(
     orderMailSentAt: { type: Date, default: null },
     // Arka plan gönderiminin sahiplik işareti (aynı sipariş için çift e-postayı önler).
     mailAttemptAt: { type: Date, default: null },
+    // Gönderilemeyen sipariş e-postasının deneme sayısı ve bir sonraki deneme anı.
+    mailAttempts: { type: Number, default: 0 },
+    mailRetryAt: { type: Date, default: null },
     // payment_review uyarısı yöneticiye gönderildi mi.
     reviewAlertSentAt: { type: Date, default: null },
     customerMailSentAt: { type: Date, default: null },
@@ -68,6 +71,8 @@ const OrderSchema = new mongoose.Schema(
     shippedMailSentAt: { type: Date, default: null },
     deliveredMailSentAt: { type: Date, default: null },
     statusMailAttemptAt: { type: Date, default: null },
+    statusMailAttempts: { type: Number, default: 0 },
+    statusMailRetryAt: { type: Date, default: null },
     // Yöneticinin iptal / iade kaydı. Para PayTR panelinden iade edilir; burada kaydı tutulur.
     refund: {
       amount: { type: Number, default: null, min: 0 },

@@ -16,6 +16,17 @@ const SWEEP_GRACE_MS = Number(process.env.ORDER_MAIL_SWEEP_GRACE_MS || 60 * 1000
 // kaydı tutulmadan önceki ya da gönderimi o zaman başarısız olmuş) haftalar sonra onay
 // e-postası ya da yöneticiye inceleme uyarısı gitmesin.
 const ORDER_MAIL_MAX_AGE_MS = 3 * 24 * 60 * 60 * 1000;
+// Stok ayrımı bırakma ve terk edilen siparişleri kapatma e-postadan ayrı döngüde çalışır:
+// e-posta sunucusu yanıt vermese de süresi dolan ayrımlar gecikmesin.
+const STOCK_SWEEP_MS = Number(process.env.STOCK_SWEEP_MS || SWEEP_MS);
+
+// Gönderilemeyen e-posta her taramada değil, giderek seyrekleşen aralıklarla yeniden
+// denenir: 5, 10, 20, 40, sonra en çok 60 dakikada bir (yaş sınırına kadar).
+function nextRetryAt(attempts) {
+  const minutes = Math.min(60, 5 * 2 ** Math.max(0, attempts - 1));
+  return new Date(Date.now() + minutes * 60 * 1000);
+}
+const retryDue = (field) => ({ $or: [{ [field]: null }, { [field]: { $lte: new Date() } }] });
 
 async function claim(orderId) {
   const now = new Date();
@@ -24,7 +35,10 @@ async function claim(orderId) {
       _id: orderId,
       status: { $in: PAID_STATUSES },
       orderMailSentAt: null,
-      $or: [{ mailAttemptAt: null }, { mailAttemptAt: { $lt: new Date(now.getTime() - CLAIM_TTL_MS) } }],
+      $and: [
+        { $or: [{ mailAttemptAt: null }, { mailAttemptAt: { $lt: new Date(now.getTime() - CLAIM_TTL_MS) } }] },
+        retryDue("mailRetryAt"),
+      ],
     },
     { $set: { mailAttemptAt: now } },
     { new: true }
@@ -40,6 +54,8 @@ async function sendOrderMails(orderId) {
     console.warn("[order-mail] gönderilemedi:", error?.message || error);
   }
   // Yalnız e-posta alanları yazılır; siparişin diğer alanlarını ezmez.
+  const done = Boolean(order.orderMailSentAt);
+  const attempts = done ? order.mailAttempts || 0 : (order.mailAttempts || 0) + 1;
   await Order.updateOne(
     { _id: order._id },
     {
@@ -47,7 +63,9 @@ async function sendOrderMails(orderId) {
         customerMailSentAt: order.customerMailSentAt || null,
         adminMailSentAt: order.adminMailSentAt || null,
         orderMailSentAt: order.orderMailSentAt || null,
-        mailAttemptAt: order.orderMailSentAt ? order.mailAttemptAt : null,
+        mailAttemptAt: done ? order.mailAttemptAt : null,
+        mailAttempts: attempts,
+        mailRetryAt: done ? null : nextRetryAt(attempts),
       },
     }
   );
@@ -125,7 +143,10 @@ async function sendStatusMail(orderId, kind) {
       [spec.at]: { $ne: null },
       [spec.sent]: null,
       ...spec.filter,
-      $or: [{ statusMailAttemptAt: null }, { statusMailAttemptAt: { $lt: new Date(now.getTime() - CLAIM_TTL_MS) } }],
+      $and: [
+        { $or: [{ statusMailAttemptAt: null }, { statusMailAttemptAt: { $lt: new Date(now.getTime() - CLAIM_TTL_MS) } }] },
+        retryDue("statusMailRetryAt"),
+      ],
     },
     { $set: { statusMailAttemptAt: now } },
     { new: true }
@@ -138,9 +159,17 @@ async function sendStatusMail(orderId, kind) {
   } catch (error) {
     console.warn(`[order-mail] ${kind} e-postası gönderilemedi:`, error?.message || error);
   }
+  const attempts = sent ? order.statusMailAttempts || 0 : (order.statusMailAttempts || 0) + 1;
   await Order.updateOne(
     { _id: order._id },
-    { $set: { statusMailAttemptAt: null, ...(sent ? { [spec.sent]: new Date() } : {}) } }
+    {
+      $set: {
+        statusMailAttemptAt: null,
+        statusMailAttempts: attempts,
+        statusMailRetryAt: sent ? null : nextRetryAt(attempts),
+        ...(sent ? { [spec.sent]: new Date() } : {}),
+      },
+    }
   );
   return sent;
 }
@@ -177,16 +206,22 @@ async function closeAbandonedOrders() {
   if (result.modifiedCount) console.log(`[orders] ${result.modifiedCount} terk edilmiş sipariş kapatıldı.`);
 }
 
-async function sweep() {
+async function sweepStock() {
   await releaseExpiredReservations();
   await closeAbandonedOrders();
+}
+
+async function sweep() {
   const cutoff = new Date(Date.now() - SWEEP_GRACE_MS);
   const recent = new Date(Date.now() - ORDER_MAIL_MAX_AGE_MS);
   const pending = await Order.find({
     status: { $in: PAID_STATUSES },
     orderMailSentAt: null,
     paymentReceivedAt: { $gte: recent, $lt: cutoff },
-    $or: [{ mailAttemptAt: null }, { mailAttemptAt: { $lt: new Date(Date.now() - CLAIM_TTL_MS) } }],
+    $and: [
+      { $or: [{ mailAttemptAt: null }, { mailAttemptAt: { $lt: new Date(Date.now() - CLAIM_TTL_MS) } }] },
+      retryDue("mailRetryAt"),
+    ],
   })
     .select("_id")
     .limit(20)
@@ -210,7 +245,10 @@ async function sweep() {
       [spec.at]: { $gte: new Date(Date.now() - STATUS_MAIL_MAX_AGE_MS), $lt: cutoff },
       [spec.sent]: null,
       ...spec.filter,
-      $or: [{ statusMailAttemptAt: null }, { statusMailAttemptAt: { $lt: new Date(Date.now() - CLAIM_TTL_MS) } }],
+      $and: [
+        { $or: [{ statusMailAttemptAt: null }, { statusMailAttemptAt: { $lt: new Date(Date.now() - CLAIM_TTL_MS) } }] },
+        retryDue("statusMailRetryAt"),
+      ],
     })
       .select("_id")
       .limit(20)
@@ -219,21 +257,29 @@ async function sweep() {
   }
 }
 
-function startOrderMailSweeper() {
+function loop(work, intervalMs, label) {
   let stopped = false;
   let timer;
   const tick = async () => {
     if (stopped) return;
     try {
-      await sweep();
+      await work();
     } catch (error) {
-      console.error("[order-mail] tarama hatası:", error?.message || error);
+      console.error(`[${label}] tarama hatası:`, error?.message || error);
     } finally {
-      if (!stopped) timer = setTimeout(tick, SWEEP_MS);
+      if (!stopped) timer = setTimeout(tick, intervalMs);
     }
   };
-  timer = setTimeout(tick, SWEEP_MS);
-  return { stop() { stopped = true; clearTimeout(timer); } };
+  timer = setTimeout(tick, intervalMs);
+  return () => {
+    stopped = true;
+    clearTimeout(timer);
+  };
+}
+
+function startOrderMailSweeper() {
+  const stops = [loop(sweepStock, STOCK_SWEEP_MS, "stock"), loop(sweep, SWEEP_MS, "order-mail")];
+  return { stop() { stops.forEach((stop) => stop()); } };
 }
 
 module.exports = {
