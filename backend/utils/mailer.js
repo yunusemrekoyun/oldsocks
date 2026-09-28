@@ -856,9 +856,9 @@ async function sendAccountNoticeMail({ to, subject, lines = [], footer = ACCOUNT
   });
 }
 
-// Sistem uyarısı (ör. yedek başarısız): yalnız yöneticilere, düz ve kısa.
-async function sendAdminAlertMail({ subject, lines = [] }) {
-  const recipients = getAdminRecipients();
+// Sistem uyarısı (ör. yedek başarısız): yalnız yöneticilere (ya da verilen adrese), düz ve kısa.
+async function sendAdminAlertMail({ subject, lines = [], to = null }) {
+  const recipients = to ? [to] : getAdminRecipients();
   if (!recipients.length) return;
   const safeLines = lines.map((line) => clampText(String(line || ""), 400));
   const html = baseEmailLayout({

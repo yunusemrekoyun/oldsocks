@@ -27,6 +27,8 @@ const app = express();
 
 /* 1) DB */
 const databaseReady = connectDB();
+// Bağlantı koparsa site sahibine e-posta (services/dbWatch).
+require("./services/dbWatch").startDbWatch();
 const mediaStorageReady = initializeMediaStorage();
 
 /* 2) Güven / Proxy (Render, Railway vb. için) */
