@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { FaChevronLeft, FaChevronRight, FaTimes } from "react-icons/fa";
 import { getResponsiveImageProps } from "../../../utils/media";
 
@@ -209,9 +210,13 @@ export default function ProductDetails({ product }) {
         )}
       </div>
 
-      {viewer !== null && (
-        <Viewer gallery={gallery} start={viewer} name={product.name} onClose={() => setViewer(null)} />
-      )}
+      {/* Sayfa köküne çizilir: telefonda galeri sabitlenip ölçeklendiği için kendi katmanında
+          kalırsa detay kartı ve header görüntüleyicinin üstüne çıkar. */}
+      {viewer !== null &&
+        createPortal(
+          <Viewer gallery={gallery} start={viewer} name={product.name} onClose={() => setViewer(null)} />,
+          document.body
+        )}
     </div>
   );
 }

@@ -1,5 +1,5 @@
 // src/pages/ProductDetailsPage.jsx
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useParams } from "react-router-dom";
 import api from "../../api";
 
@@ -35,6 +35,45 @@ export default function ProductDetailsPage() {
       })
       .finally(() => setLoading(false));
   }, [id]);
+
+  // Telefonda detay kartı parmağı izler: kart yukarı çıktıkça görsel hafifçe küçülüp kararır
+  // (--sheet-p: 0 görsel açık, 1 detaylar açık); yarıda bırakılırsa en yakın duruma oturur.
+  const galleryRef = useRef(null);
+  const sheetRef = useRef(null);
+  useEffect(() => {
+    const gallery = galleryRef.current;
+    const sheet = sheetRef.current;
+    if (!gallery || !sheet) return undefined;
+    const phone = window.matchMedia("(max-width: 1023.98px)");
+    const root = document.documentElement;
+    // Tarayıcılar kaydırma olayını kare başına en çok bir kez gönderir; ayrıca kare beklenmez.
+    const update = () => {
+      if (!phone.matches) {
+        gallery.style.removeProperty("--sheet-p");
+        return;
+      }
+      const headerBottom = document.querySelector("header")?.getBoundingClientRect().bottom || 0;
+      const travel = sheet.getBoundingClientRect().top + window.scrollY - headerBottom;
+      const progress = travel > 0 ? Math.min(1, Math.max(0, window.scrollY / travel)) : 0;
+      gallery.style.setProperty("--sheet-p", progress.toFixed(3));
+    };
+    const applySnap = () => root.classList.toggle("product-sheet-snap", phone.matches);
+    const onChange = () => {
+      applySnap();
+      update();
+    };
+    applySnap();
+    update();
+    window.addEventListener("scroll", update, { passive: true });
+    window.addEventListener("resize", update);
+    phone.addEventListener("change", onChange);
+    return () => {
+      window.removeEventListener("scroll", update);
+      window.removeEventListener("resize", update);
+      phone.removeEventListener("change", onChange);
+      root.classList.remove("product-sheet-snap");
+    };
+  }, [product, loading]);
 
   const firstImage = product?.media?.images?.[0]?.url || product?.images?.[0] || undefined;
   usePageMeta({
@@ -107,6 +146,8 @@ export default function ProductDetailsPage() {
 
   return (
     <>
+      {/* Telefonda "görsel açık" durumunun oturma noktası */}
+      <div aria-hidden="true" className="product-snap-top" />
       {/* Telefonda ilk ekranda yalnız header ve ürün görseli olsun */}
       <div className="hidden lg:block">
         <BreadCrumb category={product.category} name={product.name} />
@@ -115,13 +156,21 @@ export default function ProductDetailsPage() {
       <div className="mx-auto max-w-7xl px-4 pb-12 pt-2 sm:px-6 lg:px-8 lg:pt-6">
         <div className="grid grid-cols-1 lg:grid-cols-12 lg:gap-12">
           {/* Görseller. Telefonda yerinde kalır, detay kartı üstüne kayarak gelir. */}
-          <section className="sticky top-[65px] lg:static lg:col-span-7" aria-label="Ürün görselleri">
+          <section
+            ref={galleryRef}
+            className="product-gallery sticky top-[65px] lg:static lg:col-span-7"
+            aria-label="Ürün görselleri"
+          >
             <ProductDetails product={product} />
+            <div
+              aria-hidden="true"
+              className="product-gallery-dim pointer-events-none absolute -inset-x-2 inset-y-0 rounded-[1.75rem] bg-black sm:inset-x-0 lg:hidden"
+            />
           </section>
 
           {/* Satın alma. Telefonda görselin altından taşan kart (tutamaç + ad + fiyat ilk ekranda
               görünür, "aşağıda devamı var" der); masaüstünde kaydırırken sabit kalır. */}
-          <aside className="product-sheet relative z-10 -mx-4 -mt-6 rounded-t-[1.75rem] bg-white px-4 pt-3 shadow-[0_-16px_30px_-22px_rgba(0,0,0,0.45)] sm:-mx-6 sm:px-6 lg:static lg:z-auto lg:col-span-5 lg:mx-0 lg:mt-0 lg:rounded-none lg:bg-transparent lg:px-0 lg:pt-0 lg:shadow-none">
+          <aside ref={sheetRef} className="product-sheet relative z-10 -mx-4 -mt-6 rounded-t-[1.75rem] bg-white px-4 pt-3 shadow-[0_-16px_30px_-22px_rgba(0,0,0,0.45)] sm:-mx-6 sm:px-6 lg:static lg:z-auto lg:col-span-5 lg:mx-0 lg:mt-0 lg:rounded-none lg:bg-transparent lg:px-0 lg:pt-0 lg:shadow-none">
             <div aria-hidden="true" className="mx-auto mb-4 h-1.5 w-10 rounded-full bg-dark1/15 lg:hidden" />
             <div className="space-y-6 lg:sticky lg:top-24">
               <AddToCart
