@@ -339,7 +339,7 @@ exports.updateOrderTracking = async (req, res) => {
 };
 
 const CUSTOMER_HIDDEN_FIELDS =
-  "-paytrInit -iyzInit -mailAttemptAt -statusMailAttemptAt -reviewAlertSentAt -adminSeenAt -customerMailSentAt -adminMailSentAt -orderMailSentAt -shippedMailSentAt -deliveredMailSentAt";
+  "-paytrInit -iyzInit -mailAttemptAt -statusMailAttemptAt -reviewAlertSentAt -adminSeenAt -customerMailSentAt -adminMailSentAt -orderMailSentAt -shippedMailSentAt -deliveredMailSentAt -stockHoldKey";
 
 exports.getMyOrders = async (req, res) => {
   const userId = req.user.userId;

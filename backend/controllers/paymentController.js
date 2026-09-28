@@ -15,7 +15,8 @@ const { calculateCartPricing } = require("../services/cartPricingService");
 const {
   PAYTR_TIMEOUT_MINUTES,
   createOrderWithReservation,
-  holdLimitReached,
+  HoldLimitError,
+  holdKeyFor,
   releaseCustomerPendingOrders,
   releaseOwnCheckout,
   releaseReservation,
@@ -85,12 +86,17 @@ const STOCK_TAKEN = {
   message:
     "Sepetinizdeki bir ürünün stoğu az önce tükendi ya da başka bir müşterinin ödemesi için ayrıldı. Sepetinizi kontrol edip tekrar deneyin.",
 };
-const stockTakenAsNull = (err) => (err instanceof StockUnavailableError ? null : Promise.reject(err));
 const TOO_MANY_HOLDS = {
   code: "TOO_MANY_HOLDS",
-  message:
-    "Açık ödeme oturumunuz çok fazla. Mevcut ödemenizi tamamlayın ya da birkaç dakika sonra tekrar deneyin.",
+  message: "Bu bağlantıdan şu anda çok sayıda açık ödeme var. Birkaç dakika sonra tekrar deneyin.",
 };
+// Stok ayrılamadıysa müşteriye dönen yanıt: son adet başka müşteriye ayrıldı ya da
+// bağlantının açık ayrım sınırı doldu.
+function reservationRefusal(err) {
+  if (err instanceof StockUnavailableError) return { status: 409, body: STOCK_TAKEN };
+  if (err instanceof HoldLimitError) return { status: 429, body: TOO_MANY_HOLDS };
+  throw err;
+}
 
 // Yöneticinin iptal ettiği ya da otomatik tamamlanamayan siparişe ödeme geldi: para
 // alındı, sessizce geçme; incelemeye al ve yöneticiye haber ver.
@@ -373,7 +379,6 @@ exports.startGuestPaymentSession = async (req, res) => {
     const orderNumber = Math.floor(1e9 + Math.random() * 9e9).toString();
 
     // 3) Order yarat (user YOK, guest DOLU)
-    if (await holdLimitReached(consent.ip)) return res.status(429).json(TOO_MANY_HOLDS);
 
     // Stok bu siparişe ayrılır (ödeme ekranı); yetmezse sipariş oluşmaz.
     const createdOrder = await createOrderWithReservation({
@@ -432,8 +437,8 @@ exports.startGuestPaymentSession = async (req, res) => {
         name: pricing.summary.shippingName,
         fee: pricing.summary.shippingFee,
       },
-    }).catch(stockTakenAsNull);
-    if (!createdOrder) return res.status(409).json(STOCK_TAKEN);
+    }, { holdKey: holdKeyFor(consent.ip) }).catch((err) => ({ refusal: reservationRefusal(err) }));
+    if (createdOrder.refusal) return res.status(createdOrder.refusal.status).json(createdOrder.refusal.body);
 
     return res.json({
       conversationId,
@@ -529,7 +534,6 @@ exports.startPaymentSession = async (req, res) => {
     const orderNumber = Math.floor(1e9 + Math.random() * 9e9).toString();
 
     // Pending Order
-    if (await holdLimitReached(consent.ip)) return res.status(429).json(TOO_MANY_HOLDS);
 
     // Stok bu siparişe ayrılır (ödeme ekranı); yetmezse sipariş oluşmaz.
     const createdOrder = await createOrderWithReservation({
@@ -581,8 +585,8 @@ exports.startPaymentSession = async (req, res) => {
         name: pricing.summary.shippingName,
         fee: pricing.summary.shippingFee,
       },
-    }).catch(stockTakenAsNull);
-    if (!createdOrder) return res.status(409).json(STOCK_TAKEN);
+    }).catch((err) => ({ refusal: reservationRefusal(err) }));
+    if (createdOrder.refusal) return res.status(createdOrder.refusal.status).json(createdOrder.refusal.body);
     // Aynı anda başlatılmış eski oturumu varsa (ikinci sekme) kapatılır; stok geri eklenir.
     await releaseCustomerPendingOrders({ userId, olderThan: createdOrder._id });
 

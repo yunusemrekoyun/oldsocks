@@ -2,11 +2,15 @@
 // oluşturulurken stok aynı işlemde düşülür ve belirli süre bu siparişe ayrılır.
 // Ödeme başarısız olursa, süre dolarsa veya müşteri yeni bir ödeme başlatırsa stok
 // geri eklenir. Ödeme başarılı olursa stok tekrar düşülmez.
+const { ipKeyGenerator } = require("express-rate-limit");
 const Order = require("../models/Order");
+const ReservationLock = require("../models/ReservationLock");
 const { applyStockChanges, restoreStock } = require("../utils/updateStock");
 const { invalidateCatalog } = require("./catalogCache");
 
-const HOLD_MINUTES = Math.max(5, Number(process.env.STOCK_HOLD_MINUTES) || 20);
+// En az 10 dakika: ödeme formu ayrımın bitmesine 3 dakika kala kapanır ve en az 2 dakika
+// açık kalmalıdır (paymentController: inlineCheckoutHtml).
+const HOLD_MINUTES = Math.max(10, Number(process.env.STOCK_HOLD_MINUTES) || 20);
 const HOLD_MS = HOLD_MINUTES * 60 * 1000;
 // PayTR ödeme sayfası rezervasyondan önce kapansın; aradaki süre geç gelen bildirim içindir.
 const PAYTR_TIMEOUT_MINUTES = Math.max(5, HOLD_MINUTES - 5);
@@ -24,12 +28,48 @@ async function inTransaction(work) {
   }
 }
 
-// Stok yetmezse StockUnavailableError fırlatır; sipariş oluşmaz.
-async function createOrderWithReservation(orderData) {
+// Aynı bağlantıdan (IP) aynı anda açık tutulabilecek misafir stok ayrımı sayısı; sahte
+// e-postalarla stoğun tutulmasını zorlaştırır. Üyeler hesap başına tek ayrımla sınırlıdır.
+const HOLDS_PER_IP = Math.max(1, Number(process.env.STOCK_HOLDS_PER_IP) || 3);
+
+class HoldLimitError extends Error {
+  constructor() {
+    super("Too many open stock holds for this connection.");
+    this.name = "HoldLimitError";
+  }
+}
+
+// IPv6'da tek cihaz birçok adres kullanabilir: hız sınırlayıcıdaki gibi /56 ağı sayılır.
+function holdKeyFor(ip) {
+  return ip ? ipKeyGenerator(String(ip)) : null;
+}
+
+// Stok yetmezse StockUnavailableError, bağlantının açık ayrım sınırı doluysa
+// HoldLimitError fırlatır; sipariş oluşmaz.
+async function createOrderWithReservation(orderData, { holdKey = null } = {}) {
   const created = await inTransaction(async (session) => {
+    if (holdKey) {
+      // Kilit kaydına yazmak aynı bağlantıdan eşzamanlı başlatmaları sıraya sokar;
+      // sayım diğerinin sonucunu görür.
+      await ReservationLock.updateOne({ _id: holdKey }, { $set: { at: new Date() } }, { upsert: true, session });
+      const active = await Order.countDocuments({
+        stockHoldKey: holdKey,
+        status: "pending",
+        stockUpdated: true,
+        stockReservedUntil: { $gt: new Date() },
+      }).session(session);
+      if (active >= HOLDS_PER_IP) throw new HoldLimitError();
+    }
     await applyStockChanges({ items: orderData.items }, { session });
     const [order] = await Order.create(
-      [{ ...orderData, stockUpdated: true, stockReservedUntil: new Date(Date.now() + HOLD_MS) }],
+      [
+        {
+          ...orderData,
+          stockHoldKey: holdKey,
+          stockUpdated: true,
+          stockReservedUntil: new Date(Date.now() + HOLD_MS),
+        },
+      ],
       { session }
     );
     return order;
@@ -95,20 +135,6 @@ async function releaseOwnCheckout(conversationId) {
   return true;
 }
 
-// Aynı IP'den aynı anda açık tutulabilecek stok ayrımı sayısı (sahte e-postalarla tüm
-// stoğun tutulmasını zorlaştırır).
-const HOLDS_PER_IP = Math.max(1, Number(process.env.STOCK_HOLDS_PER_IP) || 3);
-async function holdLimitReached(ip) {
-  if (!ip) return false;
-  const active = await Order.countDocuments({
-    status: "pending",
-    stockUpdated: true,
-    stockReservedUntil: { $gt: new Date() },
-    "consent.ip": ip,
-  });
-  return active >= HOLDS_PER_IP;
-}
-
 async function releaseExpiredReservations(limit = 50) {
   const expired = await Order.find({
     status: "pending",
@@ -126,7 +152,8 @@ async function releaseExpiredReservations(limit = 50) {
 module.exports = {
   HOLD_MINUTES,
   HOLDS_PER_IP,
-  holdLimitReached,
+  HoldLimitError,
+  holdKeyFor,
   releaseOwnCheckout,
   PAYTR_TIMEOUT_MINUTES,
   createOrderWithReservation,

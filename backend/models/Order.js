@@ -134,6 +134,9 @@ const OrderSchema = new mongoose.Schema(
     stockUpdated: { type: Boolean, default: false },
     // Ödeme adımında stok bu siparişe ayrıldıysa ayrımın bitiş anı (bekleyen siparişte).
     stockReservedUntil: { type: Date, default: null },
+    // Misafir ayrımında bağlantı anahtarı (IPv4 adresi ya da IPv6 /56 ağı); aynı bağlantıdan
+    // açık ayrım sayısı bununla sınırlanır.
+    stockHoldKey: { type: String, default: null },
     adminSeenAt: { type: Date, default: null },
 
     paytrInit: { type: Object, default: null },
@@ -153,5 +156,9 @@ OrderSchema.pre("validate", function (next) {
 OrderSchema.index({ status: 1, adminSeenAt: 1, createdAt: -1 });
 OrderSchema.index({ createdAt: -1 });
 OrderSchema.index({ status: 1, stockReservedUntil: 1 });
+OrderSchema.index(
+  { stockHoldKey: 1, status: 1, stockReservedUntil: 1 },
+  { partialFilterExpression: { stockHoldKey: { $type: "string" } } }
+);
 OrderSchema.index({ user: 1, createdAt: -1 });
 module.exports = mongoose.model("Order", OrderSchema);
