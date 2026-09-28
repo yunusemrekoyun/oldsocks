@@ -112,6 +112,10 @@ let json=""; process.stdin.on("data",c=>json+=c); process.stdin.on("end",()=>{
 });'
 
 chown -R oldscks:oldscks "$stage/backend" "$stage/frontend/dist"
+# Nginx siteyi okuyabilsin: arayüz herkese okunur, API kodu yalnız uygulama kullanıcısı ve
+# grubuna. (.env aşağıda 0600 olarak ayrıca yerleşir.)
+chmod -R u=rwX,go=rX "$stage/frontend/dist"
+chmod -R u=rwX,g=rX,o= "$stage/backend"
 install -o oldscks -g oldscks -m 0600 "$api/.env" "$stage/backend/.env"
 sudo -u oldscks -H bash -c 'set -euo pipefail; cd "$1"; npm ci --omit=dev --no-audit --no-fund' bash "$stage/backend"
 sudo -u oldscks -H bash -c '
@@ -128,6 +132,12 @@ nginx -t
 
 # Açık sekmeler için önceki sürümün hash'li dosyalarını yeni derlemeye taşı.
 bash "$stage/deploy/scripts/keepPreviousAssets.sh" "$web" "$stage/frontend/dist"
+# Geçişten önce: Nginx kullanıcısı yeni arayüz dosyalarını okuyabiliyor mu?
+nginx_user="$(awk '$1=="user"{gsub(";","",$2); print $2; exit}' /etc/nginx/nginx.conf)"
+if [[ -n "$nginx_user" ]] && id "$nginx_user" >/dev/null 2>&1; then
+  sudo -u "$nginx_user" test -r "$stage/frontend/dist/index.html"
+  sudo -u "$nginx_user" test -r "$stage/frontend/dist$index_js"
+fi
 
 # --- Geçiş ---
 pm2_as_app stop oldscks-media

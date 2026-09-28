@@ -77,6 +77,10 @@ index_js=$index_js
 built_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 EOF
 
+# Çalışma dizini gizli (umask 077) oluşturulur; paketin içindeki izinler sunucudaki
+# gibi olsun: arayüz herkese okunur, diğerleri sahip ve grup.
+chmod -R u=rwX,go=rX "$stage/frontend"
+chmod -R u=rwX,g=rX,o= "$stage/backend" "$stage/deploy" "$stage/RELEASE.txt"
 package="/tmp/oldsocks-release-${commit}.tar.gz"
 COPYFILE_DISABLE=1 tar -czf "$package" -C "$stage" backend deploy frontend RELEASE.txt
 if tar -tzf "$package" | grep -qE '(^|/)(\.env[^/]*|node_modules|\.git)(/|$)'; then
