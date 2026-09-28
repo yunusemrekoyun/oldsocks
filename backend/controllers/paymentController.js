@@ -502,7 +502,7 @@ exports.startPaymentSession = async (req, res) => {
       });
     }
 
-    await releaseCustomerPendingOrders({ userId });
+    await releaseCustomerPendingOrders({ userId, previousConversationId: req.body?.previousConversationId });
 
     let pricing;
     try {

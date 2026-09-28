@@ -96,3 +96,87 @@ test("en kısa ayrım süresinde de ödeme formu açılır", async () => {
   const inline = await fetch(`${server.base}/api/v1/payment/inline/${res.data.conversationId}`);
   assert.equal(inline.status, 200);
 });
+
+async function memberLogin(email) {
+  const password = `Test-${crypto.randomBytes(6).toString("hex")}!aA1`;
+  const addressId = new mongoose.Types.ObjectId();
+  await mongoose.connection.collection("users").insertOne({
+    firstName: "Sınır", lastName: "Üye", email, phone: "+905551234567", password: await bcrypt.hash(password, 4),
+    role: "user", tokenVersion: 0, refreshTokens: [], createdAt: new Date(), updatedAt: new Date(),
+    addresses: [{ _id: addressId, ...address }],
+  });
+  const login = await postJson(server.base, "/api/v1/auth/login", { email, password });
+  return { token: login.data.accessToken, addressId };
+}
+
+const startMember = (member, product, previousConversationId) =>
+  postJson(
+    server.base,
+    "/api/v1/payment/start",
+    {
+      cartItems: [{ id: String(product), size: "M", qty: 1 }],
+      addressId: String(member.addressId),
+      consent: CONSENT,
+      previousConversationId,
+    },
+    { Authorization: `Bearer ${member.token}`, "X-Forwarded-For": "10.30.0.1" }
+  );
+
+const stockOf = async (product) => (await mongoose.connection.collection("products").findOne({ _id: product })).sizes[0].stock;
+
+test("misafirken ödemeye geçip giriş yapan üye ödeme başlatabilir; misafir oturumu kapanır", async () => {
+  const product = await seedProduct();
+  await mongoose.connection.collection("products").updateOne({ _id: product }, { $set: { "sizes.0.stock": 1 } });
+  const asGuest = await start("once-misafir@sinir.test", "10.30.0.1", product);
+  assert.equal(asGuest.status, 200);
+  const member = await memberLogin(`sonra-uye-${crypto.randomBytes(3).toString("hex")}@sinir.test`);
+  const res = await startMember(member, product, asGuest.data.conversationId);
+  assert.equal(res.status, 200, JSON.stringify(res.data));
+  const old = await mongoose.connection.collection("orders").findOne({ conversationId: asGuest.data.conversationId });
+  assert.equal(old.cancelReason, "session_replaced");
+  assert.equal(await stockOf(product), 0);
+});
+
+test("üye, başka bir hesabın ödeme oturumunu kapatamaz", async () => {
+  const product = await seedProduct();
+  const first = await memberLogin(`ilk-${crypto.randomBytes(3).toString("hex")}@sinir.test`);
+  const second = await memberLogin(`ikinci-${crypto.randomBytes(3).toString("hex")}@sinir.test`);
+  const a = await startMember(first, product);
+  assert.equal(a.status, 200);
+  assert.equal((await startMember(second, product, a.data.conversationId)).status, 200);
+  const order = await mongoose.connection.collection("orders").findOne({ conversationId: a.data.conversationId });
+  assert.equal(order.status, "pending");
+});
+
+test("süresi dolmuş ama henüz geri verilmemiş kendi ayrımı sepette mevcut sayılır", async () => {
+  const product = await seedProduct();
+  await mongoose.connection.collection("products").updateOne({ _id: product }, { $set: { "sizes.0.stock": 1 } });
+  const res = await start("suresi-dolan@sinir.test", "10.30.0.2", product);
+  assert.equal(res.status, 200);
+  await mongoose.connection
+    .collection("orders")
+    .updateOne({ conversationId: res.data.conversationId }, { $set: { stockReservedUntil: new Date(Date.now() - 1000) } });
+  const check = await postJson(server.base, "/api/v1/cart-campaigns/check", {
+    cartItems: [{ id: String(product), size: "M", qty: 1 }],
+    heldBy: res.data.conversationId,
+  });
+  assert.equal(check.data.items[0].status, "ok");
+  assert.equal(check.data.items[0].available, 1);
+});
+
+test("bağlantı başına ayrım sayımı kendi indeksini kullanır", async () => {
+  const orders = mongoose.connection.collection("orders");
+  const indexName = "stockHoldKey_1_status_1_stockReservedUntil_1";
+  for (let i = 0; i < 40 && !(await orders.indexes()).some((ix) => ix.name === indexName); i += 1) {
+    await new Promise((r) => setTimeout(r, 100));
+  }
+  const plan = await orders
+    .find({
+      stockHoldKey: { $eq: "10.20.0.1", $type: "string" },
+      status: "pending",
+      stockUpdated: true,
+      stockReservedUntil: { $gt: new Date() },
+    })
+    .explain("queryPlanner");
+  assert.match(JSON.stringify(plan.queryPlanner.winningPlan), new RegExp(indexName));
+});

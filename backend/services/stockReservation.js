@@ -53,7 +53,8 @@ async function createOrderWithReservation(orderData, { holdKey = null } = {}) {
       // sayım diğerinin sonucunu görür.
       await ReservationLock.updateOne({ _id: holdKey }, { $set: { at: new Date() } }, { upsert: true, session });
       const active = await Order.countDocuments({
-        stockHoldKey: holdKey,
+        // $type: kısmi indeks (models/Order) yalnız bu biçimde kullanılır.
+        stockHoldKey: { $eq: holdKey, $type: "string" },
         status: "pending",
         stockUpdated: true,
         stockReservedUntil: { $gt: new Date() },
@@ -102,18 +103,19 @@ async function releaseReservation(orderId, reason) {
 }
 
 // Müşterinin önceki bekleyen ödeme oturumunu kapatır; yeniden denediğinde kendi ayırdığı
-// son adet ona engel olmasın. Üyelerde hesaba bağlı tüm oturumlar; misafirde yalnız aynı
-// tarayıcının bildirdiği oturum (conversationId yalnız o tarayıcıda tutulur). E-posta tek
-// başına yetmez: başkasının e-postasını yazan biri onun oturumunu kapatamasın.
+// son adet ona engel olmasın. Üyelerde hesaba bağlı tüm oturumlar; ayrıca aynı tarayıcının
+// bildirdiği oturum (conversationId yalnız o tarayıcıda tutulur), ör. misafirken ödemeye
+// geçip sonra giriş yapan üyenin misafir oturumu. Üye başka bir hesabın oturumunu kapatamaz.
+// E-posta tek başına yetmez: başkasının e-postasını yazan biri onun oturumunu kapatamasın.
 async function releaseCustomerPendingOrders({ userId, previousConversationId, olderThan } = {}) {
-  let filter;
-  if (userId) {
-    filter = { status: "pending", user: userId };
-  } else if (typeof previousConversationId === "string" && previousConversationId) {
-    filter = { status: "pending", conversationId: previousConversationId.slice(0, 64) };
-  } else {
-    return 0;
+  const conditions = [];
+  if (userId) conditions.push({ user: userId });
+  if (typeof previousConversationId === "string" && previousConversationId) {
+    const conversationId = previousConversationId.slice(0, 64);
+    conditions.push(userId ? { conversationId, user: { $in: [null, userId] } } : { conversationId });
   }
+  if (!conditions.length) return 0;
+  const filter = { status: "pending", $or: conditions };
   // Yeni sipariş oluştuktan sonra çağrılırsa yalnız ondan eski oturumlar kapanır
   // (aynı anda iki başlatmada ikisi birden kapanmasın).
   if (olderThan) filter._id = { $lt: olderThan };
@@ -125,16 +127,12 @@ async function releaseCustomerPendingOrders({ userId, previousConversationId, ol
 // Bu tarayıcının açık ödeme oturumunun ayırdığı adetler ("ürün|beden" → adet). Müşteri
 // ödeme ekranından sepete dönerse ayrım sürer (başka sekmede ödeme formu açık olabilir);
 // sepet ve ödeme adımı bu adetleri müşteriye mevcut sayar. Yeni ödeme başlatılınca bu
-// oturum kapanır.
+// oturum kapanır. Süresi dolmuş ama henüz geri verilmemiş ayrım da sayılır: stok hâlâ
+// düşülüdür ve yeni ödeme onu da kapatır.
 async function heldQuantities(conversationId) {
   const held = new Map();
   if (typeof conversationId !== "string" || !conversationId || conversationId.length > 64) return held;
-  const order = await Order.findOne({
-    conversationId,
-    status: "pending",
-    stockUpdated: true,
-    stockReservedUntil: { $gt: new Date() },
-  })
+  const order = await Order.findOne({ conversationId, status: "pending", stockUpdated: true })
     .select("items.productId items.size items.qty")
     .lean();
   for (const item of order?.items || []) {
