@@ -15,7 +15,6 @@ const { invalidateCategoriesCache } = require("../../controllers/categoryControl
 const { readDatabaseArchive } = require("./database");
 const { restic, withRuntime } = require("./commands");
 const { verifyMediaInStage, verifyMediaTree } = require("./media");
-const { recordPrices } = require("../priceHistory");
 
 const { EJSON } = mongoose.mongo.BSON;
 const SNAPSHOT_ID = /^[a-f0-9]{64}$/;
@@ -257,13 +256,6 @@ async function applyCatalog(archive, expectedFingerprint) {
       }
       await Category.collection.updateMany({ _id: { $nin: oldCategoryIds }, archivedAt: null }, { $set: { archivedAt: now } }, { session });
       await Category.collection.updateMany({ _id: { $nin: oldCategoryIds }, archivedAt: { $exists: false } }, { $set: { archivedAt: now } }, { session });
-      const priceChanges = oldProducts
-        .filter((p) => {
-          const current = currentProducts.get(id(p));
-          return !current || Number(current.price) !== Number(p.price) || Number(current.originalPrice) !== Number(p.originalPrice);
-        })
-        .map((p) => ({ product: p._id, price: p.price, originalPrice: p.originalPrice }));
-      await recordPrices(priceChanges, { source: "restore", session });
       for (const product of oldProducts) {
         await Product.collection.replaceOne(
           { _id: product._id },

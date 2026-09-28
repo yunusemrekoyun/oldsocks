@@ -21,14 +21,6 @@ const {
 const { productsCache, cachedDetail, invalidateCatalog } = require("../services/catalogCache");
 const { prepareJson, sendPreparedJson } = require("../services/preparedJson");
 const { stripPrivateAssetFields } = require("../middleware/publicAssetFilter");
-const { recordPrices } = require("../services/priceHistory");
-
-// Fiyat geçmişi yazılamazsa ürün işlemi başarısız sayılmaz; yalnız loglanır.
-function logPrice(entries, source) {
-  recordPrices(entries, { source }).catch((error) =>
-    console.warn("[price-history] kaydedilemedi:", error?.message || error)
-  );
-}
 
 function invalidateProductsCache() {
   invalidateCatalog();
@@ -106,7 +98,6 @@ exports.createProduct = async (req, res) => {
       parentProductId: null,
     });
     await syncProductReferences(product);
-    logPrice([{ product: product._id, price: product.price, originalPrice: product.originalPrice }], "create");
     invalidateProductsCache();
     const populated = await populateProductMedia(Product.findById(product._id));
     res.status(201).json(applyProductMedia(populated));
@@ -240,8 +231,6 @@ exports.updateProduct = async (req, res) => {
       videoAsset = videos[0] || null;
     }
 
-    const priceChanged =
-      Number(existing.price) !== pricing.price || Number(existing.originalPrice) !== pricing.originalPrice;
     existing.name = name;
     existing.price = pricing.price;
     existing.originalPrice = pricing.originalPrice;
@@ -257,9 +246,6 @@ exports.updateProduct = async (req, res) => {
     existing.video = videoAsset ? legacyAssetUrl(videoAsset, "detail") : "";
     await existing.save();
     await syncProductReferences(existing);
-    if (priceChanged) {
-      logPrice([{ product: existing._id, price: existing.price, originalPrice: existing.originalPrice }], "update");
-    }
     invalidateProductsCache();
     const populated = await populateProductMedia(Product.findById(existing._id));
     res.json(applyProductMedia(populated));
@@ -357,7 +343,6 @@ exports.createProductWithNewColor = async (req, res) => {
       video: videoAsset ? legacyAssetUrl(videoAsset, "detail") : "",
     });
     await syncProductReferences(product);
-    logPrice([{ product: product._id, price: product.price, originalPrice: product.originalPrice }], "create");
     invalidateProductsCache();
     const populated = await populateProductMedia(Product.findById(product._id));
     res.status(201).json(applyProductMedia(populated));

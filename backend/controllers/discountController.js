@@ -73,7 +73,6 @@ async function findConflicts(discountId, targetProductIds) {
 /* ================== Uygula / Geri Al ================== */
 
 const { invalidateCatalog } = require("../services/catalogCache");
-const { recordPrices } = require("../services/priceHistory");
 
 const round2 = (n) => Math.round(Number(n || 0) * 100) / 100;
 
@@ -154,12 +153,6 @@ async function applyToProducts(productIds, rate, session) {
     })),
     { session }
   );
-  await recordPrices(
-    entries
-      .filter((e) => e.appliedPrice !== e.previousPrice)
-      .map((e) => ({ product: e.product, price: e.appliedPrice, originalPrice: e.originalPrice })),
-    { source: "discount", session }
-  );
   return entries.map(({ originalPrice: _omit, ...entry }) => entry);
 }
 
@@ -173,7 +166,6 @@ async function revertProducts(entries, session) {
     .lean();
   const byId = new Map(products.map((p) => [String(p._id), p]));
   const ops = [];
-  const history = [];
   for (const entry of entries) {
     const product = byId.get(String(entry.product));
     if (!product) continue;
@@ -193,12 +185,8 @@ async function revertProducts(entries, session) {
         update: { $set: { price: restored, discount: discountPercent(restored, originalPrice) } },
       },
     });
-    if (round2(product.price) !== round2(restored)) {
-      history.push({ product: product._id, price: restored, originalPrice });
-    }
   }
   if (ops.length) await Product.bulkWrite(ops, { session });
-  await recordPrices(history, { source: "discount_revert", session });
 }
 
 async function inTransaction(work) {
