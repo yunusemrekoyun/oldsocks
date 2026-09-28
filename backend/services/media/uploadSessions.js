@@ -69,7 +69,11 @@ async function sumForMatch(match, field) {
   return Number(result?.total || 0);
 }
 
-async function assertQuotas({ createdBy, reservationBytes, expectedBytes }) {
+// Müşteri (yönetici olmayan) yalnız profil fotoğrafı yükleyebilir; günlük kotası dar tutulur.
+const CUSTOMER_DAILY_UPLOADS = 10;
+const CUSTOMER_DAILY_BYTES = 25 * 1024 * 1024;
+
+async function assertQuotas({ createdBy, role, reservationBytes, expectedBytes }) {
   const now = new Date();
   const tenMinutesAgo = new Date(now.getTime() - TEN_MINUTES_MS);
   const hourAgo = new Date(now.getTime() - HOUR_MS);
@@ -101,6 +105,16 @@ async function assertQuotas({ createdBy, reservationBytes, expectedBytes }) {
 
   if (recentSessions >= 30) {
     throw mediaError("MEDIA_RATE_LIMITED", 429, { retryAfter: 60 });
+  }
+  if (role !== "admin") {
+    const dailySessions = await MediaUploadSession.countDocuments({ createdBy, createdAt: { $gte: dayAgo } });
+    if (dailySessions >= CUSTOMER_DAILY_UPLOADS || dailyBytes + expectedBytes > CUSTOMER_DAILY_BYTES) {
+      throw mediaError("MEDIA_QUOTA_EXCEEDED", 429, {
+        retryAfter: 60 * 60,
+        message: "Günlük yükleme sınırına ulaştınız. Lütfen yarın tekrar deneyin.",
+        details: { limitUploads: CUSTOMER_DAILY_UPLOADS, limitBytes: CUSTOMER_DAILY_BYTES },
+      });
+    }
   }
   if (adminInFlight + reservationBytes > MEDIA_RUNTIME.perAdminInFlightBytes) {
     throw mediaError("MEDIA_QUOTA_EXCEEDED", 429, {
@@ -197,7 +211,7 @@ async function createUploadSession({
   }
 
   const reservationBytes = reservationFor(policy, normalizedBytes);
-  await assertQuotas({ createdBy, reservationBytes, expectedBytes: normalizedBytes });
+  await assertQuotas({ createdBy, role, reservationBytes, expectedBytes: normalizedBytes });
 
   const sessionId = new mongoose.Types.ObjectId();
   const assetId = new mongoose.Types.ObjectId();
