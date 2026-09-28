@@ -4,6 +4,7 @@ const Product = require("../models/Product");
 const Category = require("../models/Category");
 const Order = require("../models/Order");
 const { timedCache } = require("../services/timedCache");
+const { loadCompactProducts } = require("./productController");
 
 const defaults = Object.freeze({
   fontPreset: "classic",
@@ -85,6 +86,84 @@ exports.getPublic = async (_req, res) => {
   const bestSellingProductIds = needsSales ? await bestSellerIds() : [];
   res.set("Cache-Control", "public, max-age=5, s-maxage=5");
   res.json({ ...settings, bestSellingProductIds });
+};
+
+// Ana sayfa bölümleri için yalnız gereken ürünler: her bölümün aday havuzu (en çok
+// HOME_POOL_SIZE) ve bu ürünlerin renk varyantları. Karıştırma ve 4 ürün seçimi
+// tarayıcıda yapılır; ana sayfa tüm ürün listesini indirmez.
+const HOME_POOL_SIZE = 12;
+
+function productTime(product) {
+  if (product.createdAt) return new Date(product.createdAt).getTime() || 0;
+  return Number.parseInt(String(product._id || "").slice(0, 8), 16) * 1000 || 0;
+}
+
+function sample(items, size) {
+  const copy = [...items];
+  for (let i = copy.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [copy[i], copy[j]] = [copy[j], copy[i]];
+  }
+  return copy.slice(0, size);
+}
+
+function sectionPool(all, byId, section, bestSelling) {
+  switch (section.source) {
+    case "manual":
+      return section.productIds.map((id) => byId.get(String(id))).filter(Boolean).slice(0, HOME_POOL_SIZE);
+    case "category":
+      return all
+        .filter((product) => {
+          const category = product.category;
+          const id = typeof category === "object" ? category?._id : category;
+          const parent = typeof category === "object" ? category?.parent?._id || category?.parent : null;
+          return [id, parent].some((value) => String(value || "") === String(section.categoryId));
+        })
+        .sort((a, b) => productTime(b) - productTime(a))
+        .slice(0, HOME_POOL_SIZE);
+    case "best_selling":
+      return bestSelling.map((id) => byId.get(String(id))).filter(Boolean).slice(0, HOME_POOL_SIZE);
+    case "random":
+      return sample(all, HOME_POOL_SIZE);
+    case "latest":
+    default:
+      return [...all].sort((a, b) => productTime(b) - productTime(a)).slice(0, 10);
+  }
+}
+
+// Ana sayfa kartının kullandığı alanlar: ilk görsel, fiyatlar, stok ve renk.
+function homeCard(product) {
+  return {
+    _id: product._id,
+    name: product.name,
+    price: product.price,
+    originalPrice: product.originalPrice,
+    discount: product.discount,
+    video: product.video || "",
+    color: product.color || "",
+    parentProductId: product.parentProductId || null,
+    sizes: (product.sizes || []).map((row) => ({ size: row.size, stock: row.stock })),
+    images: (product.images || []).slice(0, 1),
+    media: { images: (product.media?.images || []).slice(0, 1) },
+  };
+}
+
+const variantBase = (product) => String(product.parentProductId?._id || product.parentProductId || product._id);
+
+exports.getHomeProducts = async (_req, res) => {
+  const [settings, all] = await Promise.all([loadSettings(), loadCompactProducts()]);
+  const visible = sectionKeys.filter((key) => settings.sections[key].visible);
+  const needsSales = visible.some((key) => settings.sections[key].source === "best_selling");
+  const bestSelling = needsSales ? await bestSellerIds() : [];
+  const byId = new Map(all.map((product) => [String(product._id), product]));
+  const pools = Object.fromEntries(visible.map((key) => [key, sectionPool(all, byId, settings.sections[key], bestSelling)]));
+  const bases = new Set(Object.values(pools).flat().map(variantBase));
+  const sections = Object.fromEntries(Object.entries(pools).map(([key, pool]) => [key, pool.map(homeCard)]));
+  const variants = all
+    .filter((product) => bases.has(variantBase(product)) && String(product.color || "").trim())
+    .map((product) => ({ _id: product._id, color: product.color, parentProductId: product.parentProductId || null }));
+  res.set("Cache-Control", "public, max-age=5, s-maxage=5");
+  res.json({ sections, variants });
 };
 
 exports.getAdmin = async (_req, res) => {

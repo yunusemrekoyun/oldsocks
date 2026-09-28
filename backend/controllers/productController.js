@@ -112,6 +112,28 @@ exports.createProduct = async (req, res) => {
   }
 };
 
+// Aktif ürün listesi (önbellekte): tam ve kısa JSON ile ana sayfa bölümleri için kısa kayıtlar.
+async function buildProductLists() {
+  const products = await populateProductMedia(
+    Product.find({ archivedAt: null })
+      .sort({ createdAt: -1 })
+      .select(
+        "name video images videoAsset imageAssets price originalPrice discount sizes color category parentProductId createdAt"
+      )
+  ).lean();
+  const full = stripPrivateAssetFields(products.map((product) => applyProductMedia(product, "list")));
+  const items = full.map(compactProductListItem);
+  return {
+    full: prepareJson(full),
+    compact: prepareJson(items),
+    items,
+  };
+}
+
+async function loadCompactProducts() {
+  return (await productsCache.get(buildProductLists)).items;
+}
+
 exports.getProducts = async (req, res) => {
   try {
     if (req.query.varyantsOf) {
@@ -130,20 +152,7 @@ exports.getProducts = async (req, res) => {
       res.set("Cache-Control", "public, max-age=5, s-maxage=5");
       return res.json(products);
     }
-    const result = await productsCache.get(async () => {
-      const products = await populateProductMedia(
-        Product.find({ archivedAt: null })
-          .sort({ createdAt: -1 })
-          .select(
-            "name video images videoAsset imageAssets price originalPrice discount sizes color category parentProductId createdAt"
-          )
-      ).lean();
-      const full = stripPrivateAssetFields(products.map((product) => applyProductMedia(product, "list")));
-      return {
-        full: prepareJson(full),
-        compact: prepareJson(full.map(compactProductListItem)),
-      };
-    });
+    const result = await productsCache.get(buildProductLists);
     if (req.query.view === "compact") {
       return sendPreparedJson(req, res, result.compact, {
         cacheControl: "public, max-age=5, s-maxage=5",
@@ -426,3 +435,5 @@ exports.createProductWithNewColor = async (req, res) => {
     res.status(500).json({ message: "Yeni renk eklenirken beklenmeyen bir hata oluştu." });
   }
 };
+
+exports.loadCompactProducts = loadCompactProducts;

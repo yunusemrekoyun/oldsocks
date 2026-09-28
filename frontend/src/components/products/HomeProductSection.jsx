@@ -1,13 +1,13 @@
 import { useMemo, useState } from "react";
-import useProductsCache from "../../hooks/useProductsCache";
+import useHomeProducts from "../../hooks/useHomeProducts";
 import { useStorefrontSettings } from "../../context/storefrontSettings";
-import { selectHomeProducts } from "../../utils/homeProductSelection";
+import { pickHomeProducts } from "../../utils/homeProductSelection";
 import { buildVariantColorMap, getVariantColors } from "../../utils/productVariants";
 import NewProductItem from "./NewProductItem";
 import ProductGridItem from "./ProductGridItem";
 
 export default function HomeProductSection({ sectionKey }) {
-  const { data: allProducts, loading } = useProductsCache();
+  const { data, loading } = useHomeProducts();
   const settings = useStorefrontSettings();
   const section = settings.sections?.[sectionKey];
   const [randomValues] = useState(() => Array.from({ length: 256 }, () => Math.random()));
@@ -16,12 +16,12 @@ export default function HomeProductSection({ sectionKey }) {
     return () => randomValues[index++ % randomValues.length];
   }, [randomValues]);
   const products = useMemo(
-    () => selectHomeProducts(allProducts, section, settings.bestSellingProductIds, random),
-    [allProducts, section, settings.bestSellingProductIds, random]
+    () => pickHomeProducts(data?.sections?.[sectionKey], section, random),
+    [data, sectionKey, section, random]
   );
-  const variantColorMap = useMemo(() => buildVariantColorMap(allProducts || []), [allProducts]);
+  const variantColorMap = useMemo(() => buildVariantColorMap(data?.variants || []), [data]);
 
-  if (loading || !allProducts) {
+  if (loading) {
     return <section className="bg-light1 py-12 text-center">Ürünler yükleniyor…</section>;
   }
   if (!products.length) return null;
