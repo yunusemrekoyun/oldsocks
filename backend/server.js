@@ -38,6 +38,10 @@ app.set("trust proxy", 1); // gerçek istemci IP’si için
 app.use(cloudflareClientIp); // Cloudflare arkasında ziyaretçinin kendi adresi
 app.disable("x-powered-by");
 app.use(requestId);
+
+/* Ürün sayfası HTML'i (paylaşım önizlemesi). Güvenlik başlıklarından (helmet CSP) önce:
+   bu yanıt mağaza sayfasının kendisidir, API'nin sıkı politikası sayfayı bozardı. */
+app.get("/product-details/:id", require("./services/sharePreview").sendProductPage);
 app.use((req, res, next) => {
   if (!req.path.startsWith("/api/v1")) return next();
   const finish = trafficMonitor.begin();
