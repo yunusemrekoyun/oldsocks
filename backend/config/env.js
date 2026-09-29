@@ -19,7 +19,7 @@ function loadEnv() {
   const uri = String(process.env.MONGO_URI || "");
   if (process.env.NODE_ENV !== "production" && /mongodb\.net/i.test(uri)) {
     console.warn(
-      "[env] Geliştirme ortamı Atlas'taki bir kümeye bağlanıyor. Canlıyla aynı kümeyse yerel testler canlıyı etkileyebilir; yerel ortam için dev/README.md'ye bakın."
+      "[env] Geliştirme ortamı Atlas'taki bir kümeye bağlanıyor. Canlıyla aynı kümeyse yerel testler canlıyı etkileyebilir; yerel ortam için dev/yerel-ortam.sh kullanın."
     );
   }
 }
