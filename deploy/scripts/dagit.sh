@@ -188,6 +188,6 @@ REMOTE
 
 tag="canli-$(date +%Y%m%d-%H%M)"
 if git -C "$root" rev-parse -q --verify "$commit^{commit}" >/dev/null; then
-  git -C "$root" tag -a "$tag" "$commit" -m "Canlıya alındı: $commit"
+  git -C "$root" tag -a "$tag" "$commit" -m "Deploy $commit"
   echo "Yerel etiket: $tag (git push origin $tag ile gönderin)"
 fi
