@@ -15,10 +15,18 @@ test.after(async () => {
 test("HEAD istekleri okuma sınırına sayılır; dakikada 2000'den sonrası 429 alır", async () => {
   const url = `${server.base}/api/v1/products?view=compact`;
   const statuses = [];
-  for (let i = 0; i < 2005; i += 1) {
-    const res = await fetch(url, { method: "HEAD" });
-    statuses.push(res.status);
+  // Yavaş yerel ortamda sıralı 2000 istek bir dakikalık pencereyi aşmasın.
+  // Son beş istek, izin verilen grubun tamamlanmasından sonra gönderilir.
+  for (let i = 0; i < 2000; i += 50) {
+    const responses = await Promise.all(
+      Array.from({ length: 50 }, () => fetch(url, { method: "HEAD" }))
+    );
+    statuses.push(...responses.map((res) => res.status));
   }
+  const limited = await Promise.all(
+    Array.from({ length: 5 }, () => fetch(url, { method: "HEAD" }))
+  );
+  statuses.push(...limited.map((res) => res.status));
   assert.equal(statuses.slice(0, 2000).every((s) => s === 200), true);
   assert.equal(statuses.slice(2000).every((s) => s === 429), true);
 });
