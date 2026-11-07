@@ -128,7 +128,14 @@ test("kargo firması girilmezse Kargo ayarlarındaki yöntem adı kullanılır; 
   assert.match(mails[0].Text, /YK123456/);
   assert.match(mails[0].Text, /Yurtiçi Kargo/);
 
-  const stored = await Orders.findOne({ _id });
+  // SMTP kabulünden sonra gönderildi işareti ayrı bir Mongo yazımıyla kaydedilir.
+  // Mailpit'te iletinin görünmesi bu yazımın tamamlandığı anlamına gelmez.
+  const persistedBy = Date.now() + 10_000;
+  let stored = await Orders.findOne({ _id });
+  while (!stored?.shippedMailSentAt && Date.now() < persistedBy) {
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    stored = await Orders.findOne({ _id });
+  }
   assert.ok(stored.shippedAt);
   assert.ok(stored.shippedMailSentAt);
 
