@@ -176,11 +176,10 @@ export default function Hero() {
   // 2+ medya -> slider
   return (
     <section className="relative w-full h-[100vh] overflow-hidden">
-      {/* Sonsuz döngü: son banner'dan sonra ilkine kesintisiz geçer (en az 3 banner gerekir). */}
+      {/* Sonsuz döngü: son banner'dan sonra ilkine kesintisiz geçer. */}
       <Swiper
         modules={[Autoplay, Pagination]}
-        loop={items.length >= 3}
-        rewind={items.length < 3}
+        loop
         autoplay={{ delay: 5000, disableOnInteraction: false }}
         pagination={{ clickable: true }}
         className="w-full h-full"

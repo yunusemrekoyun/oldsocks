@@ -8,7 +8,7 @@ export default function CookieConsent() {
   if (consent) return null;
 
   return (
-    <div className="fixed inset-x-0 bottom-0 z-[1000] pointer-events-none">
+    <div className="fixed inset-x-0 z-[1000] pointer-events-none" style={{ bottom: "var(--mobile-nav-space, 0px)" }}>
       <div className="relative w-full">
         <div
           role="dialog"

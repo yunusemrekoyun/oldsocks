@@ -6,6 +6,7 @@ import { FaVolumeMute, FaVolumeUp, FaPlay } from "react-icons/fa";
 import { getResponsiveImageProps } from "../../utils/media";
 import { toCssColor } from "../../utils/productVariants";
 import { formatTry } from "../../utils/currency";
+import FavoriteButton from "./FavoriteButton";
 
 const MOBILE_VIDEO_EVENT = "product-mobile-play";
 
@@ -149,9 +150,10 @@ const ProductGridItem = ({
   );
 
   return (
+    <div className="relative flex h-full flex-col">
     <Link
       to={`/product-details/${id}`}
-      className="group relative flex flex-col rounded-xl overflow-hidden bg-white shadow border border-light2 hover:shadow-xl transition-all duration-300"
+      className="group relative flex h-full flex-col rounded-xl overflow-hidden bg-white shadow border border-light2 hover:shadow-xl transition-all duration-300"
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
     >
@@ -161,7 +163,7 @@ const ProductGridItem = ({
       {shouldShowVideo && isHoverCapable && isHovered && (
         <button
           onClick={toggleMute}
-          className="hidden md:flex absolute top-3 right-3 bg-white border border-gray-200 p-1 rounded-full z-10 shadow-md hover:border-purple-500 transition"
+          className="hidden md:flex absolute top-14 right-3 bg-white border border-gray-200 p-1 rounded-full z-10 shadow-md hover:border-purple-500 transition"
           aria-label={isMuted ? "Sesi aç" : "Sesi kapat"}
         >
           {isMuted ? (
@@ -277,6 +279,8 @@ const ProductGridItem = ({
         )}
       </div>
     </Link>
+    <FavoriteButton productId={id} productName={name} className="absolute right-2 top-2 z-20" />
+    </div>
   );
 };
 

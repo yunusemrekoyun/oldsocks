@@ -6,22 +6,20 @@ import {
   FaSearch,
   FaShoppingCart,
   FaUser,
-  FaBars,
-  FaTimes,
+  FaRegHeart,
 } from "react-icons/fa";
-import { ChevronDownIcon, ChevronRightIcon } from "@heroicons/react/24/solid";
+import { ChevronDownIcon } from "@heroicons/react/24/solid";
 import { AuthContext } from "../../context/AuthContext";
 import { useCart } from "../../context/useCart";
 import SearchModal from "../search/SearchModal";
 import useCategoriesCache from "../../hooks/useCategoriesCache";
 import logo from "../../assets/logo/logo.webp";
-import publicApi from "../../../publicApi";
 import { useSiteContent } from "../../context/siteContent";
 import { getResponsiveImageProps } from "../../utils/media";
 import HeaderBrand from "./HeaderBrand";
 
 const DISCOUNT_HOVER_KEY = "__discount_campaigns__";
-const Header = () => {
+const Header = ({ headerCampaigns = [] }) => {
   const { isLoggedIn } = useContext(AuthContext);
   const { items } = useCart();
   const siteContent = useSiteContent();
@@ -40,10 +38,6 @@ const Header = () => {
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
-  // Mobil Drawer
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [drawerVisible, setDrawerVisible] = useState(false); // animasyon
-
   // Mağaza dropdown (desktop)
   const [shopOpen, setShopOpen] = useState(false);
   const [hoverParent, setHoverParent] = useState(null);
@@ -51,32 +45,11 @@ const Header = () => {
   const shopToggleRef = useRef(null);
   const navigate = useNavigate();
 
-  // Mobil akordeon: açık parent id'leri
-  const [openParents, setOpenParents] = useState(() => new Set());
-  const [headerCampaigns, setHeaderCampaigns] = useState([]);
-
   const { data: cachedCategories } = useCategoriesCache();
   const cats = useMemo(
     () => (Array.isArray(cachedCategories) ? cachedCategories : []),
     [cachedCategories]
   );
-
-  useEffect(() => {
-    let alive = true;
-    (async () => {
-      try {
-        const { data } = await publicApi.get("/cart-campaigns/header");
-        if (!alive) return;
-        setHeaderCampaigns(Array.isArray(data) ? data : []);
-      } catch (e) {
-        console.error("Header kampanyaları alınamadı:", e);
-        if (alive) setHeaderCampaigns([]);
-      }
-    })();
-    return () => {
-      alive = false;
-    };
-  }, []);
 
   // id helper
   const getId = (maybeObj) =>
@@ -95,11 +68,6 @@ const Header = () => {
     () => headerCampaigns.filter((c) => c.headerPlacement === "sub_panel"),
     [headerCampaigns]
   );
-  const allMobileCampaigns = useMemo(
-    () => [...topPanelCampaigns, ...subPanelCampaigns],
-    [topPanelCampaigns, subPanelCampaigns]
-  );
-
   // Desktop hover’lı menüde children
   const isDiscountHover = hoverParent === DISCOUNT_HOVER_KEY;
   const hoveredParentObj = isDiscountHover
@@ -131,8 +99,6 @@ const Header = () => {
   const goShopWith = (preset) => {
     setShopOpen(false);
     setHoverParent(null);
-    setMobileMenuOpen(false);
-    setDrawerVisible(false);
     if (Array.isArray(preset?.productIds)) {
       navigate("/shop", { state: { preset } });
       return;
@@ -143,27 +109,6 @@ const Header = () => {
     if (preset?.discountOnly) params.set("indirim", "1");
     const search = params.toString();
     navigate(search ? `/shop?${search}` : "/shop");
-  };
-
-  // Mobil drawer animasyonu
-  useEffect(() => {
-    if (mobileMenuOpen) {
-      // çizimden sonra translateX’i sıfırla
-      const t = setTimeout(() => setDrawerVisible(true), 10);
-      return () => clearTimeout(t);
-    } else {
-      setDrawerVisible(false);
-    }
-  }, [mobileMenuOpen]);
-
-  // Akordeon toggle
-  const toggleParentOpen = (pid) => {
-    setOpenParents((prev) => {
-      const next = new Set(prev);
-      if (next.has(pid)) next.delete(pid);
-      else next.add(pid);
-      return next;
-    });
   };
 
   const menuItems = [
@@ -190,25 +135,8 @@ const Header = () => {
             scrolled ? "h-14 lg:h-16" : "h-16 lg:h-20"
           }`}
         >
-          {/* Sol: mobilde menü ve arama, masaüstünde menü linkleri */}
+          {/* Soldaki boşluk mobilde markayı ortalar; masaüstünde gezinme burada. */}
           <div className="flex min-w-0 items-center gap-0.5 sm:gap-1">
-            <button
-              type="button"
-              onClick={() => setMobileMenuOpen(true)}
-              className={`${iconButton} lg:hidden`}
-              aria-label="Menüyü Aç"
-            >
-              <FaBars className="text-lg" />
-            </button>
-            <button
-              type="button"
-              className={`${iconButton} lg:hidden`}
-              onClick={() => setShowSearch(true)}
-              aria-label="Ürün ara"
-            >
-              <FaSearch className="text-[15px]" />
-            </button>
-
             {/* Menü - Desktop */}
             <nav className="hidden lg:flex items-center gap-4 xl:gap-7 text-sm xl:text-[15px] font-medium tracking-wide text-dark2 relative">
               <Link to="/" className="hover:text-brand transition-colors">
@@ -413,24 +341,27 @@ const Header = () => {
             <HeaderBrand header={siteContent?.header} logoProps={siteLogo} compact={scrolled} />
           </Link>
 
-          {/* Sağ: arama (masaüstü), profil, sepet */}
+          {/* Sağ: arama; masaüstünde ayrıca favoriler, profil ve sepet */}
           <div className="flex items-center justify-end gap-0.5 sm:gap-1.5">
             <button
               type="button"
-              className={`${iconButton} hidden lg:flex`}
+              className={iconButton}
               onClick={() => setShowSearch(true)}
               aria-label="Ürün ara"
             >
               <FaSearch className="text-[15px]" />
             </button>
-            <Link to="/profile" aria-label={isLoggedIn ? "Hesabım" : "Giriş yap"} className={iconButton}>
+            <Link to="/favorites" aria-label="Favoriler" className={`${iconButton} hidden lg:flex`}>
+              <FaRegHeart className="text-[17px]" />
+            </Link>
+            <Link to="/profile" aria-label={isLoggedIn ? "Hesabım" : "Giriş yap"} className={`${iconButton} hidden lg:flex`}>
               <FaUser className="text-[15px]" />
             </Link>
             <Link
               to="/cart"
               id="cart-icon"
               aria-label={`Sepet${items.length ? `, ${items.length} ürün` : ""}`}
-              className="relative ml-0.5 flex h-10 w-10 items-center justify-center rounded-full bg-dark1 text-white transition hover:bg-black focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-dark1"
+              className="relative ml-0.5 hidden h-10 w-10 items-center justify-center rounded-full bg-dark1 text-white transition hover:bg-black focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-dark1 lg:flex"
             >
               <FaShoppingCart className="text-[15px]" />
               {items.length > 0 && (
@@ -443,192 +374,7 @@ const Header = () => {
         </div>
       </div>
 
-      {/* =================== Mobil Drawer =================== */}
-      {/* Kaydırınca header'a gelen bulanıklık (backdrop-filter) içindeki "fixed" öğeleri
-          header kutusuna hapseder; menü ve arama bu yüzden sayfa köküne taşınır. */}
-      {mobileMenuOpen && createPortal(
-        <div className="fixed inset-0 z-[1100]">
-          {/* Backdrop */}
-          <div
-            className={`absolute inset-0 bg-black/40 backdrop-blur-sm transition-opacity ${
-              drawerVisible ? "opacity-100" : "opacity-0"
-            }`}
-            onClick={() => setMobileMenuOpen(false)}
-          />
-          {/* Panel */}
-          <div
-            className={`absolute left-0 top-0 h-full w-[86%] max-w-sm bg-white shadow-2xl border-r border-light2 transform transition-transform duration-300 ${
-              drawerVisible ? "translate-x-0" : "-translate-x-full"
-            } flex flex-col`}
-          >
-            {/* Drawer Header */}
-            <div className="flex items-center justify-between px-4 py-3 border-b border-light2">
-              <Link
-                to="/"
-                onClick={() => setMobileMenuOpen(false)}
-                className="flex items-center"
-                aria-label="OLDSOCKS ana sayfa"
-              >
-                <HeaderBrand header={siteContent?.header} logoProps={siteLogo} compact />
-              </Link>
-              <button
-                onClick={() => setMobileMenuOpen(false)}
-                className="w-9 h-9 flex items-center justify-center rounded-full border border-light3 hover:bg-light1"
-                aria-label="Kapat"
-              >
-                <FaTimes className="text-dark2" />
-              </button>
-            </div>
-
-            {/* Quick Actions */}
-            <div className="px-4 pt-3 pb-1 grid grid-cols-3 gap-2">
-              <button
-                onClick={() => {
-                  setMobileMenuOpen(false);
-                  navigate("/shop");
-                }}
-                className="px-3 py-2 rounded-lg bg-light1 hover:bg-light1/80 border border-light2 text-sm"
-              >
-                Mağaza
-              </button>
-              <button
-                onClick={() => {
-                  setMobileMenuOpen(false);
-                  goShopWith({ discountOnly: true });
-                }}
-                className="px-3 py-2 rounded-lg bg-red-50 text-red-600 border border-red-100 hover:bg-red-100 text-sm"
-              >
-                İndirim
-              </button>
-              <button
-                onClick={() => {
-                  setShowSearch(true);
-                  setMobileMenuOpen(false);
-                }}
-                className="px-3 py-2 rounded-lg bg-light1 hover:bg-light1/80 border border-light2 text-sm"
-              >
-                Ara
-              </button>
-            </div>
-
-            {allMobileCampaigns.length > 0 && (
-              <div className="px-4 py-2">
-                <div className="rounded-xl border border-red-100 bg-red-50/50 p-3">
-                  <div className="text-xs font-semibold text-red-600 mb-2 uppercase">
-                    Kampanyalar
-                  </div>
-                  <div className="space-y-1">
-                    {allMobileCampaigns.map((c) => (
-                      <button
-                        key={c._id}
-                        onClick={() => {
-                          setMobileMenuOpen(false);
-                          goShopWith({
-                            title: c.name,
-                            productIds: c.productIds || [],
-                          });
-                        }}
-                        className="w-full text-left px-2 py-1.5 rounded-lg text-sm text-red-700 hover:bg-red-100 transition"
-                      >
-                        {c.name}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Links */}
-            <nav className="px-4 py-2 space-y-2 overflow-y-auto">
-              <Link
-                to="/"
-                className="block px-4 py-3 rounded-xl hover:bg-light1 transition"
-                onClick={() => setMobileMenuOpen(false)}
-              >
-                Ana Sayfa
-              </Link>
-
-              {/* Kategoriler (akordeon kart) */}
-              <div className="rounded-2xl border border-light2 overflow-hidden">
-                <div className="px-4 py-2 text-xs uppercase text-dark2 bg-light1/60">
-                  Kategoriler
-                </div>
-                <ul className="divide-y divide-light2">
-                  {parents.map((p) => {
-                    const pid = String(p._id);
-                    const children =
-                      (p.children && p.children.length
-                        ? p.children
-                        : childrenOf(pid)) || [];
-                    const isOpen = openParents.has(pid);
-
-                    return (
-                      <li key={pid} className="bg-white">
-                        <div className="flex items-center">
-                          <button
-                            onClick={() =>
-                              goShopWith({ category: [pid], subCategory: [] })
-                            }
-                            className="flex-1 text-left px-4 py-3 hover:bg-light1 transition"
-                          >
-                            {p.name}
-                          </button>
-                          {children.length > 0 && (
-                            <button
-                              onClick={() => toggleParentOpen(pid)}
-                              className="px-3 py-3 hover:bg-light1 transition"
-                              aria-label="Alt kategorileri aç/kapat"
-                            >
-                              {isOpen ? (
-                                <ChevronDownIcon className="w-4 h-4 text-dark2" />
-                              ) : (
-                                <ChevronRightIcon className="w-4 h-4 text-dark2" />
-                              )}
-                            </button>
-                          )}
-                        </div>
-
-                        {children.length > 0 && isOpen && (
-                          <ul className="bg-light1/60 px-2 py-2 grid grid-cols-1 gap-1">
-                            {children.map((sc) => (
-                              <li key={sc._id}>
-                                <button
-                                  onClick={() =>
-                                    goShopWith({
-                                      category: [],
-                                      subCategory: [sc._id],
-                                    })
-                                  }
-                                  className="w-full text-left px-3 py-2 rounded-lg hover:bg-light1 transition text-sm"
-                                >
-                                  {sc.name}
-                                </button>
-                              </li>
-                            ))}
-                          </ul>
-                        )}
-                      </li>
-                    );
-                  })}
-                </ul>
-              </div>
-
-              {menuItems.slice(1).map(({ label, path }) => (
-                <Link
-                  key={path}
-                  to={path}
-                  className="block px-4 py-3 rounded-xl hover:bg-light1 transition"
-                  onClick={() => setMobileMenuOpen(false)}
-                >
-                  {label}
-                </Link>
-              ))}
-            </nav>
-          </div>
-        </div>,
-        document.body
-      )}
-
+      {/* Blur içindeki sabit arama katmanı sayfa köküne taşınır. */}
       {createPortal(<SearchModal open={showSearch} onClose={() => setShowSearch(false)} />, document.body)}
     </header>
   );

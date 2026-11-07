@@ -158,7 +158,7 @@ export default function ProductDetailsPage() {
           {/* Görseller. Telefonda yerinde kalır, detay kartı üstüne kayarak gelir. */}
           <section
             ref={galleryRef}
-            className="product-gallery sticky top-[65px] lg:static lg:col-span-7"
+            className="product-gallery sticky top-[var(--storefront-header-height,65px)] lg:static lg:col-span-7"
             aria-label="Ürün görselleri"
           >
             <ProductDetails product={product} />

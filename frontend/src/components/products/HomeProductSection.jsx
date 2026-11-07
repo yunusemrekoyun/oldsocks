@@ -1,7 +1,6 @@
-import { useMemo, useState } from "react";
-import { Swiper, SwiperSlide } from "swiper/react";
+import { useMemo, useRef, useState } from "react";
+import LoopCarousel from "../common/LoopCarousel";
 import { FaChevronLeft, FaChevronRight } from "react-icons/fa";
-import "swiper/css";
 import useHomeProducts from "../../hooks/useHomeProducts";
 import { useStorefrontSettings } from "../../context/storefrontSettings";
 import { pickHomeProducts } from "../../utils/homeProductSelection";
@@ -23,9 +22,7 @@ export default function HomeProductSection({ sectionKey }) {
     [data, sectionKey, section, random]
   );
   const variantColorMap = useMemo(() => buildVariantColorMap(data?.variants || []), [data]);
-  const [swiper, setSwiper] = useState(null);
-  const [edges, setEdges] = useState({ start: true, end: false, locked: false });
-  const syncEdges = (s) => setEdges({ start: s.isBeginning, end: s.isEnd, locked: s.isLocked });
+  const swiperRef = useRef(null);
 
   if (loading) {
     return <section className="bg-light1 py-12 text-center">Ürünler yükleniyor…</section>;
@@ -41,11 +38,14 @@ export default function HomeProductSection({ sectionKey }) {
       <h2 className="mb-5 text-center text-2xl uppercase text-black sm:mb-8 sm:text-3xl md:text-4xl">{section.heading}</h2>
       {/* Telefonda şerit ekran kenarına kadar uzanır; ilk kart sayfa hizasında başlar. */}
       <div className="relative -mx-4 sm:mx-0">
-        {!edges.locked && <>
-          <button type="button" aria-label="Önceki ürünler" onClick={() => swiper?.slidePrev()} disabled={edges.start} className={`${arrow} -left-5`}><FaChevronLeft /></button>
-          <button type="button" aria-label="Sonraki ürünler" onClick={() => swiper?.slideNext()} disabled={edges.end} className={`${arrow} -right-5`}><FaChevronRight /></button>
+        {products.length > 4 && <>
+          <button type="button" aria-label="Önceki ürünler" onClick={() => swiperRef.current?.slidePrev()} className={`${arrow} -left-5`}><FaChevronLeft /></button>
+          <button type="button" aria-label="Sonraki ürünler" onClick={() => swiperRef.current?.slideNext()} className={`${arrow} -right-5`}><FaChevronRight /></button>
         </>}
-        <Swiper
+        <LoopCarousel
+          items={products}
+          carouselId={`home-${sectionKey}`}
+          label={section.heading}
           className="home-rail"
           slidesPerView={1.6}
           spaceBetween={12}
@@ -55,30 +55,24 @@ export default function HomeProductSection({ sectionKey }) {
             640: { slidesPerView: 2.5, spaceBetween: 16, slidesOffsetBefore: 0, slidesOffsetAfter: 0 },
             1024: { slidesPerView: 4, spaceBetween: 24, slidesOffsetBefore: 0, slidesOffsetAfter: 0 },
           }}
-          grabCursor
-          onSwiper={(s) => { setSwiper(s); syncEdges(s); }}
-          onSlideChange={syncEdges}
-          onResize={syncEdges}
-          onReachEnd={syncEdges}
-          onReachBeginning={syncEdges}
-        >
-        {products.map((product) => {
-          const final = Number(product.price || 0);
-          const original = Number(product.originalPrice || 0);
-          const hasDiscount = original > final && final > 0;
-          return <SwiperSlide key={product._id}><Card
-            id={product._id}
-            video={product.video}
-            poster={product.media?.images?.[0] || product.poster || product.images?.[0] || null}
-            name={product.name}
-            price={hasDiscount ? original : final}
-            discountedPrice={hasDiscount ? final : null}
-            discountRate={hasDiscount ? Math.round(100 - final / original * 100) : 0}
-            stock={Array.isArray(product.sizes) ? product.sizes.reduce((sum, row) => sum + Number(row.stock || 0), 0) : 0}
-            variantColors={getVariantColors(product, variantColorMap)}
-          /></SwiperSlide>;
-        })}
-        </Swiper>
+          onSwiper={(swiper) => { swiperRef.current = swiper; }}
+          renderItem={(product) => {
+            const final = Number(product.price || 0);
+            const original = Number(product.originalPrice || 0);
+            const hasDiscount = original > final && final > 0;
+            return <Card
+              id={product._id}
+              video={product.video}
+              poster={product.media?.images?.[0] || product.poster || product.images?.[0] || null}
+              name={product.name}
+              price={hasDiscount ? original : final}
+              discountedPrice={hasDiscount ? final : null}
+              discountRate={hasDiscount ? Math.round(100 - final / original * 100) : 0}
+              stock={Array.isArray(product.sizes) ? product.sizes.reduce((sum, row) => sum + Number(row.stock || 0), 0) : 0}
+              variantColors={getVariantColors(product, variantColorMap)}
+            />;
+          }}
+        />
       </div>
     </div>
   </section>;

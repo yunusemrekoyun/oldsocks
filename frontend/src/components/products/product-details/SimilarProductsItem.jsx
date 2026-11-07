@@ -7,6 +7,7 @@ import { FaVolumeMute, FaVolumeUp, FaPlay } from "react-icons/fa";
 import { getResponsiveImageProps } from "../../../utils/media";
 import { toCssColor } from "../../../utils/productVariants";
 import { formatTry } from "../../../utils/currency";
+import FavoriteButton from "../FavoriteButton";
 
 const MOBILE_VIDEO_EVENT = "product-mobile-play";
 
@@ -149,6 +150,7 @@ export default function SimilarProductItem({
   const colorDots = Array.isArray(variantColors) ? variantColors : [];
 
   return (
+    <div className="relative flex h-full flex-col">
     <Link
       to={`/product-details/${id}`}
       draggable={false}
@@ -216,7 +218,7 @@ export default function SimilarProductItem({
         {shouldShowVideo && isHoverCapable && isHovered && (
           <button
             onClick={toggleMute}
-            className="hidden md:flex absolute top-2 right-2 bg-white/90 p-2 rounded-full shadow-md z-10 hover:scale-110 transition"
+            className="hidden md:flex absolute top-14 right-2 bg-white/90 p-2 rounded-full shadow-md z-10 hover:scale-110 transition"
             aria-label={isMuted ? "Sesi aç" : "Sesi kapat"}
           >
             {isMuted ? (
@@ -280,6 +282,8 @@ export default function SimilarProductItem({
         )}
       </div>
     </Link>
+    <FavoriteButton productId={id} productName={name} className="absolute right-2 top-2 z-20" />
+    </div>
   );
 }
 

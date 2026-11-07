@@ -115,7 +115,8 @@ export default function AddToCart({
     // kalıcı buton
     setHasAddedToCart(true);
 
-    const cartIcon = document.getElementById("cart-icon");
+    const cartIcon = [document.getElementById("mobile-cart-icon"), document.getElementById("cart-icon")]
+      .find((element) => element?.getClientRects().length);
     if (cartIcon) {
       cartIcon.classList.add("animate-shake");
       setTimeout(() => cartIcon.classList.remove("animate-shake"), 500);

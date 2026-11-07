@@ -40,7 +40,7 @@ export default function WhatsAppButton() {
       "
       // iOS safe-area
       style={{
-        paddingBottom: "max(env(safe-area-inset-bottom), 0px)",
+        bottom: "calc(var(--mobile-nav-space, 0px) + 1rem + env(safe-area-inset-bottom, 0px))",
       }}
     >
       <FaWhatsapp className="w-6 h-6 md:w-8 md:h-8" />

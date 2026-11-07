@@ -2,13 +2,12 @@
 import React, { useState, useEffect, useMemo } from "react";
 import useProductsCache from "../../../hooks/useProductsCache";
 import SimilarProductsItem from "./SimilarProductsItem";
-import { Swiper, SwiperSlide } from "swiper/react";
+import LoopCarousel from "../../common/LoopCarousel";
 import { Autoplay, FreeMode } from "swiper/modules";
 import {
   buildVariantColorMap,
   getVariantColors,
 } from "../../../utils/productVariants";
-import "swiper/css";
 import "swiper/css/free-mode";
 
 export default function SimilarProducts({ categoryId, currentProductId }) {
@@ -88,18 +87,17 @@ export default function SimilarProducts({ categoryId, currentProductId }) {
     <div className="space-y-5">
       <h2 className="text-lg font-semibold uppercase tracking-wide text-dark1">Benzer Ürünler</h2>
       {/* Sonsuz döngü: son üründen sonra başa kesintisiz döner. */}
-      <Swiper
+      <LoopCarousel
+        items={items}
+        carouselId="similar-products"
+        label="Benzer Ürünler"
         modules={[Autoplay, FreeMode]}
         spaceBetween={16}
         slidesPerView={2}
         breakpoints={{ 768: { slidesPerView: 3 }, 1024: { slidesPerView: 4 } }}
         autoplay={{ delay: 3500, disableOnInteraction: false, pauseOnMouseEnter: true }}
-        loop={items.length > 4}
-        rewind={items.length <= 4}
-        grabCursor
         freeMode
-      >
-        {items.map((p) => {
+        renderItem={(p) => {
           const poster =
             p.media?.images?.[0] ||
             p.poster ||
@@ -108,20 +106,18 @@ export default function SimilarProducts({ categoryId, currentProductId }) {
           const { price, discountedPrice } = toCardPricing(p);
 
           return (
-            <SwiperSlide key={p._id}>
-              <SimilarProductsItem
-                id={p._id}
-                video={p.video}
-                poster={poster}
-                name={p.name}
-                price={price}
-                discountedPrice={discountedPrice ?? undefined}
-                variantColors={getVariantColors(p, variantColorMap)}
-              />
-            </SwiperSlide>
+            <SimilarProductsItem
+              id={p._id}
+              video={p.video}
+              poster={poster}
+              name={p.name}
+              price={price}
+              discountedPrice={discountedPrice ?? undefined}
+              variantColors={getVariantColors(p, variantColorMap)}
+            />
           );
-        })}
-      </Swiper>
+        }}
+      />
     </div>
   );
 }

@@ -16,6 +16,7 @@ const AdminLayout = lazy(() => import("./admin/layout/AdminLayout"));
 const HomePage = lazy(() => import("./pages/HomePage"));
 const ShopPage = lazy(() => import("./pages/ShopPage"));
 const CartPage = lazy(() => import("./pages/CartPage"));
+const FavoritesPage = lazy(() => import("./pages/FavoritesPage"));
 const GuestCheckoutPage = lazy(() => import("./pages/GuestCheckoutPage"));
 const AboutPage = lazy(() => import("./pages/AboutPage"));
 const BlogPage = lazy(() => import("./pages/BlogPage"));
@@ -87,6 +88,7 @@ export default function App() {
             <Route path="/blog/:slug" element={<BlogDetailsPage />} />
             <Route path="/product-details/:id" element={<ProductDetailsPage />} />
             <Route path="/cart" element={<CartPage />} />
+            <Route path="/favorites" element={<FavoritesPage />} />
             <Route path="/checkout-guest" element={<GuestCheckoutPage />} />
             <Route path="/agreement" element={<AgreementPage />} />
             <Route path="/payment" element={<PaymentPage />} />

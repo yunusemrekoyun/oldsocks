@@ -37,8 +37,7 @@ export default function SocialMedia() {
             slidesPerView={1}
             navigation
             pagination={{ clickable: true }}
-            loop={posts.length >= 3}
-            rewind={posts.length < 3}
+            loop={posts.length > 1}
             className="w-full"
           >
             {posts.map((post) => (

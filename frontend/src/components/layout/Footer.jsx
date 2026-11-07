@@ -34,6 +34,9 @@ const Footer = () => {
             <li>
               <Link to="/blog">Blog</Link>
             </li>
+            <li>
+              <Link to="/contact">İletişim</Link>
+            </li>
           </ul>
           {/* Burada sadece text-right'ı kaldırdık */}
           <ul className="space-y-2">

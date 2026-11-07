@@ -7,12 +7,13 @@ import useProductsCache from "../../hooks/useProductsCache";
 import { selectCartRecommendations } from "../../utils/cartRecommendations";
 import { formatTry } from "../../utils/currency";
 import { getResponsiveImageProps } from "../../utils/media";
+import LoopCarousel from "../common/LoopCarousel";
 
-function RecommendationCard({ product, onAdded, stacked = false }) {
+function RecommendationCard({ product, onAdded, state = {}, onStateChange, stacked = false }) {
   const { addToCart, items } = useCart();
-  const [size, setSize] = useState("");
-  const [adding, setAdding] = useState(false);
-  const [error, setError] = useState("");
+  // Loop buffer copies share form state with the same logical product.
+  const { size = "", adding = false, error = "" } = state;
+  const updateState = (patch) => onStateChange(product._id, patch);
   const sizes = Array.isArray(product.sizes) ? product.sizes : [];
   const withoutSize = sizes.length === 1 && !String(sizes[0]?.size || "").trim();
   const image = getResponsiveImageProps(product.media?.images?.[0] || product.images?.[0], {
@@ -22,8 +23,7 @@ function RecommendationCard({ product, onAdded, stacked = false }) {
 
   const add = async () => {
     if (!withoutSize && !size) return;
-    setAdding(true);
-    setError("");
+    updateState({ adding: true, error: "" });
     try {
       const { data: fresh } = await publicApi.get(`/products/${product._id}`);
       const freshRows = Array.isArray(fresh?.sizes) ? fresh.sizes : [];
@@ -33,7 +33,7 @@ function RecommendationCard({ product, onAdded, stacked = false }) {
       const stock = Number(row?.stock || 0);
       const inCart = items.find((item) => String(item.id) === String(product._id) && String(item.size || "") === chosenSize);
       if (!row || stock <= Number(inCart?.qty || 0)) {
-        setError("Seçilen bedenin stoğu güncellendi. Ürünü yeniden inceleyin.");
+        updateState({ error: "Seçilen bedenin stoğu güncellendi. Ürünü yeniden inceleyin." });
         return;
       }
       addToCart({
@@ -47,9 +47,9 @@ function RecommendationCard({ product, onAdded, stacked = false }) {
       });
       onAdded(fresh.name);
     } catch {
-      setError("Ürün şu an eklenemedi. Lütfen yeniden deneyin.");
+      updateState({ error: "Ürün şu an eklenemedi. Lütfen yeniden deneyin." });
     } finally {
-      setAdding(false);
+      updateState({ adding: false });
     }
   };
 
@@ -68,7 +68,7 @@ function RecommendationCard({ product, onAdded, stacked = false }) {
       {product.color && <p className="mt-1 text-xs text-dark2">{product.color}</p>}
       <p className="mt-1 text-sm font-medium text-dark1">{formatTry(product.price)}</p>
       {!withoutSize && <label className={`${stacked ? "mt-2" : "mt-3"} block text-xs font-medium text-dark2`}>Beden
-        <select value={size} onChange={(event) => { setSize(event.target.value); setError(""); }} className="mt-1 w-full rounded-md border border-light2 bg-white px-2 py-2 text-sm text-dark1">
+        <select value={size} onChange={(event) => updateState({ size: event.target.value, error: "" })} className="mt-1 w-full rounded-md border border-light2 bg-white px-2 py-2 text-sm text-dark1">
           <option value="">Beden seçin</option>
           {sizes.filter((row) => String(row.size || "").trim()).map((row) => <option key={row.size} value={row.size} disabled={Number(row.stock) <= 0}>{row.size}{Number(row.stock) <= 0 ? " (Tükendi)" : ""}</option>)}
         </select>
@@ -89,6 +89,10 @@ export default function CartRecommendations({ inline = false }) {
   const settings = useStorefrontSettings().cartRecommendations;
   const { data: products } = useProductsCache();
   const [notice, setNotice] = useState("");
+  const [cardStates, setCardStates] = useState({});
+  const updateCardState = (id, patch) => setCardStates((current) => ({
+    ...current, [id]: { ...current[id], ...patch },
+  }));
   const recommendations = useMemo(
     () => selectCartRecommendations(products, items, settings?.productIds),
     [products, items, settings?.productIds]
@@ -107,12 +111,21 @@ export default function CartRecommendations({ inline = false }) {
     {notice && <p role="status" className="mb-4 rounded-lg bg-emerald-50 px-4 py-3 text-sm text-emerald-800">{notice} sepete eklendi.</p>}
     {inline
       ? <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-        {recommendations.map((product) => <RecommendationCard key={product._id} product={product} onAdded={setNotice} />)}
+        {recommendations.map((product) => <RecommendationCard key={product._id} product={product} onAdded={setNotice} state={cardStates[product._id]} onStateChange={updateCardState} />)}
       </div>
-      : <div className="no-scrollbar -mx-4 flex snap-x snap-mandatory scroll-px-4 gap-3 overflow-x-auto px-4 pb-1">
-        {recommendations.map((product) => <div key={product._id} className="w-[44%] shrink-0 snap-start sm:w-[30%]">
-          <RecommendationCard product={product} onAdded={setNotice} stacked />
-        </div>)}
+      : <div className="-mx-4">
+        <LoopCarousel
+          items={recommendations}
+          carouselId="cart-recommendations"
+          label={settings?.heading || "Sepet önerileri"}
+          slidesPerView={100 / 44}
+          spaceBetween={12}
+          slidesOffsetBefore={16}
+          slidesOffsetAfter={16}
+          breakpoints={{ 640: { slidesPerView: 100 / 30 } }}
+          className="pb-1"
+          renderItem={(product) => <RecommendationCard product={product} onAdded={setNotice} state={cardStates[product._id]} onStateChange={updateCardState} stacked />}
+        />
       </div>}
   </section>;
 }

@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { FaChevronLeft, FaChevronRight, FaTimes } from "react-icons/fa";
 import { getResponsiveImageProps } from "../../../utils/media";
+import FavoriteButton from "../FavoriteButton";
 
 // Ürün galerisi. Mobilde header'ın altındaki ekranı dolduran, köşeleri yuvarlak ve parmakla
 // kaydırılan görseller (altta detay kartının üst kısmı görünür); masaüstünde tek görsel
@@ -134,13 +135,14 @@ export default function ProductDetails({ product }) {
   };
 
   return (
-    <div>
+    <div className="relative">
+      <FavoriteButton productId={product._id} productName={product.name} className="absolute right-3 top-3 z-20" />
       {/* Mobil ve tablet: kaydırmalı galeri. Yükseklik = ekran - header - detay kartının görünen kısmı */}
       <div className="relative -mx-2 overflow-hidden rounded-[1.75rem] bg-light1 sm:mx-0 lg:hidden">
         <div
           ref={trackRef}
           onScroll={(event) => setActive(Math.round(event.currentTarget.scrollLeft / event.currentTarget.clientWidth))}
-          className="no-scrollbar flex h-[calc(100vh-10.5rem)] min-h-[22rem] snap-x snap-mandatory overflow-x-auto supports-[height:100svh]:h-[calc(100svh-10.5rem)]"
+          className="no-scrollbar flex h-[calc(100vh-10.5rem-var(--mobile-nav-space,0px))] min-h-[15rem] snap-x snap-mandatory overflow-x-auto supports-[height:100svh]:h-[calc(100svh-10.5rem-var(--mobile-nav-space,0px))]"
         >
           {gallery.map((image, i) => (
             <button
