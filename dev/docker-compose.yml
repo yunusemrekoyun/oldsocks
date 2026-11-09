@@ -4,16 +4,21 @@ name: oldsocks-dev
 services:
   mongo:
     image: mongo:8.0.4
-    command: ["--replSet", "rs0", "--bind_ip_all"]
+    command: ["--replSet", "rs0", "--bind_ip_all", "--wiredTigerCacheSizeGB", "0.25"]
+    init: true
+    mem_limit: 768m
+    memswap_limit: 768m
+    cpus: 1.0
     ports:
       - "127.0.0.1:27117:27017"
     volumes:
       - mongo-data:/data/db
     healthcheck:
       test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand({ ping: 1 }).ok"]
-      interval: 5s
-      timeout: 5s
-      retries: 20
+      interval: 30s
+      timeout: 10s
+      start_period: 10s
+      retries: 3
   mailpit:
     image: axllent/mailpit:v1.27.8
     environment:

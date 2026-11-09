@@ -32,6 +32,25 @@ function databaseUri(name) {
   return url.toString();
 }
 
+async function stopChild(child) {
+  if (!child.pid || child.exitCode !== null || child.signalCode !== null) return;
+  await new Promise((resolve, reject) => {
+    const cleanup = () => {
+      clearTimeout(forceTimer);
+      clearTimeout(deadlineTimer);
+      child.removeListener("exit", onExit);
+    };
+    const onExit = () => { cleanup(); resolve(); };
+    const forceTimer = setTimeout(() => child.kill("SIGKILL"), 3000);
+    const deadlineTimer = setTimeout(() => {
+      cleanup();
+      reject(new Error("Test sunucusu 5 sn içinde kapatılamadı."));
+    }, 5000);
+    child.once("exit", onExit);
+    child.kill("SIGTERM");
+  });
+}
+
 async function startTestServer(extraEnv = {}) {
   if (/mongodb\.net/i.test(BASE_URI)) throw new Error("Entegrasyon testleri Atlas'a bağlanamaz.");
   const port = await freePort();
@@ -69,7 +88,12 @@ async function startTestServer(extraEnv = {}) {
     STOCK_HOLDS_PER_IP: "1000",
     ...extraEnv,
   };
-  fs.writeFileSync(envFile, Object.entries(env).map(([k, v]) => `${k}=${v}`).join("\n"));
+  try {
+    fs.writeFileSync(envFile, Object.entries(env).map(([k, v]) => `${k}=${v}`).join("\n"));
+  } catch (error) {
+    fs.rmSync(tmp, { recursive: true, force: true });
+    throw error;
+  }
 
   const child = spawn(process.execPath, ["server.js"], {
     cwd: BACKEND_DIR,
@@ -77,34 +101,55 @@ async function startTestServer(extraEnv = {}) {
     stdio: ["ignore", "pipe", "pipe"],
   });
   let output = "";
+  let spawnError;
+  child.on("error", (error) => { spawnError = error; });
   child.stdout.on("data", (chunk) => { output += chunk; });
   child.stderr.on("data", (chunk) => { output += chunk; });
 
   const base = `http://127.0.0.1:${port}`;
-  const deadline = Date.now() + 20_000;
-  for (;;) {
-    if (child.exitCode !== null) throw new Error(`Sunucu başlamadı:\n${output}`);
+  async function stop() {
     try {
-      const res = await fetch(`${base}/readyz`);
-      if (res.ok) break;
-    } catch {
-      // henüz dinlemiyor
+      await stopChild(child);
+    } finally {
+      try {
+        if (mongoose.connection.readyState === 1 && mongoose.connection.name === dbName) {
+          await mongoose.connection.dropDatabase({ maxTimeMS: 5000 }).catch(() => {});
+        }
+      } finally {
+        await mongoose.disconnect().catch(() => {});
+        fs.rmSync(tmp, { recursive: true, force: true });
+      }
     }
-    if (Date.now() > deadline) {
-      child.kill("SIGKILL");
-      throw new Error(`Sunucu 20 sn içinde hazır olmadı:\n${output}`);
-    }
-    await new Promise((r) => setTimeout(r, 200));
   }
 
-  await mongoose.connect(env.MONGO_URI);
+  try {
+    const deadline = Date.now() + 20_000;
+    for (;;) {
+      if (spawnError) throw spawnError;
+      if (child.exitCode !== null || child.signalCode !== null) throw new Error(`Sunucu başlamadı:\n${output}`);
+      if (Date.now() >= deadline) throw new Error(`Sunucu 20 sn içinde hazır olmadı:\n${output}`);
+      try {
+        const res = await fetch(`${base}/readyz`, {
+          signal: AbortSignal.timeout(Math.max(1, Math.min(2000, deadline - Date.now()))),
+        });
+        await res.body?.cancel();
+        if (res.ok) break;
+      } catch {
+        // henüz dinlemiyor veya bu denemenin süresi doldu
+      }
+      await new Promise((r) => setTimeout(r, 200));
+    }
 
-  async function stop() {
-    child.kill("SIGTERM");
-    await new Promise((r) => (child.exitCode !== null ? r() : child.once("exit", r)));
-    await mongoose.connection.dropDatabase().catch(() => {});
-    await mongoose.disconnect();
-    fs.rmSync(tmp, { recursive: true, force: true });
+    await mongoose.connect(env.MONGO_URI, {
+      serverSelectionTimeoutMS: 5000,
+      connectTimeoutMS: 5000,
+      socketTimeoutMS: 10000,
+    });
+  } catch (error) {
+    await stop().catch((cleanupError) => {
+      error.message += `\nTest temizliği başarısız: ${cleanupError.message}`;
+    });
+    throw error;
   }
 
   return { base, port, stop, env, output: () => output };

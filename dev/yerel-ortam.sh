@@ -75,7 +75,7 @@ ortami_yukle() {
 }
 
 baslat() {
-  "${compose[@]}" up -d --wait
+  "${compose[@]}" up -d --wait --wait-timeout 60
   "${compose[@]}" exec -T mongo mongosh --quiet --eval '
     try { rs.status().ok } catch (e) {
       rs.initiate({ _id: "rs0", members: [{ _id: 0, host: "127.0.0.1:27017" }] }).ok
