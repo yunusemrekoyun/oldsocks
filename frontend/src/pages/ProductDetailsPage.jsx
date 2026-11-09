@@ -1,5 +1,5 @@
 // src/pages/ProductDetailsPage.jsx
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useLayoutEffect, useRef } from "react";
 import { useParams } from "react-router-dom";
 import api from "../../api";
 
@@ -23,24 +23,31 @@ export default function ProductDetailsPage() {
   const [error, setError] = useState("");
 
   useEffect(() => {
+    const controller = new AbortController();
     setLoading(true);
     api
-      .get(`/products/${id}`)
+      .get(`/products/${id}`, { signal: controller.signal })
       .then(({ data }) => {
+        if (controller.signal.aborted) return;
         setProduct(data);
         setError("");
       })
       .catch(() => {
+        if (controller.signal.aborted) return;
         setError("Ürün yüklenirken hata oluştu.");
       })
-      .finally(() => setLoading(false));
+      .finally(() => {
+        if (!controller.signal.aborted) setLoading(false);
+      });
+    return () => controller.abort();
   }, [id]);
 
   // Telefonda detay kartı parmağı izler: kart yukarı çıktıkça görsel hafifçe küçülüp kararır
   // (--sheet-p: 0 görsel açık, 1 detaylar açık); yarıda bırakılırsa en yakın duruma oturur.
   const galleryRef = useRef(null);
   const sheetRef = useRef(null);
-  useEffect(() => {
+  useLayoutEffect(() => {
+    if (loading || String(product?._id) !== id) return undefined;
     const gallery = galleryRef.current;
     const sheet = sheetRef.current;
     if (!gallery || !sheet) return undefined;
@@ -62,6 +69,8 @@ export default function ProductDetailsPage() {
       applySnap();
       update();
     };
+    // Loading changes the page height. Reset before enabling snap on the new product.
+    window.scrollTo({ top: 0, left: 0, behavior: "instant" });
     applySnap();
     update();
     window.addEventListener("scroll", update, { passive: true });
@@ -73,7 +82,7 @@ export default function ProductDetailsPage() {
       phone.removeEventListener("change", onChange);
       root.classList.remove("product-sheet-snap");
     };
-  }, [product, loading]);
+  }, [id, product, loading]);
 
   const firstImage = product?.media?.images?.[0]?.url || product?.images?.[0] || undefined;
   usePageMeta({
